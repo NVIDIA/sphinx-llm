@@ -15,6 +15,8 @@ jobs:
         image: ollama/ollama:latest
         ports:
           - 11434:11434
+        volumes:
+          - .ollama/:/root/.ollama
         options: >-
           --name ollama
           --health-cmd "ollama ps"
@@ -25,6 +27,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+
+      - name: Cache Ollama Models
+        id: cache-models
+        uses: actions/cache@v4
+        with:
+          path: .ollama/models
+          key: models
 
       - name: Set up Python
         uses: actions/setup-python@v4
