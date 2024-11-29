@@ -1,5 +1,6 @@
 import os
 import hashlib
+import time
 from pathlib import Path
 
 from docutils.nodes import Text, admonition, inline, paragraph
@@ -91,7 +92,14 @@ class Docref(BaseAdmonition, SphinxDirective):
         # Check if the model is already loaded
         ollama_client = ollama.Client(host=OLLAMA_BASE_URL)
         try:
-            ollama_client.ps()
+            for i in range(5):
+                try:
+                    ollama_client.ps()
+                    break
+                except Exception as e:
+                    if i == 4:
+                        raise e
+                    time.sleep(1)
             try:
                 ollama_client.show(model)
                 return
