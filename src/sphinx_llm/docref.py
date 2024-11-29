@@ -21,7 +21,7 @@ OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 class Docref(BaseAdmonition, SphinxDirective):
     node_class = admonition
     required_arguments = 1
-    option_spec = {"model": str}    
+    option_spec = {"model": str, "hash": str}    
 
     def run(self):
         # Get the document name from the directive arguments
@@ -31,8 +31,8 @@ class Docref(BaseAdmonition, SphinxDirective):
         self.arguments = [doc_title]
 
         # Generate a summary of the document contents and replace the directive content with it
-        summary = self.generate_summary(doc_name)
-        self.content.data = [summary]
+        hash, summary = self.generate_summary(doc_name)
+        self.update_content(hash, summary)
 
         # Specify that this page should be rebuilt when the referenced document changes
         self.state.document.settings.env.note_dependency(doc_name)
@@ -62,21 +62,16 @@ class Docref(BaseAdmonition, SphinxDirective):
         # Get the document contents
         doc_contents = self.state.document.settings.env.app.builder.env.get_doctree(doc_name).astext()
 
-        # Set up cache
-        env = self.state.document.settings.env
-        if not hasattr(env, "sphinx_llm_cache"):
-            env.sphinx_llm_cache = {}
-
-        # Check for a summary in the build cache
+        # Check the cached summary
         doc_hash = hashlib.md5(doc_contents.encode()).hexdigest()
-        if doc_hash in env.sphinx_llm_cache:
-            return env.sphinx_llm_cache[doc_hash]
+        if "hash" in self.options and self.options["hash"] == doc_hash:
+            return doc_hash, "\n".join(self.content.data)
 
         # Generate a summary using the LLM
         if "model" in self.options and self.options["model"]:
             model = self.options["model"]
-        elif hasattr(env.app.config, "sphinx_llm_options"):
-            model = env.app.config.sphinx_llm_options.get("model", DEFAULT_MODEL)
+        elif hasattr(self.config, "sphinx_llm_options"):
+            model = self.config.sphinx_llm_options.get("model", DEFAULT_MODEL)
         else:
             model = DEFAULT_MODEL
         self.ensure_model(model)
@@ -87,9 +82,7 @@ class Docref(BaseAdmonition, SphinxDirective):
         )
         doc_summary = llm_client.invoke([("system", SYSTEM_PROMPT), ("human", doc_contents + "\n\nHere's a concise one-sentence summary of the above:")]).content
 
-        # Cache the summary and return it
-        env.sphinx_llm_cache[doc_hash] = doc_summary
-        return doc_summary
+        return doc_hash, doc_summary
     
     def ensure_model(self, model: str):
         # Check if the model is already loaded
@@ -101,6 +94,42 @@ class Docref(BaseAdmonition, SphinxDirective):
             logger.info(f"Model {model} not found, loading...")
             ollama_client.pull(model)
             logger.info(f"Pulled model {model}")
+
+    def update_content(self, hash: str, summary: str):
+        self.content.data = summary.splitlines()
+
+        # Update the source file with the new summary
+        source_file = Path(self.state.document.current_source)
+        if source_file.suffix != ".rst":
+            raise ValueError(f"Source file {source_file} is not an RST file")
+        source = source_file.read_text().splitlines()
+        original_source = source.copy()
+        start_line_idx = self.lineno - 1
+
+        # Figure out which lines to replace and the indent level
+        lines = [line for (_, line) in self.content.items]
+        indent = len(source[lines[0]]) - len(source[lines[0]].lstrip())
+
+        # Remove original lines from the source
+        for line in reversed(lines):
+            source.pop(line)
+        
+        # Insert the summary into the source
+        for line in reversed(summary.splitlines()):
+            source.insert(lines[0], " " * indent + line)
+
+        # Update the hash
+        for i, line in enumerate(self.content.parent.data):
+            if ":hash:" in line:
+                source[start_line_idx + i] = " " * indent + f":hash: {hash}"
+                break
+        else:
+            source.insert(start_line_idx + 1, " " * indent + f":hash: {hash}")
+                
+        # Only write if we are making changes
+        if source != original_source:
+            source_file.write_text("\n".join(source))
+        
 
 
 

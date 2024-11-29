@@ -52,6 +52,6 @@ jobs:
         run: |
           sphinx-build -b html docs/source docs/build/html
 
-      - name: Output test HTML page
+      - name: DEBUG Output updated source file
         run: |
-          cat docs/build/html/test.html
+          cat docs/source/test.rst
