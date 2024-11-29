@@ -66,6 +66,8 @@ class Docref(BaseAdmonition, SphinxDirective):
         doc_hash = hashlib.md5(doc_contents.encode()).hexdigest()
         if "hash" in self.options and self.options["hash"] == doc_hash:
             return doc_hash, "\n".join(self.content.data)
+        if hasattr(self.config, "sphinx_llm_options") and self.config.sphinx_llm_options.get("warn_on_cache_miss", True):
+            logger.warning(f"LLM summary is out of date {doc_name}, regenerating summary")
 
         # Generate a summary using the LLM
         if "model" in self.options and self.options["model"]:
@@ -100,6 +102,7 @@ class Docref(BaseAdmonition, SphinxDirective):
 
         # Update the source file with the new summary
         source_file = Path(self.state.document.current_source)
+        # TODO add support for myst and other markdown formats
         if source_file.suffix != ".rst":
             raise ValueError(f"Source file {source_file} is not an RST file")
         source = source_file.read_text().splitlines()
@@ -118,7 +121,7 @@ class Docref(BaseAdmonition, SphinxDirective):
         for line in reversed(summary.splitlines()):
             source.insert(lines[0], " " * indent + line)
 
-        # Update the hash
+        # Update the hash (rst specific for now)
         for i, line in enumerate(self.content.parent.data):
             if ":hash:" in line:
                 source[start_line_idx + i] = " " * indent + f":hash: {hash}"
