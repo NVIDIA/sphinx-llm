@@ -16,7 +16,7 @@ jobs:
         ports:
           - 11434:11434
         volumes:
-          - ./.ollama/:/root/.ollama
+          - ${{ github.workspace }}/.ollama/:/root/.ollama
         options: >-
           --name ollama
           --health-cmd "ollama ps"
@@ -32,7 +32,7 @@ jobs:
         id: cache-models
         uses: actions/cache@v4
         with:
-          path: .ollama/models
+          path: ${{ github.workspace }}/.ollama/models
           key: models
 
       - name: Set up Python
