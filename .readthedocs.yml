@@ -9,8 +9,8 @@ build:
     python: "3.12"
 
   jobs:
-    pre_build:
-      - docker run --rm hello-world
+    pre_install:
+      - curl -fsSL https://ollama.com/install.sh | sh
 
 sphinx:
   configuration: docs/source/conf.py
