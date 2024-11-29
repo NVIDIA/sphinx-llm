@@ -10,7 +10,9 @@ build:
 
   jobs:
     pre_install:
-      - curl -fsSL https://ollama.com/install.sh | sudo sh
+      - curl -L https://ollama.com/download/ollama-linux-amd64.tgz -o ollama-linux-amd64.tgz
+      - tar -C /tmp -xzf ollama-linux-amd64.tgz
+      - /tmp/ollama serve &
 
 sphinx:
   configuration: docs/source/conf.py
