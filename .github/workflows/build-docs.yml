@@ -16,7 +16,7 @@ jobs:
         ports:
           - 11434:11434
         volumes:
-          - .ollama/:/root/.ollama
+          - ./.ollama/:/root/.ollama
         options: >-
           --name ollama
           --health-cmd "ollama ps"
