@@ -12,7 +12,7 @@ build:
     pre_install:
       - curl -L https://ollama.com/download/ollama-linux-amd64.tgz -o ollama-linux-amd64.tgz
       - mkdir /tmp/ollama && tar -C /tmp/ollama -xzf ollama-linux-amd64.tgz
-      - /tmp/ollama/bin/ollama serve &
+      - nohup /tmp/ollama/bin/ollama serve
       - curl --connect-timeout 5 --retry-all-errors --max-time 10 --retry 5 --retry-delay 0 --retry-max-time 60 'http://localhost:11434/api/ps'
     post_install:
       - curl --connect-timeout 5 --retry-all-errors --max-time 10 --retry 5 --retry-delay 0 --retry-max-time 60 'http://localhost:11434/api/ps'
