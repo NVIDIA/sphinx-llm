@@ -7,9 +7,10 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.12"
-    
-  pre_build:
-    - docker run --rm hello-world
+
+  jobs:
+    pre_build:
+      - docker run --rm hello-world
 
 sphinx:
   configuration: docs/source/conf.py
