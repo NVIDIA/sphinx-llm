@@ -14,12 +14,14 @@ logger = logging.getLogger(__name__)
 import ollama
 from langchain_ollama import ChatOllama
 
+DEFAULT_MODEL = "llama3.2:3b"
 SYSTEM_PROMPT = "Keep responses concise and focused, avoiding unnecessary elaboration or additional context unless explicitly requested. Do not use bullet points, lists, or nested structures unless specifically asked. If a response requires further detail, prioritize the most relevant information and conclude promptly. Avoid apologies or mentions of limitations; simply deliver the most direct and straightforward answer."
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
 class Docref(BaseAdmonition, SphinxDirective):
     node_class = admonition
     required_arguments = 1
+    option_spec = {"model": str}    
 
     def run(self):
         # Get the document name from the directive arguments
@@ -71,7 +73,12 @@ class Docref(BaseAdmonition, SphinxDirective):
             return env.sphinx_llm_cache[doc_hash]
 
         # Generate a summary using the LLM
-        model = "llama3.2:3b"
+        if "model" in self.options and self.options["model"]:
+            model = self.options["model"]
+        elif hasattr(env.app.config, "sphinx_llm_options"):
+            model = env.app.config.sphinx_llm_options.get("model", DEFAULT_MODEL)
+        else:
+            model = DEFAULT_MODEL
         self.ensure_model(model)
         llm_client = ChatOllama(
             base_url=OLLAMA_BASE_URL,
@@ -99,6 +106,7 @@ class Docref(BaseAdmonition, SphinxDirective):
 
 def setup(app: Sphinx) -> dict:
     app.add_directive("docref", Docref)
+    app.add_config_value('sphinx_llm_options', {}, 'env')
 
     return {
         "version": "0.1",
