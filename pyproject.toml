@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
@@ -34,7 +34,10 @@ Issues = "https://github.com/jacobtomlinson/sphinx-llm/issues"
 Source = "https://github.com/jacobtomlinson/sphinx-llm"
 
 [tool.hatch.version]
-path = "src/sphinx_llm/__about__.py"
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "_version.py"
 
 [tool.hatch.envs.types]
 extra-dependencies = ["mypy>=1.0.0"]

@@ -13,6 +13,9 @@ from sphinx.application import Sphinx
 from sphinx.builders.html import StandaloneHTMLBuilder
 from sphinx.util import logging
 
+from .version import __version__
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,7 +135,7 @@ def setup(app: Sphinx) -> Dict[str, Any]:
     generator.setup()
     
     return {
-        'version': '0.0.1',
+        'version': __version__,
         'parallel_read_safe': True,
         'parallel_write_safe': True,
     }

@@ -10,6 +10,9 @@ from sphinx.util.docutils import SphinxDirective
 from sphinx.util import logging
 from sphinx.errors import ExtensionError
 
+from .version import __version__
+
+
 logger = logging.getLogger(__name__)
 
 import ollama
@@ -146,7 +149,7 @@ def setup(app: Sphinx) -> dict:
     app.add_config_value('sphinx_llm_options', {}, 'env')
 
     return {
-        "version": "0.1",
+        "version": __version__,
         "parallel_read_safe": True,
         "parallel_write_safe": True,
     }
