@@ -104,8 +104,8 @@ class MarkdownGenerator:
             
             logger.info(f"Generated {len(self.generated_markdown_files)} markdown files")
             
-            # Concatenate all markdown files into llms.txt
-            llms_txt_path = outdir / "llms.txt"
+            # Concatenate all markdown files into llms-full.txt
+            llms_txt_path = outdir / "llms-full.txt"
             with open(llms_txt_path, 'w', encoding='utf-8') as llms_txt:
                 # Sort files to ensure index.html.md comes first
                 sorted_files = sorted(self.generated_markdown_files, key=lambda x: (x.name != 'index.html.md', x.name))

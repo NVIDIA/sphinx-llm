@@ -24,7 +24,7 @@ pip install git+https://github.com/jacobtomlinson/sphinx-llm.git
 
 The [llms.txt](https://llmstxt.org/) standard describes how you can provide documentation in a way that can be easily consumed by LLMs, either during model training or at inference time when using tools that search the web.
 
-The standard described that your entire documentation should be provided in markdown via a single file called `llms.txt`. Each individual page on your website should also have a markdown version of the page at the same URL with an additional `.md` extension.
+The standard describes that your documentation sitemap should be provided in markdown in `llms.txt` and then the entire documentation should be provided in markdown via a single file called `llms-full.txt`. Additionally each individual page on your website should also have a markdown version of the page at the same URL with an additional `.md` extension.
 
 The `sphinx_llm.txt` extension automatically generates markdown files alongside HTML files during the Sphinx build process.
 
@@ -44,7 +44,7 @@ When you build your documentation with `sphinx-build` (or `make html`), the exte
 1. Find all HTML files generated in the output directory
 2. Convert each HTML file to markdown format
 3. Save the markdown files with the same name plus an extra `.md` extension
-4. Concatenates all generated markdown into a single `llms.txt` file
+4. Concatenates all generated markdown into a single `llms-full.txt` file
 
 For example, if your build generates:
 - `_build/html/index.html`
@@ -53,7 +53,7 @@ For example, if your build generates:
 The extension will also create:
 - `_build/html/index.html.md`
 - `_build/html/apples.html.md`
-- `_build/html/llms.txt`
+- `_build/html/llms-full.txt`
 
 Note: This extension only works with HTML builders (like `html` and `dirhtml`).
 
