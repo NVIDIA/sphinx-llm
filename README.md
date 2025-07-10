@@ -3,9 +3,14 @@
 > [!WARNING]  
 > This repo is experimental. Use at your own risk!
 
-The `sphinx-llm` package includes extensions for leveraging LLMs as part of the Sphinx build process. 
-This is useful for generating content that gets baked into the documentation. It it not intended to provide
-an interactive chat service in your documentation.
+The `sphinx-llm` package includes extensions for working with LLMs.
+
+There are two categories of tools in this package. 
+
+One is extensions for leveraging LLMs as part of the Sphinx build process. 
+This is useful for generating content that gets baked into the documentation. It it not intended to provide an interactive chat service in your documentation.
+
+The other category is extensions for making your documentation easier for consumption by LLMs. This is useful when you want your project to be well indexed and represented in LLMs when users ask about projects in your domain.
 
 ## Installation
 
@@ -13,15 +18,15 @@ an interactive chat service in your documentation.
 pip install git+https://github.com/jacobtomlinson/sphinx-llm.git
 ```
 
-## Usage
+## Extensions
 
-To use this extension you need to have [ollama](https://github.com/ollama/ollama) running.
+### llms.txt Support
 
-If you have a GPU then generation will be much faster, but it is optional. See [the GitHub Actions](.github/workflows/build-docs.yml) for an example of using it in CI.
+The [llms.txt](https://llmstxt.org/) standard describes how you can provide documentation in a way that can be easily consumed by LLMs, either during model training or at inference time when using tools that search the web.
 
-### Markdown Generation
+The standard described that your entire documentation should be provided in markdown via a single file called `llms.txt`. Each individual page on your website should also have a markdown version of the page at the same URL with an additional `.md` extension.
 
-The `sphinx_llm.txt` extension automatically generates markdown files alongside HTML files during the Sphinx build process. This is useful for creating markdown versions of your documentation that can be used in other contexts (like GitHub READMEs, documentation sites, etc.).
+The `sphinx_llm.txt` extension automatically generates markdown files alongside HTML files during the Sphinx build process.
 
 To use the extension add it to your `conf.py`:
 
@@ -38,7 +43,8 @@ When you build your documentation with `sphinx-build` (or `make html`), the exte
 
 1. Find all HTML files generated in the output directory
 2. Convert each HTML file to markdown format
-3. Save the markdown files with the same name but `.md` extension
+3. Save the markdown files with the same name plus an extra `.md` extension
+4. Concatenates all generated markdown into a single `llms.txt` file
 
 For example, if your build generates:
 - `_build/html/index.html`
@@ -47,18 +53,15 @@ For example, if your build generates:
 The extension will also create:
 - `_build/html/index.html.md`
 - `_build/html/apples.html.md`
-
-The HTML to markdown conversion includes:
-- Headers (h1-h6)
-- Paragraphs
-- Links
-- Bold and italic text
-- Lists
-- Code blocks and inline code
+- `_build/html/llms.txt`
 
 Note: This extension only works with HTML builders (like `html` and `dirhtml`).
 
 ### Docref
+
+To use this extension you need to have [ollama](https://github.com/ollama/ollama) running.
+
+If you have a GPU then generation will be much faster, but it is optional. See [the GitHub Actions](.github/workflows/build-docs.yml) for an example of using it in CI.
 
 The `sphinx_llm.docref` extension adds a directive for summarising and referencing other pages in your documentation.
 Instead of just linking to a page the extension will generate a summary of the page being linked to and include that too.
