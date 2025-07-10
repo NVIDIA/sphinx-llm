@@ -24,6 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "langchain-ollama>=0.2.0",
+    "sphinx-markdown-builder>=0.6.8",
     "sphinx>=7.4.7",
 ]
 
@@ -52,3 +53,8 @@ tests = ["tests", "*/sphinx-llm/tests"]
 
 [tool.coverage.report]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+]

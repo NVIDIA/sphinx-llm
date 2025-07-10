@@ -19,6 +19,45 @@ To use this extension you need to have [ollama](https://github.com/ollama/ollama
 
 If you have a GPU then generation will be much faster, but it is optional. See [the GitHub Actions](.github/workflows/build-docs.yml) for an example of using it in CI.
 
+### Markdown Generation
+
+The `sphinx_llm.txt` extension automatically generates markdown files alongside HTML files during the Sphinx build process. This is useful for creating markdown versions of your documentation that can be used in other contexts (like GitHub READMEs, documentation sites, etc.).
+
+To use the extension add it to your `conf.py`:
+
+```python
+# conf.py
+# ...
+
+extensions = [
+    "sphinx_llm.txt",
+]
+```
+
+When you build your documentation with `sphinx-build` (or `make html`), the extension will:
+
+1. Find all HTML files generated in the output directory
+2. Convert each HTML file to markdown format
+3. Save the markdown files with the same name but `.md` extension
+
+For example, if your build generates:
+- `_build/html/index.html`
+- `_build/html/apples.html`
+
+The extension will also create:
+- `_build/html/index.md`
+- `_build/html/apples.md`
+
+The HTML to markdown conversion includes:
+- Headers (h1-h6)
+- Paragraphs
+- Links
+- Bold and italic text
+- Lists
+- Code blocks and inline code
+
+Note: This extension only works with HTML builders (like `html` and `dirhtml`).
+
 ### Docref
 
 The `sphinx_llm.docref` extension adds a directive for summarising and referencing other pages in your documentation.
