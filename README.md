@@ -45,8 +45,8 @@ For example, if your build generates:
 - `_build/html/apples.html`
 
 The extension will also create:
-- `_build/html/index.md`
-- `_build/html/apples.md`
+- `_build/html/index.html.md`
+- `_build/html/apples.html.md`
 
 The HTML to markdown conversion includes:
 - Headers (h1-h6)
