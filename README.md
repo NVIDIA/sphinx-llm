@@ -111,5 +111,5 @@ You can also modify the summary if you need to clean up the language generated, 
 Try it out yourself by building the example documentation.
 
 ```console
-uv run --with sphinx-autobuild sphinx-autobuild docs/source docs/build/html
+uv run --dev sphinx-autobuild docs/source docs/build/html
 ```

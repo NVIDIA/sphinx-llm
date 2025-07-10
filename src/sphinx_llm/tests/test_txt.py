@@ -27,63 +27,51 @@ def test_markdown_generator_init():
     assert generator.generated_markdown_files == []
 
 
-def test_html_to_markdown_basic_conversion():
-    """Test basic HTML to markdown conversion."""
+def test_setup_function():
+    """Test the setup function returns correct configuration."""
+    app: Any = MockApp()
+    result = setup(app)
+    
+    assert result['version'] == '0.0.1'
+    assert result['parallel_read_safe'] is True
+    assert result['parallel_write_safe'] is True
+
+
+def test_markdown_generator_setup():
+    """Test that setup connects to the correct events."""
     app: Any = MockApp()
     generator = MarkdownGenerator(app)
     
-    html_content = """
-    <h1>Test Title</h1>
-    <p>This is a paragraph.</p>
-    <h2>Subtitle</h2>
-    <p>Another paragraph.</p>
-    """
+    generator.setup()
     
-    result = generator._html_to_markdown(html_content)
-    
-    assert "# Test Title" in result
-    assert "This is a paragraph." in result
-    assert "## Subtitle" in result
-    assert "Another paragraph." in result
+    # Check that the correct events are connected
+    events = [call[0] for call in app.connect_calls]
+    assert 'builder-inited' in events
+    assert 'build-finished' in events
 
 
-def test_html_to_markdown_links_and_formatting():
-    """Test link and formatting conversion."""
+def test_builder_inited():
+    """Test builder_inited method."""
     app: Any = MockApp()
     generator = MarkdownGenerator(app)
     
-    html_content = """
-    <a href="https://example.com">Example Link</a>
-    <strong>Bold text</strong>
-    <em>Italic text</em>
-    <code>inline code</code>
-    """
+    # Mock a builder
+    mock_builder = type('MockBuilder', (), {})()
+    app.builder = mock_builder
     
-    result = generator._html_to_markdown(html_content)
+    generator.builder_inited(app)
     
-    assert "[Example Link](https://example.com)" in result
-    assert "**Bold text**" in result
-    assert "*Italic text*" in result
-    assert "`inline code`" in result
+    assert generator.builder == mock_builder
 
 
-def test_html_to_markdown_remove_unwanted_elements():
-    """Test that unwanted HTML elements are removed."""
+def test_generate_markdown_files_with_exception():
+    """Test generate_markdown_files when an exception occurs."""
     app: Any = MockApp()
     generator = MarkdownGenerator(app)
     
-    html_content = """
-    <script>alert('test');</script>
-    <style>body { color: red; }</style>
-    <nav>Navigation content</nav>
-    <footer>Footer content</footer>
-    <p>This should remain</p>
-    """
+    # Test with exception
+    exception = Exception("Build failed")
+    generator.generate_markdown_files(app, exception)
     
-    result = generator._html_to_markdown(html_content)
-    
-    assert "alert('test')" not in result
-    assert "body { color: red; }" not in result
-    assert "Navigation content" not in result
-    assert "Footer content" not in result
-    assert "This should remain" in result
+    # Should not process files when exception occurs
+    assert generator.generated_markdown_files == []

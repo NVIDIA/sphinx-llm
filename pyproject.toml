@@ -57,4 +57,5 @@ exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+    "sphinx-autobuild>=2024.10.3",
 ]

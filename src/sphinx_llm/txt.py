@@ -2,7 +2,7 @@
 Sphinx extension to generate markdown files alongside HTML files.
 
 This extension hooks into the Sphinx build process to create markdown versions
-of all HTML files that are generated during the build.
+of all documents using the sphinx_markdown_builder.
 """
 
 import os
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class MarkdownGenerator:
-    """Generates markdown files alongside HTML files."""
+    """Generates markdown files using sphinx_markdown_builder."""
     
     def __init__(self, app: Sphinx):
         self.app = app
@@ -36,7 +36,7 @@ class MarkdownGenerator:
         self.builder = app.builder
     
     def generate_markdown_files(self, app: Sphinx, exception: Exception | None):
-        """Generate markdown files for all HTML files and concatenate them into llms.txt."""
+        """Generate markdown files using sphinx_markdown_builder and concatenate them into llms.txt."""
         if exception:
             logger.warning("Skipping markdown generation due to build error")
             return
@@ -46,106 +46,84 @@ class MarkdownGenerator:
             return
         
         outdir = Path(self.builder.outdir)
-        logger.info("Generating markdown files...")
+        logger.info("Generating markdown files using sphinx_markdown_builder...")
         
-        # Find all HTML files in the output directory
-        html_files = list(outdir.rglob("*.html"))
-        self.generated_markdown_files = []
+        # Create a temporary markdown build directory
+        md_build_dir = outdir / "_markdown_build"
+        md_build_dir.mkdir(exist_ok=True)
         
-        for html_file in html_files:
-            md_file = self._convert_html_to_markdown(html_file)
-            if md_file:
-                self.generated_markdown_files.append(md_file)
-        
-        logger.info(f"Generated {len(self.generated_markdown_files)} markdown files")
-        
-        # Concatenate all markdown files into llms.txt
-        llms_txt_path = outdir / "llms.txt"
-        with open(llms_txt_path, 'w', encoding='utf-8') as llms_txt:
-            for md_file in self.generated_markdown_files:
-                with open(md_file, 'r', encoding='utf-8') as f:
-                    llms_txt.write(f"# {md_file.name}\n\n")
-                    llms_txt.write(f.read())
-                    llms_txt.write("\n\n")
-        logger.info(f"Concatenated markdown files into: {llms_txt_path}")
-    
-    def _convert_html_to_markdown(self, html_file: Path):
-        """Convert a single HTML file to markdown. Returns the markdown file path or None on failure."""
         try:
-            # Read the HTML content
-            with open(html_file, 'r', encoding='utf-8') as f:
-                html_content = f.read()
-            # Convert HTML to markdown
-            markdown_content = self._html_to_markdown(html_content)
-            # Create markdown file path (append .md to the HTML filename)
-            markdown_file = html_file.with_name(html_file.name + '.md')
-            # Write markdown file
-            with open(markdown_file, 'w', encoding='utf-8') as f:
-                f.write(markdown_content)
-            logger.info(f"Generated: {markdown_file}")
-            return markdown_file
-        except Exception as e:
-            logger.warning(f"Failed to convert {html_file}: {e}")
-            return None
+            # Build markdown files using sphinx_markdown_builder
+            from sphinx_markdown_builder import MarkdownBuilder
             
-    def _html_to_markdown(self, html_content: str) -> str:
-        """Convert HTML content to markdown format."""
-        # This is a simple conversion - in a real implementation you might want
-        # to use a library like html2text or beautifulsoup for better conversion
-        
-        # Remove HTML tags and convert basic elements
-        import re
-        
-        # Remove script and style tags and their content
-        html_content = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL)
-        
-        # Remove navigation and footer elements
-        html_content = re.sub(r'<nav[^>]*>.*?</nav>', '', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<footer[^>]*>.*?</footer>', '', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<div[^>]*class="[^"]*related[^"]*"[^>]*>.*?</div>', '', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<div[^>]*class="[^"]*sphinxsidebar[^"]*"[^>]*>.*?</div>', '', html_content, flags=re.DOTALL)
-        
-        # Convert headers
-        html_content = re.sub(r'<h1[^>]*>(.*?)</h1>', r'# \1', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<h2[^>]*>(.*?)</h2>', r'## \1', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<h3[^>]*>(.*?)</h3>', r'### \1', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<h4[^>]*>(.*?)</h4>', r'#### \1', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<h5[^>]*>(.*?)</h5>', r'##### \1', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<h6[^>]*>(.*?)</h6>', r'###### \1', html_content, flags=re.DOTALL)
-        
-        # Convert paragraphs
-        html_content = re.sub(r'<p[^>]*>(.*?)</p>', r'\1\n\n', html_content, flags=re.DOTALL)
-        
-        # Convert links
-        html_content = re.sub(r'<a[^>]*href="([^"]*)"[^>]*>(.*?)</a>', r'[\2](\1)', html_content, flags=re.DOTALL)
-        
-        # Convert bold and italic
-        html_content = re.sub(r'<strong[^>]*>(.*?)</strong>', r'**\1**', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<b[^>]*>(.*?)</b>', r'**\1**', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<em[^>]*>(.*?)</em>', r'*\1*', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<i[^>]*>(.*?)</i>', r'*\1*', html_content, flags=re.DOTALL)
-        
-        # Convert lists
-        html_content = re.sub(r'<li[^>]*>(.*?)</li>', r'- \1', html_content, flags=re.DOTALL)
-        
-        # Convert code blocks
-        html_content = re.sub(r'<pre[^>]*><code[^>]*>(.*?)</code></pre>', r'```\n\1\n```', html_content, flags=re.DOTALL)
-        html_content = re.sub(r'<code[^>]*>(.*?)</code>', r'`\1`', html_content, flags=re.DOTALL)
-        
-        # Remove remaining HTML tags
-        html_content = re.sub(r'<[^>]*>', '', html_content)
-        
-        # Decode HTML entities
-        import html
-        html_content = html.unescape(html_content)
-        
-        # Clean up whitespace and remove excessive newlines
-        html_content = re.sub(r'\n\s*\n\s*\n', '\n\n', html_content)
-        html_content = re.sub(r'[¶]', '', html_content)  # Remove paragraph symbols
-        html_content = html_content.strip()
-        
-        return html_content
+            # Create a new app instance for markdown building
+            md_app = Sphinx(
+                srcdir=str(app.srcdir),
+                confdir=str(app.confdir),
+                outdir=str(md_build_dir),
+                doctreedir=str(app.doctreedir),
+                buildername='markdown',
+                confoverrides=app.config.__dict__.copy(),
+                status=None,
+                warning=None,
+                freshenv=False,
+                warningiserror=False,
+                tags=(),
+                verbosity=0,
+                parallel=0,
+                keep_going=False,
+                pdb=False
+            )
+            
+            # Build the markdown files
+            md_app.build()
+            
+            # Find all markdown files in the build directory
+            md_files = list(md_build_dir.rglob("*.md"))
+            self.generated_markdown_files = []
+            
+            # Copy markdown files to the main output directory with renamed format
+            for md_file in md_files:
+                # Get relative path from build directory
+                rel_path = md_file.relative_to(md_build_dir)
+                
+                # Rename to follow the format: filename.html.md
+                # Remove the .md extension and add .html.md
+                base_name = rel_path.stem
+                new_name = f"{base_name}.html.md"
+                target_file = outdir / new_name
+                
+                # Ensure target directory exists
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Copy the file with the new name
+                import shutil
+                shutil.copy2(md_file, target_file)
+                self.generated_markdown_files.append(target_file)
+                logger.info(f"Generated: {target_file}")
+            
+            logger.info(f"Generated {len(self.generated_markdown_files)} markdown files")
+            
+            # Concatenate all markdown files into llms.txt
+            llms_txt_path = outdir / "llms.txt"
+            with open(llms_txt_path, 'w', encoding='utf-8') as llms_txt:
+                # Sort files to ensure index.html.md comes first
+                sorted_files = sorted(self.generated_markdown_files, key=lambda x: (x.name != 'index.html.md', x.name))
+                
+                for md_file in sorted_files:
+                    with open(md_file, 'r', encoding='utf-8') as f:
+                        llms_txt.write(f"# {md_file.name}\n\n")
+                        llms_txt.write(f.read())
+                        llms_txt.write("\n\n")
+            logger.info(f"Concatenated markdown files into: {llms_txt_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to generate markdown files: {e}")
+        finally:
+            # Clean up temporary build directory
+            if md_build_dir.exists():
+                import shutil
+                shutil.rmtree(md_build_dir)
 
 
 def setup(app: Sphinx) -> Dict[str, Any]:
