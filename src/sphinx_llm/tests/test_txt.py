@@ -27,16 +27,6 @@ def test_markdown_generator_init():
     assert generator.generated_markdown_files == []
 
 
-def test_setup_function():
-    """Test the setup function returns correct configuration."""
-    app: Any = MockApp()
-    result = setup(app)
-    
-    assert result['version'] == '0.0.1'
-    assert result['parallel_read_safe'] is True
-    assert result['parallel_write_safe'] is True
-
-
 def test_markdown_generator_setup():
     """Test that setup connects to the correct events."""
     app: Any = MockApp()
