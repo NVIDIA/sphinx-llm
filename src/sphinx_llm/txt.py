@@ -7,7 +7,7 @@ of all documents using the sphinx_markdown_builder.
 
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 from sphinx.application import Sphinx
 from sphinx.builders.html import StandaloneHTMLBuilder
@@ -38,7 +38,7 @@ class MarkdownGenerator:
         """Called when the builder is initialized."""
         self.builder = app.builder
     
-    def generate_markdown_files(self, app: Sphinx, exception: Exception | None):
+    def generate_markdown_files(self, app: Sphinx, exception: Union[Exception, None]):
         """Generate markdown files using sphinx_markdown_builder and concatenate them into llms.txt."""
         if exception:
             logger.warning("Skipping markdown generation due to build error")
