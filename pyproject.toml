@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "sphinx-markdown-builder>=0.6.8",
-    "sphinx>=7.4.7",
+    "sphinx>=5",
 ]
 
 [project.optional-dependencies]
