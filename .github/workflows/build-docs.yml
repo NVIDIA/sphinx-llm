@@ -9,6 +9,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+        sphinx-version: ["5", "6", "7", "8"]
 
     services:
       ollama:
@@ -42,11 +46,11 @@ jobs:
         uses: astral-sh/setup-uv@v6.3.1
         with:
           version: "latest"
-          python-version: 3.12
+          python-version: ${{ matrix.python-version }}
 
       - name: Build Sphinx documentation
         run: |
-          uv run --dev --extra gen sphinx-build -b html docs/source docs/build/html
+          uv run --dev --extra gen --with sphinx==${{ matrix.sphinx-version }} sphinx-build -b html docs/source docs/build/html
 
       - name: DEBUG Output updated source file
         run: |
