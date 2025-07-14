@@ -50,7 +50,7 @@ jobs:
 
       - name: Build Sphinx documentation
         run: |
-          uv run --dev --extra gen --with sphinx=="${{ matrix.sphinx-version }}" sphinx-build -b html docs/source docs/build/html
+          uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -b html docs/source docs/build/html
 
       - name: DEBUG Output updated source file
         run: |
