@@ -24,19 +24,12 @@ class MarkdownGenerator:
     
     def __init__(self, app: Sphinx):
         self.app = app
-        self.builder = None
         self.generated_markdown_files = []  # Track generated markdown files
     
     def setup(self):
         """Set up the extension."""
-        # Connect to the builder-inited event to get the builder instance
-        self.app.connect('builder-inited', self.builder_inited)
         # Connect to the build-finished event to generate markdown files
         self.app.connect('build-finished', self.generate_markdown_files)
-    
-    def builder_inited(self, app: Sphinx):
-        """Called when the builder is initialized."""
-        self.builder = app.builder
     
     def generate_markdown_files(self, app: Sphinx, exception: Union[Exception, None]):
         """Generate markdown files using sphinx_markdown_builder and concatenate them into llms.txt."""
@@ -44,11 +37,11 @@ class MarkdownGenerator:
             logger.warning("Skipping markdown generation due to build error")
             return
         
-        if not isinstance(self.builder, StandaloneHTMLBuilder):
-            logger.info("Markdown generation only works with HTML builder")
+        if not self.app.builder or self.app.builder.name not in ["html", "dirhtml"]:
+            logger.info("Markdown generation only works with HTML builders (html or dirhtml)")
             return
         
-        outdir = Path(self.builder.outdir)
+        outdir = Path(self.app.builder.outdir)
         logger.info("Generating markdown files using sphinx_markdown_builder...")
         
         # Create a temporary markdown build directory
@@ -95,13 +88,12 @@ class MarkdownGenerator:
                 base_name = rel_path.stem
                 new_name = f"{base_name}.html.md"
                 
-                # Preserve the directory structure by using the parent directory of rel_path
-                if rel_path.parent != Path('.'):
-                    # If the file is in a subdirectory, place it in the same subdirectory
-                    target_file = outdir / rel_path.parent / new_name
+                # Determine target file location based on builder and file type
+                if self.app.builder and self.app.builder.name == "dirhtml":
+                    target_file = outdir / new_name if base_name == "index" else outdir / rel_path.with_suffix("") / "index.html.md"
                 else:
-                    # If the file is in the root, place it in the root
-                    target_file = outdir / new_name
+                    target_file = outdir / rel_path.parent / new_name if rel_path.parent != Path('.') else outdir / new_name
+                logger.info(f"Copying markdown file to: {target_file}")
                 
                 # Ensure target directory exists
                 target_file.parent.mkdir(parents=True, exist_ok=True)
@@ -165,14 +157,16 @@ class MarkdownGenerator:
                 # Extract title from the markdown file
                 title = self.extract_title_from_markdown(md_file)
                 
-                # Create the URL (assuming HTML output)
-                # Remove .html.md extension and add .html
+                # Create the URL based on builder type
                 base_name = md_file.stem.replace('.html', '')
-                url = f"{base_name}.html"
-                
-                # If it's the index file, make it the root
                 if base_name == 'index':
                     url = "index.html"
+                elif self.app.builder and self.app.builder.name == "dirhtml":
+                    # For dirhtml builder: apples/index.html.md -> apples/
+                    url = f"{base_name}/"
+                else:
+                    # For html builder: apples.html.md -> apples.html
+                    url = f"{base_name}.html"
                 
                 # Write the link
                 sitemap.write(f"- [{title}]({url}): {self.get_page_description(md_file)}\n")

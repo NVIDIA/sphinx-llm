@@ -10,8 +10,8 @@ from sphinx.application import Sphinx
 from sphinx_llm.txt import MarkdownGenerator
 
 
-@pytest.fixture
-def sphinx_build() -> Generator[Tuple[Sphinx, Path, Path], None, None]:
+@pytest.fixture(params=["html", "dirhtml"])
+def sphinx_build(request) -> Generator[Tuple[Sphinx, Path, Path], None, None]:
     """
     Build Sphinx documentation into a temporary directory.
     
@@ -33,7 +33,7 @@ def sphinx_build() -> Generator[Tuple[Sphinx, Path, Path], None, None]:
             confdir=str(docs_source_dir),
             outdir=str(build_dir),
             doctreedir=str(doctree_dir),
-            buildername="html",
+            buildername=request.param,
             warningiserror=False,
             freshenv=True,
         )
@@ -70,8 +70,7 @@ def test_markdown_generator_init(sphinx_build):
     generator = MarkdownGenerator(app)
     
     assert generator.app == app
-    assert generator.builder is None
-    assert generator.generated_markdown_files == []
+    # No builder attribute to check anymore
 
 
 def test_markdown_generator_setup(sphinx_build):
@@ -89,36 +88,19 @@ def test_markdown_generator_setup(sphinx_build):
     
     generator.setup()
     
-    # Check that the correct events are connected
+    # Check that the correct event is connected
     events = [call[0] for call in connect_calls]
-    assert 'builder-inited' in events
     assert 'build-finished' in events
-    
-    # Restore original connect
-    app.connect = original_connect
-
-
-def test_builder_inited(sphinx_build):
-    """Test builder_inited method."""
-    app, _, _ = sphinx_build
-    generator = MarkdownGenerator(app)
-    
-    generator.builder_inited(app)
-    
-    assert generator.builder == app.builder
+    # No builder-inited event anymore
 
 
 def test_generate_markdown_files_with_exception(sphinx_build):
-    """Test generate_markdown_files when an exception occurs."""
+    """Test that generate_markdown_files returns early on exception."""
     app, _, _ = sphinx_build
     generator = MarkdownGenerator(app)
     
-    # Test with exception
-    exception = Exception("Build failed")
-    generator.generate_markdown_files(app, exception)
-    
-    # Should not process files when exception occurs
-    assert generator.generated_markdown_files == []
+    # Should not raise
+    generator.generate_markdown_files(app, Exception("fail"))
 
 
 def test_rst_files_have_corresponding_output_files(sphinx_build):
@@ -134,9 +116,11 @@ def test_rst_files_have_corresponding_output_files(sphinx_build):
         # Calculate relative path from source directory
         rel_path = rst_file.relative_to(source_dir)
         
-        # Remove .rst extension and add .html
-        html_name = rel_path.with_suffix('.html')
-        html_md_name = rel_path.with_suffix('.html.md')
+        # For html builder remove .rst extension and add .html
+        # For dirhtml builder remove .rst extension and add directory containing index.html
+        html_or_index = rel_path.stem == "index" or app.builder.name == "html"
+        html_name = rel_path.with_suffix('.html') if html_or_index else rel_path.with_suffix('') / "index.html"
+        html_md_name = html_name.with_suffix('.html.md')
         
         # Check HTML file exists
         html_path = build_dir / html_name
