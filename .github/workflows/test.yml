@@ -14,22 +14,22 @@ jobs:
         include:
           # Test each Sphinx version against latest Python
           - python-version: "3.12"
-            sphinx-version: "5"
+            sphinx-version: ">=5.1,<6"
           - python-version: "3.12"
-            sphinx-version: "6"
+            sphinx-version: ">=6,<7"
           - python-version: "3.12"
-            sphinx-version: "7"
+            sphinx-version: ">=7,<8"
           - python-version: "3.12"
-            sphinx-version: "8"
+            sphinx-version: ">=8,<9"
           # Test each Python version against latest Sphinx
           - python-version: "3.9"
-            sphinx-version: "7"
+            sphinx-version: ">=7,<8"
           - python-version: "3.10"
-            sphinx-version: "7"
+            sphinx-version: ">=7,<8"
           - python-version: "3.11"
-            sphinx-version: "7"
+            sphinx-version: ">=7,<8"
           - python-version: "3.12"
-            sphinx-version: "7"
+            sphinx-version: ">=7,<8"
 
     steps:
       - name: Checkout repository
