@@ -119,3 +119,33 @@ def test_generate_markdown_files_with_exception(sphinx_build):
     
     # Should not process files when exception occurs
     assert generator.generated_markdown_files == []
+
+
+def test_rst_files_have_corresponding_output_files(sphinx_build):
+    """Test that all RST files have corresponding HTML and HTML.MD files in output."""
+    app, build_dir, source_dir = sphinx_build
+    
+    # Find all RST files in the source directory
+    rst_files = list(source_dir.rglob("*.rst"))
+    assert len(rst_files) > 0, "No RST files found in source directory"
+    
+    # For each RST file, check that corresponding HTML and HTML.MD files exist
+    for rst_file in rst_files:
+        # Calculate relative path from source directory
+        rel_path = rst_file.relative_to(source_dir)
+        
+        # Remove .rst extension and add .html
+        html_name = rel_path.with_suffix('.html')
+        html_md_name = rel_path.with_suffix('.html.md')
+        
+        # Check HTML file exists
+        html_path = build_dir / html_name
+        assert html_path.exists(), f"HTML file not found: {html_path}"
+        
+        # Check HTML.MD file exists
+        html_md_path = build_dir / html_md_name
+        assert html_md_path.exists(), f"HTML.MD file not found: {html_md_path}"
+        
+        # Verify both files have content
+        assert html_path.stat().st_size > 0, f"HTML file is empty: {html_path}"
+        assert html_md_path.stat().st_size > 0, f"HTML.MD file is empty: {html_md_path}"
