@@ -14,33 +14,12 @@ jobs:
         python-version: ["3.12"]
         sphinx-version: [">=5.1,<6", ">=6,<7", ">=7,<8", ">=8,<9"]
 
-    services:
-      ollama:
-        image: ollama/ollama:latest
-        ports:
-          - 11434:11434
-        volumes:
-          - /home/runner/work/.ollama/:/root/.ollama
-        options: >-
-          --name ollama
-          --health-cmd "ollama ps"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 20
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Allow cache to extract as root
-        run: sudo chown root /bin/tar && sudo chmod u+s /bin/tar
-
-      - name: Cache Ollama Models
-        id: cache-models
-        uses: actions/cache@v4
-        with:
-          path: /home/runner/work/.ollama/models
-          key: models
+      - name: Setup Ollama
+        uses: ai-action/setup-ollama@v1
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6.3.1
