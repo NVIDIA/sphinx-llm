@@ -157,16 +157,9 @@ class MarkdownGenerator:
                 # Extract title from the markdown file
                 title = self.extract_title_from_markdown(md_file)
                 
-                # Create the URL based on builder type
-                base_name = md_file.stem.replace('.html', '')
-                if base_name == 'index':
-                    url = "index.html"
-                elif self.app.builder and self.app.builder.name == "dirhtml":
-                    # For dirhtml builder: apples/index.html.md -> apples/
-                    url = f"{base_name}/"
-                else:
-                    # For html builder: apples.html.md -> apples.html
-                    url = f"{base_name}.html"
+                # Create the URL based on the relative path from output directory
+                rel_path = md_file.relative_to(outdir)
+                url = str(rel_path)
                 
                 # Write the link
                 sitemap.write(f"- [{title}]({url}): {self.get_page_description(md_file)}\n")

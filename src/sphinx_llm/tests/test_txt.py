@@ -133,3 +133,32 @@ def test_rst_files_have_corresponding_output_files(sphinx_build):
         # Verify both files have content
         assert html_path.stat().st_size > 0, f"HTML file is empty: {html_path}"
         assert html_md_path.stat().st_size > 0, f"HTML.MD file is empty: {html_md_path}"
+
+def test_llms_txt_sitemap_links_exist(sphinx_build):
+    """Test that all markdown pages listed in the llms.txt sitemap actually exist."""
+    app, build_dir, source_dir = sphinx_build
+    
+    # Check that llms.txt exists
+    llms_txt_path = build_dir / "llms.txt"
+    assert llms_txt_path.exists(), f"llms.txt not found: {llms_txt_path}"
+    
+    # Read the sitemap and extract URLs
+    with open(llms_txt_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # Find all markdown URLs in the sitemap
+    # URLs are in the format: [title](url)
+    import re
+    url_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+    matches = re.findall(url_pattern, content)
+    
+    assert len(matches) > 0, "No URLs found in llms.txt sitemap"
+    
+    # Check that each URL points to an existing markdown file
+    for title, url in matches:
+        # Convert URL to file path relative to build directory
+        md_file_path = build_dir / url
+        
+        assert md_file_path.exists(), f"Markdown file not found for URL '{url}' (title: '{title}'): {md_file_path}"
+        assert md_file_path.stat().st_size > 0, f"Markdown file is empty for URL '{url}' (title: '{title}'): {md_file_path}"
+
