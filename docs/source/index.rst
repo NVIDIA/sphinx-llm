@@ -12,7 +12,7 @@ Welcome to sphinx-llm's documentation!
 
    test
    apples
-
+   nested/example
 
 
 Indices and tables

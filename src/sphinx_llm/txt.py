@@ -94,7 +94,14 @@ class MarkdownGenerator:
                 # Remove the .md extension and add .html.md
                 base_name = rel_path.stem
                 new_name = f"{base_name}.html.md"
-                target_file = outdir / new_name
+                
+                # Preserve the directory structure by using the parent directory of rel_path
+                if rel_path.parent != Path('.'):
+                    # If the file is in a subdirectory, place it in the same subdirectory
+                    target_file = outdir / rel_path.parent / new_name
+                else:
+                    # If the file is in the root, place it in the root
+                    target_file = outdir / new_name
                 
                 # Ensure target directory exists
                 target_file.parent.mkdir(parents=True, exist_ok=True)
