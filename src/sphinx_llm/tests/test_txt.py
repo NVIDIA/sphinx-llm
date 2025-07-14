@@ -60,19 +60,10 @@ def test_sphinx_build_fixture(sphinx_build):
     index_html = build_path / "index.html"
     assert index_html.exists(), f"{index_html} does not exist"
 
-    
-class MockApp:
-    """Simple mock for Sphinx app."""
-    def __init__(self):
-        self.connect_calls = []
-    
-    def connect(self, event: str, callback: Callable) -> None:
-        self.connect_calls.append((event, callback))
 
-
-def test_markdown_generator_init():
+def test_markdown_generator_init(sphinx_build):
     """Test MarkdownGenerator initialization."""
-    app: Any = MockApp()
+    app, _ = sphinx_build
     generator = MarkdownGenerator(app)
     
     assert generator.app == app
@@ -80,36 +71,43 @@ def test_markdown_generator_init():
     assert generator.generated_markdown_files == []
 
 
-def test_markdown_generator_setup():
+def test_markdown_generator_setup(sphinx_build):
     """Test that setup connects to the correct events."""
-    app: Any = MockApp()
+    app, _ = sphinx_build
     generator = MarkdownGenerator(app)
+    
+    # Patch app.connect to record calls
+    connect_calls = []
+    original_connect = app.connect
+    def record_connect(event, callback):
+        connect_calls.append((event, callback))
+        return original_connect(event, callback)
+    app.connect = record_connect
     
     generator.setup()
     
     # Check that the correct events are connected
-    events = [call[0] for call in app.connect_calls]
+    events = [call[0] for call in connect_calls]
     assert 'builder-inited' in events
     assert 'build-finished' in events
-
-
-def test_builder_inited():
-    """Test builder_inited method."""
-    app: Any = MockApp()
-    generator = MarkdownGenerator(app)
     
-    # Mock a builder
-    mock_builder = type('MockBuilder', (), {})()
-    app.builder = mock_builder
+    # Restore original connect
+    app.connect = original_connect
+
+
+def test_builder_inited(sphinx_build):
+    """Test builder_inited method."""
+    app, _ = sphinx_build
+    generator = MarkdownGenerator(app)
     
     generator.builder_inited(app)
     
-    assert generator.builder == mock_builder
+    assert generator.builder == app.builder
 
 
-def test_generate_markdown_files_with_exception():
+def test_generate_markdown_files_with_exception(sphinx_build):
     """Test generate_markdown_files when an exception occurs."""
-    app: Any = MockApp()
+    app, _ = sphinx_build
     generator = MarkdownGenerator(app)
     
     # Test with exception
