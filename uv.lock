@@ -789,7 +789,7 @@ wheels = [
 
 [[package]]
 name = "sphinx-llm"
-version = "0.1.1.dev0+g0ca49af.d20250710"
+version = "0.1.2.dev0+ga7682b2.d20250711"
 source = { editable = "." }
 dependencies = [
     { name = "sphinx" },
