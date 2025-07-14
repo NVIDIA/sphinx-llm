@@ -38,5 +38,4 @@ jobs:
 
       - name: DEBUG Output updated source file
         run: |
-          cat docs/source/test.rst
-          diff docs/source/test.rst docs/source/test.rst.bak
+          diff docs/source/test.rst docs/source/test.rst.bak || true
