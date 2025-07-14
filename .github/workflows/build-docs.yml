@@ -27,6 +27,11 @@ jobs:
           version: "latest"
           python-version: ${{ matrix.python-version }}
 
+      - name: Invalidate summary cache
+        run: |
+          echo "\n\nBuild ID: $GITHUB_RUN_ID" >> docs/source/test.rst
+          cp docs/source/test.rst docs/source/test.rst.bak
+
       - name: Build Sphinx documentation
         run: |
           uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -b html docs/source docs/build/html
@@ -34,3 +39,4 @@ jobs:
       - name: DEBUG Output updated source file
         run: |
           cat docs/source/test.rst
+          diff docs/source/test.rst docs/source/test.rst.bak
