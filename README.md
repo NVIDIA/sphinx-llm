@@ -112,3 +112,21 @@ Try it out yourself by building the example documentation.
 ```console
 uv run --dev sphinx-autobuild docs/source docs/build/html
 ```
+
+## Alternatives
+
+There are other projects that solve this same problem, that’s the wonderful nature of open source software. This section compares the various approaches each project has taken.
+
+These comparisons have been put together with the best of intentions, but I acknowledge they are highly subjective. If you spot any information on this page that you beleive to be incorrect or incomplete please don’t hesitate to open a Pull Request. The goal here is to provide you with all the information you need to make the right choice for your needs.
+
+
+
+| **Dimension**                           | [sphinx-llm](https://github.com/jacobtomlinson/sphinx-llm)                                                                                                                                          | [sphinx-llms-txt](https://github.com/jdillard/sphinx-llms-txt/)                                |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Purpose**                             | Rich `llms.txt` and `llms-full.txt` markdown creation with individual pages and LLM summarization capabilities.                                                                                     | Simple `llms.txt` and `llms-full.txt` files creation.                                          |
+| **Individual pages**                    | Outputs a Markdown rendered version for each page.                                                                                                                                                  | Not supported.                                                                                 |
+| **Supported docs input formats**        | Works with any Sphinx source format including RST, MyST, etc.                                                                                                                                       | Works with any Sphinx source format including RST, MyST, etc.                                  |
+| **Supported `llms.txt` output formats** | Markdown.                                                                                                                                                                                           | Passes through whatever the input format was.                                                  |
+| **Additional features**                 | In the future could allow `llms.txt` to include LLM generated summaries of each page (see [#28](https://github.com/jacobtomlinson/sphinx-llm/issues/28)).                                           | Allows manual configuration of `llms-full.txt` content.                                        |
+| **Build-time behavior**                 | Can double docs build time; Needs to run the markdown builder after the main build is complete (in future could run in parallel see [#31](https://github.com/jacobtomlinson/sphinx-llm/issues/31)). | Minimal build time impact; post build runs a converter/aggregator of `_sources`.               |
+| **Limitations**                         | Not all directives are supported by the markdown builder.                                                                                                                                           | Source documentation files are not processed, so directives like `automodule` aren't expanded. |
