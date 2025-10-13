@@ -72,6 +72,10 @@ class MarkdownGenerator:
             # Build the markdown files
             md_app.build()
 
+            if md_app.statuscode != 0:
+                logger.error("Failed to generate markdown files for llms.txt")
+                return
+
             # Find all markdown files in the build directory
             md_files = list(md_build_dir.rglob("*.md"))
             self.generated_markdown_files = []
