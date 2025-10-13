@@ -73,7 +73,9 @@ class MarkdownGenerator:
             md_app.build()
 
             if md_app.statuscode != 0:
-                logger.error("Failed to generate markdown files for llms.txt")
+                logger.error(
+                    "Failed to generate markdown files for llms.txt. For more details run the markdown builder manually. Command: sphinx-build -b markdown <source> <build>"
+                )
                 return
 
             # Find all markdown files in the build directory
