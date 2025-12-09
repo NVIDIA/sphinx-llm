@@ -2,9 +2,8 @@ name: Build Downstream Projects
 
 on:
   push:
-    # Uncomment before merging
-    # branches:
-    #   - main
+    branches:
+      - main
   schedule:
     - cron: "0 1 * * *"
 
