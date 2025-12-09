@@ -98,13 +98,13 @@ def test_markdown_generator_setup(sphinx_build):
     # No builder-inited event anymore
 
 
-def test_generate_markdown_files_with_exception(sphinx_build):
-    """Test that generate_markdown_files returns early on exception."""
+def test_build_llms_txt_with_exception(sphinx_build):
+    """Test that build_llms_txt returns early on exception."""
     app, _, _ = sphinx_build
     generator = MarkdownGenerator(app)
 
     # Should not raise
-    generator.generate_markdown_files(app, Exception("fail"))
+    generator.build_llms_txt(app, Exception("fail"))
 
 
 def test_rst_files_have_corresponding_output_files(sphinx_build):
