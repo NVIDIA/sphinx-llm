@@ -5,6 +5,8 @@ on:
     # Uncomment before merging
     # branches:
     #   - main
+  schedule:
+    - cron: "0 1 * * *"
 
 permissions:
   issues: write 
