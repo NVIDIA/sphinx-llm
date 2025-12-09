@@ -22,6 +22,9 @@ jobs:
           - repo: nolar/kopf
             install_command: "uv pip install --group docs -e ."
             build_command: "sphinx-build docs/ docs/_build/ -b html"
+          - repo: kr8s-org/kr8s
+            install_command: "uv sync --dev"
+            build_command: "uv run --dev sphinx-build docs/ docs/_build/"
 
     steps:
       - name: Checkout repository
