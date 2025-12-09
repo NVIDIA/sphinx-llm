@@ -67,8 +67,6 @@ class MarkdownGenerator:
         finally:
             # Clean up temporary build directory
             if self.md_build_dir.exists():
-                import shutil
-
                 shutil.rmtree(self.md_build_dir)
 
     def build_markdown_files(self):
