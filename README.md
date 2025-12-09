@@ -37,21 +37,25 @@ extensions = [
 
 When you build your documentation with `sphinx-build` (or `make html`), the extension will:
 
-1. Find all HTML files generated in the output directory
-2. Convert each HTML file to markdown format
-3. Save the markdown files with the same name plus an extra `.md` extension
-4. Concatenates all generated markdown into a single `llms-full.txt` file
+1. Builds your documentation as usual
+2. Also builds your documentation with the [markdown builder](https://pypi.org/project/sphinx-markdown-builder/)
+3. Merges the build outputs together 
+    - The markdown files will have the same as the HTML name plus an extra `.md` extension
+4. Generates an index file for all the markdown files named `llms.txt`
+5. Concatenates all generated markdown into a single `llms-full.txt` file
 
 For example, if your build generates:
 - `_build/html/index.html`
 - `_build/html/apples.html`
 
 The extension will also create:
+- `_build/html/llms.txt`
+- `_build/html/llms-full.txt`
 - `_build/html/index.html.md`
 - `_build/html/apples.html.md`
-- `_build/html/llms-full.txt`
 
-Note: This extension only works with HTML builders (like `html` and `dirhtml`).
+> [!NOTE]
+> This extension only works with HTML builders (like `html` and `dirhtml`).
 
 ### Docref
 
