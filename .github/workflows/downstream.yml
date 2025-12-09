@@ -16,13 +16,10 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12"]
-        downstream-project: [
-          {
-            "repo":"nolar/kopf",
-            "install_command": "uv pip install --group docs -e .", 
-            "build_command": "sphinx-build docs/ docs/_build/ -b html"
-          }
-        ]
+        downstream-project: 
+          - repo: nolar/kopf
+            install_command: "uv pip install --group docs -e ."
+            build_command: "sphinx-build docs/ docs/_build/ -b html"
 
     steps:
       - name: Checkout repository
