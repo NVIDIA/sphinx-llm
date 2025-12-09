@@ -57,8 +57,18 @@ jobs:
           cd ${{ matrix.downstream-project.path }}
           ${{ matrix.downstream-project.build_command }}
 
+      - name: Check for llms.txt build files
+        run: |
+          found=$(find ${{ matrix.downstream-project.path }} \( -name "llms.txt" -o -name "llms-full.txt" -o -name "*.html.md" \))
+          if [ -z "$found" ]; then
+            echo "No build files found"
+            exit 1
+          fi
+          echo "Build files found:"
+          echo "$found"
+
       - name: Open issue if build fails
-        if: failure() && steps.build-downstream-project.outcome == 'failure'
+        if: failure() 
         uses: actions/github-script@v7
         with:
           script: |
