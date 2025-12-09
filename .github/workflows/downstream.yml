@@ -18,8 +18,7 @@ jobs:
         python-version: ["3.12"]
         downstream-project: [
           {
-            "name":"nolar/kopf",
-            "path":"kopf", 
+            "repo":"nolar/kopf",
             "install_command": "uv pip install --group docs -e .", 
             "build_command": "sphinx-build docs/ docs/_build/ -b html"
           }
@@ -32,8 +31,8 @@ jobs:
       - name: Checkout Downstream Project
         uses: actions/checkout@v6
         with:
-          repository: ${{ matrix.downstream-project.name }}
-          path: ${{ matrix.downstream-project.path }}
+          repository: ${{ matrix.downstream-project.repo }}
+          path: ${{ matrix.downstream-project.repo }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -44,7 +43,7 @@ jobs:
 
       - name: Install Downstream Project
         run: |
-          cd ${{ matrix.downstream-project.path }}
+          cd ${{ matrix.downstream-project.repo }}
           ${{ matrix.downstream-project.install_command }}
 
       - name: Install sphinx-llm
@@ -54,12 +53,12 @@ jobs:
       - name: Build Downstream Project
         id: build-downstream-project
         run: |
-          cd ${{ matrix.downstream-project.path }}
+          cd ${{ matrix.downstream-project.repo }}
           ${{ matrix.downstream-project.build_command }}
 
       - name: Check for llms.txt build files
         run: |
-          found=$(find ${{ matrix.downstream-project.path }} \( -name "llms.txt" -o -name "llms-full.txt" -o -name "*.html.md" \))
+          found=$(find ${{ matrix.downstream-project.repo }} \( -name "llms.txt" -o -name "llms-full.txt" -o -name "*.html.md" \))
           if [ -z "$found" ]; then
             echo "No build files found"
             exit 1
@@ -75,6 +74,6 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Downstream build failed for ${process.env.GITHUB_SHA.substring(0, 8)}: ${{ matrix.downstream-project.name }}`,
+              title: `Downstream build failed for ${process.env.GITHUB_SHA.substring(0, 8)}: ${{ matrix.downstream-project.repo }}`,
               body: `Downstream testing failed, see ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
             });
