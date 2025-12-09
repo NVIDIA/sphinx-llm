@@ -5,6 +5,9 @@ This extension hooks into the Sphinx build process to create markdown versions
 of all documents using the sphinx_markdown_builder.
 """
 
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Union
 
@@ -22,142 +25,155 @@ class MarkdownGenerator:
     def __init__(self, app: Sphinx):
         self.app = app
         self.generated_markdown_files = []  # Track generated markdown files
+        self.outdir = None
+        self.md_build_dir = None
 
     def setup(self):
         """Set up the extension."""
         # Connect to the build-finished event to generate markdown files
-        self.app.connect("build-finished", self.generate_markdown_files)
+        self.app.connect("build-finished", self.build_llms_txt)
 
-    def generate_markdown_files(self, app: Sphinx, exception: Union[Exception, None]):
+    def build_llms_txt(self, app: Sphinx, exception: Union[Exception, None]):
         """Generate markdown files using sphinx_markdown_builder and concatenate them into llms.txt."""
+        self.outdir = Path(app.builder.outdir)
+        self.md_build_dir = self.outdir / "_markdown_build"
         if exception:
             logger.warning("Skipping markdown generation due to build error")
             return
 
-        if not self.app.builder or self.app.builder.name not in ["html", "dirhtml"]:
+        if app.builder and app.builder.name == "markdown":
+            return
+
+        if not app.builder or app.builder.name not in ["html", "dirhtml"]:
             logger.info(
-                "Markdown generation only works with HTML builders (html or dirhtml)"
+                "llms.txt generation only works with HTML builders (html or dirhtml), skipping..."
             )
             return
 
-        outdir = Path(self.app.builder.outdir)
         logger.info("Generating markdown files using sphinx_markdown_builder...")
 
-        # Create a temporary markdown build directory
-        md_build_dir = outdir / "_markdown_build"
-        md_build_dir.mkdir(exist_ok=True)
-
         try:
-            # Build markdown files using sphinx_markdown_builder
+            # Build markdown files with sphinx_markdown_builder
+            self.build_markdown_files()
 
-            # Create a new app instance for markdown building
-            md_app = Sphinx(
-                srcdir=str(app.srcdir),
-                confdir=str(app.confdir),
-                outdir=str(md_build_dir),
-                doctreedir=str(app.doctreedir),
-                buildername="markdown",
-                status=self.app._status,
-                warning=self.app._warning,
-                freshenv=False,
-                warningiserror=False,
-                tags=(),
-                verbosity=0,
-                parallel=0,
-                keep_going=False,
-                pdb=False,
-            )
-
-            # Build the markdown files
-            md_app.build()
-
-            # Find all markdown files in the build directory
-            md_files = list(md_build_dir.rglob("*.md"))
-            self.generated_markdown_files = []
-
-            # Copy markdown files to the main output directory with renamed format
-            for md_file in md_files:
-                # Get relative path from build directory
-                rel_path = md_file.relative_to(md_build_dir)
-
-                # Rename to follow the format: filename.html.md
-                # Remove the .md extension and add .html.md
-                base_name = rel_path.stem
-                new_name = f"{base_name}.html.md"
-
-                # Determine target file location based on builder and file type
-                if self.app.builder and self.app.builder.name == "dirhtml":
-                    target_file = (
-                        outdir / new_name
-                        if base_name == "index"
-                        else outdir / rel_path.with_suffix("") / "index.html.md"
-                    )
-                else:
-                    target_file = (
-                        outdir / rel_path.parent / new_name
-                        if rel_path.parent != Path(".")
-                        else outdir / new_name
-                    )
-                logger.info(f"Copying markdown file to: {target_file}")
-
-                # Ensure target directory exists
-                target_file.parent.mkdir(parents=True, exist_ok=True)
-
-                # Copy the file with the new name
-                import shutil
-
-                shutil.copy2(md_file, target_file)
-                self.generated_markdown_files.append(target_file)
-                logger.info(f"Generated: {target_file}")
-
-            logger.info(
-                f"Generated {len(self.generated_markdown_files)} markdown files"
-            )
+            # Copy markdown files to the main output directory
+            self.copy_markdown_files()
 
             # Concatenate all markdown files into llms-full.txt
-            llms_txt_path = outdir / "llms-full.txt"
-            with open(llms_txt_path, "w", encoding="utf-8") as llms_txt:
-                # Sort files to ensure index.html.md comes first
-                sorted_files = sorted(
-                    self.generated_markdown_files,
-                    key=lambda x: (x.name != "index.html.md", x.name),
-                )
-
-                for md_file in sorted_files:
-                    with open(md_file, encoding="utf-8") as f:
-                        llms_txt.write(f"# {md_file.name}\n\n")
-                        llms_txt.write(f.read())
-                        llms_txt.write("\n\n")
-            logger.info(f"Concatenated markdown files into: {llms_txt_path}")
+            self.build_llms_full_txt()
 
             # Create sitemap in llms.txt
-            self.create_sitemap(outdir, app)
-
-        except Exception as e:
-            logger.error(f"Failed to generate markdown files: {e}")
+            self.create_sitemap()
         finally:
             # Clean up temporary build directory
-            if md_build_dir.exists():
+            if self.md_build_dir.exists():
                 import shutil
 
-                shutil.rmtree(md_build_dir)
+                shutil.rmtree(self.md_build_dir)
 
-    def create_sitemap(self, outdir: Path, app: Sphinx):
+    def build_markdown_files(self):
+        # Create temporary markdown build directory
+        self.md_build_dir.mkdir(exist_ok=True)
+        try:
+            # Build markdown files using sphinx-markdown-builder
+            sphinx_build_cmd = [
+                sys.executable,
+                "-m",
+                "sphinx",
+                "-b",
+                "markdown",
+                str(self.app.srcdir),
+                str(self.md_build_dir),
+            ]
+
+            logger.info(
+                f"Spawning sphinx subprocess to build markdown files for llms.txt: {' '.join(sphinx_build_cmd)}"
+            )
+            try:
+                subprocess.run(
+                    sphinx_build_cmd,
+                    check=True,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
+                )
+            except Exception as exc:
+                logger.error(f"Failed to run sphinx-build subprocess: {exc}")
+        except Exception as e:
+            logger.error(f"Failed to generate markdown files: {e}")
+
+    def copy_markdown_files(self):
+        # Find all markdown files in the build directory
+        md_files = list(self.md_build_dir.rglob("*.md"))
+        self.generated_markdown_files = []
+
+        # Copy markdown files to the main output directory with renamed format
+        for md_file in md_files:
+            # Get relative path from build directory
+            rel_path = md_file.relative_to(self.md_build_dir)
+
+            # Rename to follow the format: filename.html.md
+            # Remove the .md extension and add .html.md
+            base_name = rel_path.stem
+            new_name = f"{base_name}.html.md"
+
+            # Determine target file location based on builder and file type
+            if self.app.builder and self.app.builder.name == "dirhtml":
+                target_file = (
+                    self.outdir / new_name
+                    if base_name == "index"
+                    else self.outdir / rel_path.with_suffix("") / "index.html.md"
+                )
+            else:
+                target_file = (
+                    self.outdir / rel_path.parent / new_name
+                    if rel_path.parent != Path(".")
+                    else self.outdir / new_name
+                )
+            logger.info(f"Copying markdown file to: {target_file}")
+
+            # Ensure target directory exists
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+
+            # Copy the file with the new name
+            shutil.copy2(md_file, target_file)
+            self.generated_markdown_files.append(target_file)
+            logger.info(f"Generated: {target_file}")
+
+        logger.info(f"Generated {len(self.generated_markdown_files)} markdown files")
+
+    def build_llms_full_txt(self):
+        # Concatenate all markdown files into llms-full.txt
+        llms_txt_path = self.outdir / "llms-full.txt"
+        with open(llms_txt_path, "w", encoding="utf-8") as llms_txt:
+            # Sort files to ensure index.html.md comes first
+            sorted_files = sorted(
+                self.generated_markdown_files,
+                key=lambda x: (x.name != "index.html.md", x.name),
+            )
+
+            for md_file in sorted_files:
+                with open(md_file, encoding="utf-8") as f:
+                    llms_txt.write(f"# {md_file.name}\n\n")
+                    llms_txt.write(f.read())
+                    llms_txt.write("\n\n")
+        logger.info(f"Concatenated markdown files into: {llms_txt_path}")
+
+    def create_sitemap(self):
         """Create a markdown sitemap in llms.txt."""
-        llms_txt_path = outdir / "llms.txt"
+        llms_txt_path = self.outdir / "llms.txt"
 
         with open(llms_txt_path, "w", encoding="utf-8") as sitemap:
             # Write the title and description
-            project_title = getattr(app.config, "project", "Documentation")
+            project_title = getattr(self.app.config, "project", "Documentation")
             sitemap.write(f"# {project_title}\n\n")
 
             # Add optional description if available
-            if hasattr(app.config, "html_title") and app.config.html_title:
-                sitemap.write(f"> {app.config.html_title}\n\n")
+            if hasattr(self.app.config, "html_title") and self.app.config.html_title:
+                sitemap.write(f"> {self.app.config.html_title}\n\n")
 
             # Add project details if available
-            if hasattr(app.config, "copyright") and app.config.copyright:
-                sitemap.write(f"{app.config.copyright}\n\n")
+            if hasattr(self.app.config, "copyright") and self.app.config.copyright:
+                sitemap.write(f"{self.app.config.copyright}\n\n")
 
             # Write the main content section
             sitemap.write("## Pages\n\n")
@@ -173,7 +189,7 @@ class MarkdownGenerator:
                 title = self.extract_title_from_markdown(md_file)
 
                 # Create the URL based on the relative path from output directory
-                rel_path = md_file.relative_to(outdir)
+                rel_path = md_file.relative_to(self.outdir)
                 url = str(rel_path)
 
                 # Write the link
