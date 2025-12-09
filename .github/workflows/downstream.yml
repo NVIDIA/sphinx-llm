@@ -8,7 +8,7 @@ on:
 
 permissions:
   issues: write 
-  
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,7 +20,7 @@ jobs:
           {
             "name":"nolar/kopf",
             "path":"kopf", 
-            "install_command": "pip install --group docs -e .", 
+            "install_command": "uv pip install --group docs -e .", 
             "build_command": "sphinx-build docs/ docs/_build/ -b html"
           }
         ]
