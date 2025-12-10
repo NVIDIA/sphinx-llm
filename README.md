@@ -59,7 +59,7 @@ The extension will also create:
 
 #### Configuration
 
-Supported configuration options for `sphinx_llm.txt`.
+Supported `conf.py` configuration options for `sphinx_llm.txt`.
 
 | **Name** | **Description** | **Default** |
 | --- | --- | --- |
