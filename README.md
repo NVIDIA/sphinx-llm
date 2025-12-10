@@ -57,6 +57,14 @@ The extension will also create:
 > [!NOTE]
 > This extension only works with HTML builders (like `html` and `dirhtml`).
 
+#### Configuration
+
+Supported configuration options for `sphinx_llm.txt`.
+
+| **Name** | **Description** | **Default** |
+| --- | --- | --- |
+| `llms_txt_description` | Override the project description set in `llms.txt` | Uses the project description from `pyproject.toml` by default |
+
 ### Docref
 
 The `sphinx_llm.docref` extension adds a directive for summarising and referencing other pages in your documentation.

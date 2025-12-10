@@ -5,39 +5,29 @@ build-backend = "hatchling.build"
 [project]
 name = "sphinx-llm"
 dynamic = ["version"]
-description = ''
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
 keywords = []
 authors = [{ name = "Jacob Tomlinson", email = "jacob@tomlinson.email" }]
 classifiers = [
-  "Development Status :: 4 - Beta",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = [
-    "sphinx-markdown-builder>=0.6.8",
-    "sphinx>=5",
-]
+dependencies = ["sphinx-markdown-builder>=0.6.8", "sphinx>=5"]
 
 [project.optional-dependencies]
-gen = [
-    "langchain-ollama>=0.2.0",
-]
+gen = ["langchain-ollama>=0.2.0"]
 
 [dependency-groups]
-dev = [
-    "pytest>=8.4.1",
-    "pytest-cov>=4.1.0",
-    "sphinx-autobuild>=2024.10.3",
-]
+dev = ["pytest>=8.4.1", "pytest-cov>=4.1.0", "sphinx-autobuild>=2024.10.3"]
 
 [project.urls]
 Documentation = "https://github.com/jacobtomlinson/sphinx-llm#readme"
@@ -81,9 +71,9 @@ select = [
     "UP", # pyupgrade
 ]
 ignore = [
-    "E501",  # line too long, handled by black
-    "B008",  # do not perform function calls in argument defaults
-    "C901",  # too complex
+    "E501", # line too long, handled by black
+    "B008", # do not perform function calls in argument defaults
+    "C901", # too complex
 ]
 
 [tool.ruff.format]

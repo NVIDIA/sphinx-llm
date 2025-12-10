@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from importlib.metadata import PackageNotFoundError, metadata
 from pathlib import Path
 from typing import Any, Union
 
@@ -184,18 +185,40 @@ class MarkdownGenerator:
                     llms_txt.write("\n\n")
         logger.info(f"Concatenated full context into: {llms_txt_path}")
 
+    def get_project_description(self) -> str:
+        """Get the description of the project."""
+        project_title = getattr(self.app.config, "project", "Documentation")
+        if (
+            hasattr(self.app.config, "llms_txt_description")
+            and self.app.config.llms_txt_description
+        ):
+            return self.app.config.llms_txt_description
+
+        try:
+            meta_description = metadata(project_title).get("Description")
+            if meta_description:
+                return meta_description
+        except PackageNotFoundError:
+            pass
+
+        if hasattr(self.app.config, "html_title") and self.app.config.html_title:
+            return self.app.config.html_title
+
+        return f"Documentation for {project_title}"
+
     def create_sitemap(self):
         """Create a markdown sitemap in llms.txt."""
         llms_txt_path = self.outdir / "llms.txt"
 
         with open(llms_txt_path, "w", encoding="utf-8") as sitemap:
-            # Write the title and description
+            # Write the title
             project_title = getattr(self.app.config, "project", "Documentation")
             sitemap.write(f"# {project_title}\n\n")
 
-            # Add optional description if available
-            if hasattr(self.app.config, "html_title") and self.app.config.html_title:
-                sitemap.write(f"> {self.app.config.html_title}\n\n")
+            # Add description
+            for line in self.get_project_description().strip().split("\n"):
+                sitemap.write(f"> {line}\n")
+            sitemap.write("\n\n")
 
             # Add project details if available
             if hasattr(self.app.config, "copyright") and self.app.config.copyright:
@@ -293,6 +316,7 @@ class MarkdownGenerator:
 
 def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
+    app.add_config_value("llms_txt_description", "", "env")
     generator = MarkdownGenerator(app)
     generator.setup()
 
