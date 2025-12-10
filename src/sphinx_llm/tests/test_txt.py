@@ -94,8 +94,7 @@ def test_markdown_generator_setup(sphinx_build):
 
     # Check that the correct event is connected
     events = [call[0] for call in connect_calls]
-    assert "build-finished" in events
-    # No builder-inited event anymore
+    assert "builder-inited" in events
 
 
 def test_build_llms_txt_with_exception(sphinx_build):
@@ -104,7 +103,7 @@ def test_build_llms_txt_with_exception(sphinx_build):
     generator = MarkdownGenerator(app)
 
     # Should not raise
-    generator.build_llms_txt(app, Exception("fail"))
+    generator.combine_builds(app, Exception("fail"))
 
 
 def test_rst_files_have_corresponding_output_files(sphinx_build):

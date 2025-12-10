@@ -8,6 +8,7 @@ of all documents using the sphinx_markdown_builder.
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Union
 
@@ -27,19 +28,19 @@ class MarkdownGenerator:
         self.generated_markdown_files = []  # Track generated markdown files
         self.outdir = None
         self.md_build_dir = None
+        self.md_build_process = None
+        self.md_build_logfile = tempfile.NamedTemporaryFile(
+            mode="w", delete=False, prefix="sphinx_llm_output_", suffix=".log"
+        )
 
     def setup(self):
         """Set up the extension."""
-        # Connect to the build-finished event to generate markdown files
-        self.app.connect("build-finished", self.build_llms_txt)
+        self.app.connect("builder-inited", self.build_llms_txt)
 
-    def build_llms_txt(self, app: Sphinx, exception: Union[Exception, None]):
+    def build_llms_txt(self, app: Sphinx):
         """Generate markdown files using sphinx_markdown_builder and concatenate them into llms.txt."""
         self.outdir = Path(app.builder.outdir)
         self.md_build_dir = self.outdir / "_markdown_build"
-        if exception:
-            logger.warning("Skipping markdown generation due to build error")
-            return
 
         if app.builder and app.builder.name == "markdown":
             return
@@ -50,12 +51,36 @@ class MarkdownGenerator:
             )
             return
 
-        logger.info("Generating markdown files using sphinx_markdown_builder...")
+        # Start the markdown builder subproces in the background
+        self.build_markdown_files()
+        # Once the primary build is finished, combine the markdown files
+        self.app.connect("build-finished", self.combine_builds)
+
+    def combine_builds(self, app: Sphinx, exception: Union[Exception, None]):
+        """Combine the markdown files into llms-full.txt and llms.txt and merge the build outputs together."""
+        if exception:
+            logger.warning("Skipping build combination due to build error")
+            return
+
+        if not self.md_build_process:
+            logger.warning(
+                "Markdown build process not found, skipping build combination"
+            )
+            return
+
+        if self.md_build_process.poll() is None:
+            logger.info("Waiting for markdown build subprocess to finish...")
+            self.md_build_process.wait()
+            logger.info("Markdown build subprocess finished")
+
+        if self.md_build_process.returncode != 0:
+            logger.error(
+                f"Markdown build subprocess failed with return code {self.md_build_process.returncode},"
+                " see {self.md_build_logfile.name} for details"
+            )
+            return
 
         try:
-            # Build markdown files with sphinx_markdown_builder
-            self.build_markdown_files()
-
             # Copy markdown files to the main output directory
             self.copy_markdown_files()
 
@@ -85,15 +110,19 @@ class MarkdownGenerator:
             ]
 
             logger.info(
-                f"Spawning sphinx subprocess to build markdown files for llms.txt: {' '.join(sphinx_build_cmd)}"
+                f"Spawning additional sphinx subprocess to build markdown files for llms.txt: {' '.join(sphinx_build_cmd)}"
             )
             try:
-                subprocess.run(
-                    sphinx_build_cmd,
-                    check=True,
-                    stdout=sys.stdout,
-                    stderr=sys.stderr,
+                logger.info(
+                    f"Subprocess output available at: {self.md_build_logfile.name}"
                 )
+
+                with self.md_build_logfile:
+                    self.md_build_process = subprocess.Popen(
+                        sphinx_build_cmd,
+                        stdout=self.md_build_logfile,
+                        stderr=self.md_build_logfile,
+                    )
             except Exception as exc:
                 logger.error(f"Failed to run sphinx-build subprocess: {exc}")
         except Exception as e:
@@ -127,7 +156,6 @@ class MarkdownGenerator:
                     if rel_path.parent != Path(".")
                     else self.outdir / new_name
                 )
-            logger.info(f"Copying markdown file to: {target_file}")
 
             # Ensure target directory exists
             target_file.parent.mkdir(parents=True, exist_ok=True)
@@ -135,9 +163,9 @@ class MarkdownGenerator:
             # Copy the file with the new name
             shutil.copy2(md_file, target_file)
             self.generated_markdown_files.append(target_file)
-            logger.info(f"Generated: {target_file}")
+            logger.info(f"Generated context file: {target_file}")
 
-        logger.info(f"Generated {len(self.generated_markdown_files)} markdown files")
+        logger.info(f"Generated {len(self.generated_markdown_files)} context files")
 
     def build_llms_full_txt(self):
         # Concatenate all markdown files into llms-full.txt
@@ -154,7 +182,7 @@ class MarkdownGenerator:
                     llms_txt.write(f"# {md_file.name}\n\n")
                     llms_txt.write(f.read())
                     llms_txt.write("\n\n")
-        logger.info(f"Concatenated markdown files into: {llms_txt_path}")
+        logger.info(f"Concatenated full context into: {llms_txt_path}")
 
     def create_sitemap(self):
         """Create a markdown sitemap in llms.txt."""
@@ -195,7 +223,7 @@ class MarkdownGenerator:
                     f"- [{title}]({url}): {self.get_page_description(md_file)}\n"
                 )
 
-            logger.info(f"Created sitemap: {llms_txt_path}")
+            logger.info(f"Created llms.txt sitemap: {llms_txt_path}")
 
     def extract_title_from_markdown(self, md_file: Path) -> str:
         """Extract the title from a markdown file."""
