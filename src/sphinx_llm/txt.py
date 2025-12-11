@@ -65,7 +65,7 @@ class MarkdownGenerator:
 
         if not self.md_build_process:
             logger.warning(
-                "Markdown build process not found, skipping build combination"
+                "Markdown build process not found, skipping build output combination"
             )
             return
 
