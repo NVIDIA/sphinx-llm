@@ -12,7 +12,15 @@ from sphinx.application import Sphinx
 from sphinx_llm.txt import MarkdownGenerator
 
 
-@pytest.fixture(params=["html", "dirhtml"])
+@pytest.fixture(
+    params=[
+        # builder, parallel
+        ("html", True),
+        ("dirhtml", True),
+        ("html", False),
+        ("dirhtml", False),
+    ]
+)
 def sphinx_build(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
     """
     Build Sphinx documentation into a temporary directory.
@@ -20,6 +28,7 @@ def sphinx_build(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
     Yields:
         Tuple of (Sphinx app, temporary build directory path, source directory path)
     """
+    builder, parallel = request.param
     # Get the docs source directory
     docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
 
@@ -35,9 +44,10 @@ def sphinx_build(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
             confdir=str(docs_source_dir),
             outdir=str(build_dir),
             doctreedir=str(doctree_dir),
-            buildername=request.param,
+            buildername=builder,
             warningiserror=False,
             freshenv=True,
+            confoverrides={"llms_txt_build_parallel": parallel},
         )
 
         # Build the documentation
