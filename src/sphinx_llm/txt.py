@@ -33,6 +33,7 @@ class MarkdownGenerator:
         self.md_build_logfile = tempfile.NamedTemporaryFile(
             mode="w", delete=False, prefix="sphinx_llm_output_", suffix=".log"
         )
+        self.parallel = None
 
     def setup(self):
         """Set up the extension."""
@@ -42,6 +43,7 @@ class MarkdownGenerator:
         """Generate markdown files using sphinx_markdown_builder and concatenate them into llms.txt."""
         self.outdir = Path(app.builder.outdir)
         self.md_build_dir = self.outdir / "_markdown_build"
+        self.parallel = getattr(self.app.config, "llms_txt_build_parallel", True)
 
         if app.builder and app.builder.name == "markdown":
             return
@@ -53,7 +55,7 @@ class MarkdownGenerator:
             return
 
         # Start the markdown builder subproces in the background
-        if getattr(self.app.config, "llms_txt_build_parallel", True):
+        if self.parallel:
             self.build_markdown_files()
         else:
             logger.info(
@@ -116,6 +118,12 @@ class MarkdownGenerator:
                 str(self.app.srcdir),
                 str(self.md_build_dir),
             ]
+
+            # When building sequentially we can reuse the doctree directory from the primary build
+            # but in parallel builds these may clobber each other so we need to use a separate one
+            if not self.parallel:
+                sphinx_build_cmd.append("--doctree-dir")
+                sphinx_build_cmd.append(str(self.app.doctreedir))
 
             logger.info(
                 f"Spawning additional sphinx subprocess to build markdown files for llms.txt: {' '.join(sphinx_build_cmd)}"
