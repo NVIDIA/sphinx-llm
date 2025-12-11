@@ -122,7 +122,7 @@ class MarkdownGenerator:
             # When building sequentially we can reuse the doctree directory from the primary build
             # but in parallel builds these may clobber each other so we need to use a separate one
             if not self.parallel:
-                sphinx_build_cmd.append("--doctree-dir")
+                sphinx_build_cmd.append("-d")
                 sphinx_build_cmd.append(str(self.app.doctreedir))
 
             logger.info(
