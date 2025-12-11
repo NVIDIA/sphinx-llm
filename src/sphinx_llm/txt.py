@@ -77,8 +77,9 @@ class MarkdownGenerator:
         if self.md_build_process.returncode != 0:
             logger.error(
                 f"Markdown build subprocess failed with return code {self.md_build_process.returncode},"
-                f" see {self.md_build_logfile.name} for details"
             )
+            with open(self.md_build_logfile.name, encoding="utf-8") as logfile:
+                logger.error(logfile.read())
             return
 
         try:
