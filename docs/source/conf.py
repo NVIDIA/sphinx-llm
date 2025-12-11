@@ -26,6 +26,7 @@ This includes:
 - Generating rich `llms.txt` and `llms-full.txt` markdown context files and individual page markdown context files.
 - A directive for summarising and referencing other pages in your documentation.
 """
+llms_txt_build_parallel = False
 
 templates_path = ["_templates"]
 exclude_patterns = []

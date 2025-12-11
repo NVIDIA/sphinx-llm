@@ -56,6 +56,9 @@ class MarkdownGenerator:
         if getattr(self.app.config, "llms_txt_build_parallel", True):
             self.build_markdown_files()
         else:
+            logger.info(
+                "Option llms_txt_build_parallel is set to False, will build markdown files after the primary build is finished"
+            )
             self.app.connect("build-finished", self.build_markdown_files, priority=100)
         # Once the primary build is finished, combine the markdown files
         self.app.connect("build-finished", self.combine_builds, priority=101)
@@ -99,7 +102,7 @@ class MarkdownGenerator:
             if self.md_build_dir.exists():
                 shutil.rmtree(self.md_build_dir)
 
-    def build_markdown_files(self):
+    def build_markdown_files(self, *_):
         # Create temporary markdown build directory
         self.md_build_dir.mkdir(exist_ok=True)
         try:
