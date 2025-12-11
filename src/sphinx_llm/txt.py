@@ -164,7 +164,6 @@ class MarkdownGenerator:
             # Copy the file with the new name
             shutil.copy2(md_file, target_file)
             self.generated_markdown_files.append(target_file)
-            logger.info(f"Generated context file: {target_file}")
 
         logger.info(f"Generated {len(self.generated_markdown_files)} context files")
 
