@@ -61,9 +61,10 @@ The extension will also create:
 
 Supported `conf.py` configuration options for `sphinx_llm.txt`.
 
-| **Name** | **Description** | **Default** |
+| **Name** | **Description** | **Type** | **Default** |
 | --- | --- | --- |
-| `llms_txt_description` | Override the project description set in `llms.txt` | Uses the project description from `pyproject.toml` by default |
+| `llms_txt_description` | Override the project description set in `llms.txt` | `str` | Uses the project description from `pyproject.toml` by default |
+| `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
 
 ### Docref
 

@@ -53,9 +53,12 @@ class MarkdownGenerator:
             return
 
         # Start the markdown builder subproces in the background
-        self.build_markdown_files()
+        if getattr(self.app.config, "llms_txt_build_parallel", True):
+            self.build_markdown_files()
+        else:
+            self.app.connect("build-finished", self.build_markdown_files, priority=100)
         # Once the primary build is finished, combine the markdown files
-        self.app.connect("build-finished", self.combine_builds)
+        self.app.connect("build-finished", self.combine_builds, priority=101)
 
     def combine_builds(self, app: Sphinx, exception: Union[Exception, None]):
         """Combine the markdown files into llms-full.txt and llms.txt and merge the build outputs together."""
@@ -317,6 +320,7 @@ class MarkdownGenerator:
 def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
     app.add_config_value("llms_txt_description", "", "env")
+    app.add_config_value("llms_txt_build_parallel", True, "env")
     generator = MarkdownGenerator(app)
     generator.setup()
 
