@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 """Indirect import location for version info."""
 try:
     from ._version import version as __version__  # noqa
