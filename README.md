@@ -1,11 +1,11 @@
 # sphinx-llm
 
-The `sphinx-llm` package includes a collection of extensions for working with LLMs.
+The `sphinx-llm` package includes a collection of [Sphinx](https://www.sphinx-doc.org/) extensions for working with LLMs.
 
 There are two categories of tools in this package:
 
-- **Enabling LLMs and agents to consume your docs** - This is useful when you want your project to be well indexed and represented in LLMs when users ask about projects in your domain.
-- **Leveraging LLMs to generate content dynamically during the Sphinx build** - This is useful for generating static content that gets baked into the documentation. It it not intended to provide an interactive chat service in your documentation.
+- **Enabling LLMs and agents to consume your docs** - Produced additional build output for consumption by LLMs and agents. This is useful when you want your project to be well indexed and represented in LLMs when users ask about projects in your domain.
+- **Leveraging LLMs to generate content dynamically during the Sphinx build** - Uses LLMs to generate content as part of the build process. This is useful for generating static content that gets baked into the documentation. It it not intended to provide an interactive chat service in your documentation.
 
 ## Installation
 
@@ -130,7 +130,7 @@ uv run --dev sphinx-autobuild docs/source docs/build/html
 
 There are other projects that solve this same problem, that’s the wonderful nature of open source software. This section compares the various approaches each project has taken.
 
-These comparisons have been put together with the best of intentions, but I acknowledge they are highly subjective. If you spot any information on this page that you beleive to be incorrect or incomplete please don’t hesitate to open a Pull Request. The goal here is to provide you with all the information you need to make the right choice for your needs.
+These comparisons have been put together with the best of intentions and involvement from the maintainers of all projects compared here, but we acknowledge they are highly subjective. If you spot any information on this page that you beleive to be incorrect or incomplete please don’t hesitate to open a Pull Request. The goal here is to provide you with all the information you need to make the right choice for your needs.
 
 
 
