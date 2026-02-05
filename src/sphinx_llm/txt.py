@@ -165,6 +165,8 @@ class MarkdownGenerator:
             if self.app.builder and self.app.builder.name == "dirhtml":
                 target_file = (
                     self.outdir / new_name
+                    if base_name == "index" and rel_path.parent == Path(".")
+                    else self.outdir / rel_path.parent / new_name
                     if base_name == "index"
                     else self.outdir / rel_path.with_suffix("") / "index.html.md"
                 )
