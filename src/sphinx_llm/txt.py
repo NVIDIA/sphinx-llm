@@ -163,19 +163,24 @@ class MarkdownGenerator:
 
             # Determine target file location based on builder and file type
             if self.app.builder and self.app.builder.name == "dirhtml":
-                target_file = (
-                    self.outdir / new_name
-                    if base_name == "index" and rel_path.parent == Path(".")
-                    else self.outdir / rel_path.parent / new_name
-                    if base_name == "index"
-                    else self.outdir / rel_path.with_suffix("") / "index.html.md"
-                )
+                # dirhtml builder has special handling for index files
+                if base_name == "index" and rel_path.parent == Path("."):
+                    # Root index file
+                    target_file = self.outdir / new_name
+                elif base_name == "index":
+                    # Nested index file
+                    target_file = self.outdir / rel_path.parent / new_name
+                else:
+                    # Non-index file gets its own directory
+                    target_file = (
+                        self.outdir / rel_path.with_suffix("") / "index.html.md"
+                    )
             else:
-                target_file = (
-                    self.outdir / rel_path.parent / new_name
-                    if rel_path.parent != Path(".")
-                    else self.outdir / new_name
-                )
+                # Other builders use simpler path structure
+                if rel_path.parent != Path("."):
+                    target_file = self.outdir / rel_path.parent / new_name
+                else:
+                    target_file = self.outdir / new_name
 
             # Ensure target directory exists
             target_file.parent.mkdir(parents=True, exist_ok=True)
