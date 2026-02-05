@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: github.repository == 'jacobtomlinson/sphinx-llm'
+    if: github.repository == 'NVIDIA/sphinx-llm'
     strategy:
       matrix:
         python-version: ["3.12"]
