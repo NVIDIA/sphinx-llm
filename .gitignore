@@ -164,3 +164,7 @@ cython_debug/
 .pixi
 
 _version.py
+
+# Claude Code local settings
+.claude/settings.local.json
+CLAUDE.local.md
