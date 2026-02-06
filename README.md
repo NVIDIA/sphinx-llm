@@ -143,3 +143,19 @@ These comparisons have been put together with the best of intentions and involve
 | **Additional features**                 | In the future could allow `llms.txt` to include LLM generated summaries of each page (see [#28](https://github.com/NVIDIA/sphinx-llm/issues/28)).                                           | Allows manual configuration of `llms-full.txt` content.                                        |
 | **Build-time behavior**                 | Minimal build time impact; a separate build of the markdown is run in parallel, then the two build outputs are merged. | Minimal build time impact; post build runs a converter/aggregator of `_sources`.               |
 | **Limitations**                         | Not all directives are supported by the markdown builder.                                                                                                                                           | Source documentation files are not processed, so directives like `automodule` aren't expanded. |
+
+## Making a release
+
+Releases are automated via GitHub Actions and any maintainers with write access to the repository can create one in just a couple of steps. To create a new release:
+
+1. Create a new tag with the version number:
+   ```console
+   git tag -a 0.0.0 -m 'Version 0.0.0'
+   ```
+
+2. Push the tag to the upstream repository:
+   ```console
+   git push https://github.com/NVIDIA/sphinx-llm main --tags
+   ```
+
+The GitHub Actions workflow will automatically build the package and publish it to PyPI using trusted publishing.
