@@ -4,8 +4,8 @@ The `sphinx-llm` package includes a collection of [Sphinx](https://www.sphinx-do
 
 There are two categories of tools in this package:
 
-- **Enabling LLMs and agents to consume your docs** - Produced additional build output for consumption by LLMs and agents. This is useful when you want your project to be well indexed and represented in LLMs when users ask about projects in your domain.
-- **Leveraging LLMs to generate content dynamically during the Sphinx build** - Uses LLMs to generate content as part of the build process. This is useful for generating static content that gets baked into the documentation. It it not intended to provide an interactive chat service in your documentation.
+- **Enabling LLMs and agents to consume your docs** - Produces additional build output for consumption by LLMs and agents. This is useful when you want your project to be well indexed and represented in LLMs when users ask about projects in your domain.
+- **Leveraging LLMs to generate content dynamically during the Sphinx build** - Uses LLMs to generate content as part of the build process. This is useful for generating static content that gets baked into the documentation. It is not intended to provide an interactive chat service in your documentation.
 
 ## Installation
 
