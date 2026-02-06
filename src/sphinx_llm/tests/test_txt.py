@@ -180,9 +180,9 @@ def test_llms_txt_sitemap_links_exist(sphinx_build):
         # Convert URL to file path relative to build directory
         md_file_path = build_dir / url
 
-        assert (
-            md_file_path.exists()
-        ), f"Markdown file not found for URL '{url}' (title: '{title}'): {md_file_path}"
-        assert (
-            md_file_path.stat().st_size > 0
-        ), f"Markdown file is empty for URL '{url}' (title: '{title}'): {md_file_path}"
+        assert md_file_path.exists(), (
+            f"Markdown file not found for URL '{url}' (title: '{title}'): {md_file_path}"
+        )
+        assert md_file_path.stat().st_size > 0, (
+            f"Markdown file is empty for URL '{url}' (title: '{title}'): {md_file_path}"
+        )
