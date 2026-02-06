@@ -8,7 +8,7 @@ on:
     - cron: "0 1 * * *"
 
 permissions:
-  issues: write 
+  issues: write
 
 jobs:
   build:
@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12"]
-        downstream-project: 
+        downstream-project:
           - repo: nolar/kopf
             install_command: "uv pip install --group docs -e ."
             build_command: "sphinx-build docs/ docs/_build/ -b html"
@@ -68,7 +68,7 @@ jobs:
           echo "$found"
 
       - name: Open issue if build fails
-        if: failure() 
+        if: failure()
         uses: actions/github-script@v7
         with:
           script: |

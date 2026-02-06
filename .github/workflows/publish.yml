@@ -3,20 +3,20 @@ name: Publish to PyPI
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
 jobs:
   publish:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
     permissions:
-      id-token: write  # Required for trusted publishing
+      id-token: write # Required for trusted publishing
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Required for hatch-vcs to determine version from tags
+          fetch-depth: 0 # Required for hatch-vcs to determine version from tags
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6.3.1
