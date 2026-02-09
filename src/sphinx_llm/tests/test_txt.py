@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from sphinx.application import Sphinx
+from sphinx.errors import ExtensionError
 
 from sphinx_llm.txt import MarkdownGenerator
 
@@ -347,3 +348,62 @@ def test_dirhtml_suffix_mode_configuration(sphinx_build_with_suffix_mode_config)
             assert url_suffix_md.exists(), (
                 f"URL-suffix markdown file not found: {url_suffix_md}"
             )
+
+    # Root index should always be generated regardless of suffix mode
+    index_file_suffix_md = build_dir / "index.html.md"
+    index_url_suffix_md = build_dir / "index.md"
+
+    if suffix_mode_config == "file-suffix":
+        # Only file-suffix should exist
+        assert index_file_suffix_md.exists(), (
+            f"Root index file-suffix markdown file not found with suffix_mode={suffix_mode_config!r}: {index_file_suffix_md}"
+        )
+        assert not index_url_suffix_md.exists(), (
+            f"Root index url-suffix markdown file should not exist with suffix_mode='file-suffix': {index_url_suffix_md}"
+        )
+    elif suffix_mode_config == "url-suffix":
+        # Only URL-suffix should exist
+        assert index_url_suffix_md.exists(), (
+            f"Root index url-suffix markdown file not found with suffix_mode={suffix_mode_config!r}: {index_url_suffix_md}"
+        )
+        assert not index_file_suffix_md.exists(), (
+            f"Root index file-suffix markdown file should not exist with suffix_mode='url-suffix': {index_file_suffix_md}"
+        )
+    elif suffix_mode_config == "both":
+        # Both should exist
+        assert index_file_suffix_md.exists(), (
+            f"Root index file-suffix markdown file not found with suffix_mode={suffix_mode_config!r}: {index_file_suffix_md}"
+        )
+        assert index_url_suffix_md.exists(), (
+            f"Root index url-suffix markdown file not found with suffix_mode={suffix_mode_config!r}: {index_url_suffix_md}"
+        )
+
+
+def test_invalid_suffix_mode_raises_error():
+    """Test that invalid llms_txt_suffix_mode values raise an error."""
+    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        build_dir = temp_path / "build"
+        doctree_dir = temp_path / "doctrees"
+
+        # Create Sphinx app with invalid suffix mode - should raise ExtensionError
+        with pytest.raises(ExtensionError) as exc_info:
+            app = Sphinx(
+                srcdir=str(docs_source_dir),
+                confdir=str(docs_source_dir),
+                outdir=str(build_dir),
+                doctreedir=str(doctree_dir),
+                buildername="dirhtml",
+                warningiserror=False,
+                freshenv=True,
+                confoverrides={
+                    "llms_txt_suffix_mode": "invalid-mode",
+                },
+            )
+            app.build()
+
+        # Verify error message
+        assert "Invalid llms_txt_suffix_mode: 'invalid-mode'" in str(exc_info.value)
+        assert "Must be one of" in str(exc_info.value)
