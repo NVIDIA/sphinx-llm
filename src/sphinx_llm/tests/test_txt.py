@@ -303,7 +303,7 @@ def sphinx_build_with_suffix_mode_config(
 
 @pytest.mark.parametrize(
     "sphinx_build_with_suffix_mode_config",
-    [("dirhtml", "file-suffix"), ("dirhtml", "url-suffix"), ("dirhtml", "both")],
+    [("dirhtml", "file-suffix"), ("dirhtml", "url-suffix"), ("dirhtml", "auto")],
     indirect=True,
 )
 def test_dirhtml_suffix_mode_configuration(sphinx_build_with_suffix_mode_config):
@@ -340,7 +340,7 @@ def test_dirhtml_suffix_mode_configuration(sphinx_build_with_suffix_mode_config)
             assert not file_suffix_md.exists(), (
                 f"File-suffix markdown file should not exist with suffix_mode='url-suffix': {file_suffix_md}"
             )
-        elif suffix_mode_config == "both":
+        elif suffix_mode_config == "auto":
             # Both should exist
             assert file_suffix_md.exists(), (
                 f"File-suffix markdown file not found: {file_suffix_md}"
@@ -369,13 +369,92 @@ def test_dirhtml_suffix_mode_configuration(sphinx_build_with_suffix_mode_config)
         assert not index_file_suffix_md.exists(), (
             f"Root index file-suffix markdown file should not exist with suffix_mode='url-suffix': {index_file_suffix_md}"
         )
-    elif suffix_mode_config == "both":
+    elif suffix_mode_config == "auto":
         # Both should exist
         assert index_file_suffix_md.exists(), (
             f"Root index file-suffix markdown file not found with suffix_mode={suffix_mode_config!r}: {index_file_suffix_md}"
         )
         assert index_url_suffix_md.exists(), (
             f"Root index url-suffix markdown file not found with suffix_mode={suffix_mode_config!r}: {index_url_suffix_md}"
+        )
+
+
+@pytest.mark.parametrize(
+    "sphinx_build_with_suffix_mode_config",
+    [("html", "replace"), ("dirhtml", "replace")],
+    indirect=True,
+)
+def test_replace_suffix_mode(sphinx_build_with_suffix_mode_config):
+    """Test that replace mode replaces .html with .md for both html and dirhtml builders."""
+    app, build_dir, source_dir = sphinx_build_with_suffix_mode_config
+
+    # Find all RST files in the source directory
+    rst_files = list(source_dir.rglob("*.rst"))
+    assert len(rst_files) > 0, "No RST files found in source directory"
+
+    # For each RST file, check that .md file exists (not .html.md)
+    for rst_file in rst_files:
+        # Calculate relative path from source directory
+        rel_path = rst_file.relative_to(source_dir)
+
+        # For replace mode, foo.rst should create foo.md (not foo.html.md)
+        if app.builder.name == "dirhtml":
+            if rel_path.stem == "index":
+                # For index files in dirhtml:
+                # - Root index.rst -> index.md
+                # - subdir/index.rst -> subdir.md
+                if rel_path.parent == Path("."):
+                    replace_md = build_dir / "index.md"
+                else:
+                    replace_md = build_dir / f"{rel_path.parent}.md"
+            else:
+                # For non-index files: foo.rst -> foo.md
+                replace_md = build_dir / rel_path.with_suffix(".md")
+        else:  # html builder
+            # For html builder: foo.rst -> foo.md
+            replace_md = build_dir / rel_path.with_suffix(".md")
+
+        assert replace_md.exists(), (
+            f"Replace mode markdown file not found: {replace_md}"
+        )
+        assert replace_md.stat().st_size > 0, (
+            f"Replace mode markdown file is empty: {replace_md}"
+        )
+
+        # Ensure .html.md files do NOT exist with replace mode
+        if app.builder.name == "html":
+            html_md = build_dir / rel_path.with_suffix(".html.md")
+            assert not html_md.exists(), (
+                f"File with .html.md extension should not exist in replace mode: {html_md}"
+            )
+
+
+@pytest.mark.parametrize(
+    "sphinx_build_with_suffix_mode_config",
+    [("dirhtml", "both")],
+    indirect=True,
+)
+def test_both_mode_backward_compatibility(sphinx_build_with_suffix_mode_config):
+    """Test that 'both' mode still works for backward compatibility (treated as 'auto')."""
+    app, build_dir, source_dir = sphinx_build_with_suffix_mode_config
+
+    # Find all RST files in the source directory (except index.rst)
+    rst_files = [f for f in source_dir.rglob("*.rst") if f.stem != "index"]
+    assert len(rst_files) > 0, "No non-index RST files found in source directory"
+
+    # For each RST file, check that both formats exist (same as auto mode)
+    for rst_file in rst_files:
+        rel_path = rst_file.relative_to(source_dir)
+
+        file_suffix_md = build_dir / rel_path.with_suffix("") / "index.html.md"
+        url_suffix_md = build_dir / rel_path.with_suffix(".md")
+
+        # Both should exist (backward compatible with "auto")
+        assert file_suffix_md.exists(), (
+            f"File-suffix markdown file not found: {file_suffix_md}"
+        )
+        assert url_suffix_md.exists(), (
+            f"URL-suffix markdown file not found: {url_suffix_md}"
         )
 
 

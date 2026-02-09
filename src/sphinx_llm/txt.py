@@ -47,10 +47,14 @@ class MarkdownGenerator:
         self.outdir = Path(app.builder.outdir)
         self.md_build_dir = self.outdir / "_markdown_build"
         self.parallel = getattr(self.app.config, "llms_txt_build_parallel", True)
-        self.suffix_mode = getattr(self.app.config, "llms_txt_suffix_mode", "both")
+        self.suffix_mode = getattr(self.app.config, "llms_txt_suffix_mode", "auto")
+
+        # Backward compatibility: treat "both" as "auto"
+        if self.suffix_mode == "both":
+            self.suffix_mode = "auto"
 
         # Validate suffix_mode configuration
-        valid_modes = {"file-suffix", "url-suffix", "both"}
+        valid_modes = {"file-suffix", "url-suffix", "auto", "replace"}
         if self.suffix_mode not in valid_modes:
             raise ExtensionError(
                 f"Invalid llms_txt_suffix_mode: {self.suffix_mode!r}. "
@@ -180,65 +184,95 @@ class MarkdownGenerator:
                 # dirhtml builder has special handling for index files
                 if base_name == "index" and rel_path.parent == Path("."):
                     # Root index file
-                    file_suffix_target = self.outdir / new_name  # index.html.md
-                    url_suffix_target = self.outdir / "index.md"  # index.md
+                    if self.suffix_mode == "replace":
+                        # Replace mode: index.md
+                        replace_target = self.outdir / "index.md"
+                        target_files.append(replace_target)
+                        primary_target = replace_target
+                    else:
+                        file_suffix_target = self.outdir / new_name  # index.html.md
+                        url_suffix_target = self.outdir / "index.md"  # index.md
 
-                    if self.suffix_mode == "file-suffix":
-                        target_files.append(file_suffix_target)
-                        primary_target = file_suffix_target
-                    elif self.suffix_mode == "url-suffix":
-                        target_files.append(url_suffix_target)
-                        primary_target = url_suffix_target
-                    elif self.suffix_mode == "both":
-                        target_files.extend([file_suffix_target, url_suffix_target])
-                        # Use file-suffix as primary for llms-full.txt and llms.txt (spec-compliant)
-                        primary_target = file_suffix_target
+                        if self.suffix_mode == "file-suffix":
+                            target_files.append(file_suffix_target)
+                            primary_target = file_suffix_target
+                        elif self.suffix_mode == "url-suffix":
+                            target_files.append(url_suffix_target)
+                            primary_target = url_suffix_target
+                        elif self.suffix_mode == "auto":
+                            target_files.extend([file_suffix_target, url_suffix_target])
+                            # Use file-suffix as primary for llms-full.txt and llms.txt (spec-compliant)
+                            primary_target = file_suffix_target
                 elif base_name == "index":
                     # Nested index file (e.g., subdir/index.rst)
-                    file_suffix_target = (
-                        self.outdir / rel_path.parent / new_name
-                    )  # subdir/index.html.md
-                    url_suffix_target = (
-                        self.outdir / f"{rel_path.parent}.md"
-                    )  # subdir.md
+                    if self.suffix_mode == "replace":
+                        # Replace mode: subdir.md
+                        replace_target = self.outdir / f"{rel_path.parent}.md"
+                        target_files.append(replace_target)
+                        primary_target = replace_target
+                    else:
+                        file_suffix_target = (
+                            self.outdir / rel_path.parent / new_name
+                        )  # subdir/index.html.md
+                        url_suffix_target = (
+                            self.outdir / f"{rel_path.parent}.md"
+                        )  # subdir.md
 
-                    if self.suffix_mode == "file-suffix":
-                        target_files.append(file_suffix_target)
-                        primary_target = file_suffix_target
-                    elif self.suffix_mode == "url-suffix":
-                        target_files.append(url_suffix_target)
-                        primary_target = url_suffix_target
-                    elif self.suffix_mode == "both":
-                        target_files.extend([file_suffix_target, url_suffix_target])
-                        # Use file-suffix as primary for llms-full.txt and llms.txt (spec-compliant)
-                        primary_target = file_suffix_target
+                        if self.suffix_mode == "file-suffix":
+                            target_files.append(file_suffix_target)
+                            primary_target = file_suffix_target
+                        elif self.suffix_mode == "url-suffix":
+                            target_files.append(url_suffix_target)
+                            primary_target = url_suffix_target
+                        elif self.suffix_mode == "auto":
+                            target_files.extend([file_suffix_target, url_suffix_target])
+                            # Use file-suffix as primary for llms-full.txt and llms.txt (spec-compliant)
+                            primary_target = file_suffix_target
                 else:
                     # Non-index file gets different treatment based on suffix mode
-                    # File-suffix mode: foo/index.html.md
-                    file_suffix_target = (
-                        self.outdir / rel_path.with_suffix("") / "index.html.md"
-                    )
-                    # URL-suffix mode: foo.md
-                    url_suffix_target = self.outdir / rel_path.with_suffix(".md")
+                    if self.suffix_mode == "replace":
+                        # Replace mode: foo.md
+                        replace_target = self.outdir / rel_path.with_suffix(".md")
+                        target_files.append(replace_target)
+                        primary_target = replace_target
+                    else:
+                        # File-suffix mode: foo/index.html.md
+                        file_suffix_target = (
+                            self.outdir / rel_path.with_suffix("") / "index.html.md"
+                        )
+                        # URL-suffix mode: foo.md
+                        url_suffix_target = self.outdir / rel_path.with_suffix(".md")
 
-                    if self.suffix_mode == "file-suffix":
-                        target_files.append(file_suffix_target)
-                        primary_target = file_suffix_target
-                    elif self.suffix_mode == "url-suffix":
-                        target_files.append(url_suffix_target)
-                        primary_target = url_suffix_target
-                    elif self.suffix_mode == "both":
-                        target_files.extend([file_suffix_target, url_suffix_target])
-                        # Use file-suffix as primary for llms-full.txt and llms.txt (spec-compliant)
-                        primary_target = file_suffix_target
+                        if self.suffix_mode == "file-suffix":
+                            target_files.append(file_suffix_target)
+                            primary_target = file_suffix_target
+                        elif self.suffix_mode == "url-suffix":
+                            target_files.append(url_suffix_target)
+                            primary_target = url_suffix_target
+                        elif self.suffix_mode == "auto":
+                            target_files.extend([file_suffix_target, url_suffix_target])
+                            # Use file-suffix as primary for llms-full.txt and llms.txt (spec-compliant)
+                            primary_target = file_suffix_target
             else:
-                # Other builders use simpler path structure
-                if rel_path.parent != Path("."):
-                    target_file = self.outdir / rel_path.parent / new_name
+                # Other builders (html) use simpler path structure
+                if self.suffix_mode == "replace":
+                    # Replace mode: foo.md (replace .html with .md)
+                    if rel_path.parent != Path("."):
+                        replace_target = (
+                            self.outdir / rel_path.parent / f"{base_name}.md"
+                        )
+                    else:
+                        replace_target = self.outdir / f"{base_name}.md"
+                    target_files.append(replace_target)
+                    primary_target = replace_target
                 else:
-                    target_file = self.outdir / new_name
-                target_files.append(target_file)
-                primary_target = target_file
+                    # Default behavior: foo.html.md
+                    if rel_path.parent != Path("."):
+                        target_file = self.outdir / rel_path.parent / new_name
+                    else:
+                        target_file = self.outdir / new_name
+                    target_files.append(target_file)
+                    primary_target = target_file
 
             # Copy the file to all target locations
             for target_file in target_files:
@@ -404,7 +438,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
-    app.add_config_value("llms_txt_suffix_mode", "both", "env")
+    app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     generator = MarkdownGenerator(app)
     generator.setup()
 

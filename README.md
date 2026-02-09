@@ -87,7 +87,16 @@ format (`page/index.html.md`) and the URL-suffix format (`page.md`) by default:
   `https://platform.claude.com/docs/overview.md`)
 
 You can control which format(s) are generated using the `llms_txt_suffix_mode`
-configuration option.
+configuration option:
+
+- `"auto"` (default): For `dirhtml`, generates both file-suffix and URL-suffix
+  formats; for `html`, generates the standard `.html.md` format
+- `"file-suffix"`: For `dirhtml`, only generates `page/index.html.md`; for
+  `html`, generates the standard `.html.md` format
+- `"url-suffix"`: For `dirhtml`, only generates `page.md`; for `html`,
+  generates the standard `.html.md` format
+- `"replace"`: Replaces the `.html` extension with `.md` for both builders
+  (e.g., `page.md` instead of `page.html.md`)
 
 > [!NOTE]
 > This extension only works with HTML builders (like `html` and `dirhtml`).
@@ -101,7 +110,7 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | --- | --- | --- | --- |
 | `llms_txt_description` | Override the project description set in `llms.txt` | `str` | Uses the project description from `pyproject.toml` by default |
 | `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
-| `llms_txt_suffix_mode` | Suffix mode for generated markdown files when using `dirhtml` builder. Options: `"file-suffix"` (only `page/index.html.md`), `"url-suffix"` (only `page.md`), or `"both"` (generates both formats). | `str` | `"both"` |
+| `llms_txt_suffix_mode` | Suffix mode for generated markdown files. Options: `"auto"` (default behavior for each builder), `"file-suffix"` (spec-compliant format), `"url-suffix"` (URL-style format), or `"replace"` (replaces `.html` with `.md`). Note: `"both"` is deprecated but still supported (treated as `"auto"`). | `str` | `"auto"` |
 <!-- markdownlint-enable MD013 -->
 
 ### Docref
