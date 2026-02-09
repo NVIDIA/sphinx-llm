@@ -77,6 +77,10 @@ uv run --dev sphinx-build docs/source docs/build/html
   3. Generating `llms-full.txt` (concatenated markdown)
   4. Generating `llms.txt` (sitemap with descriptions)
 - Handles both `html` and `dirhtml` builders with different path structures
+- For `dirhtml` builder, supports three suffix modes via `llms_txt_suffix_mode`:
+  - `"file-suffix"`: Only generates `page/index.html.md` files
+  - `"url-suffix"`: Only generates URL-style `page.md` files
+  - `"both"` (default): Generates both formats for maximum compatibility
 
 **`sphinx_llm.docref` (src/sphinx_llm/docref.py)**
 

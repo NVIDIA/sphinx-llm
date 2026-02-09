@@ -63,7 +63,7 @@ extension will:
 4. Generates an index file for all the markdown files named `llms.txt`
 5. Concatenates all generated markdown into a single `llms-full.txt` file
 
-For example, if your build generates:
+For example, if your build with the `html` builder generates:
 
 - `_build/html/index.html`
 - `_build/html/apples.html`
@@ -74,6 +74,20 @@ The extension will also create:
 - `_build/html/llms-full.txt`
 - `_build/html/index.html.md`
 - `_build/html/apples.html.md`
+
+With the `dirhtml` builder, which creates URLs like `/apples/` instead of
+`/apples.html`, the extension generates markdown files in both the file-suffix
+format (`page/index.html.md`) and the URL-suffix format (`page.md`) by default:
+
+- `_build/dirhtml/llms.txt`
+- `_build/dirhtml/llms-full.txt`
+- `_build/dirhtml/index.html.md`
+- `_build/dirhtml/apples/index.html.md` (file-suffix)
+- `_build/dirhtml/apples.md` (URL-suffix, matches Claude docs behavior like
+  `https://platform.claude.com/docs/overview.md`)
+
+You can control which format(s) are generated using the `llms_txt_suffix_mode`
+configuration option.
 
 > [!NOTE]
 > This extension only works with HTML builders (like `html` and `dirhtml`).
@@ -87,6 +101,7 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | --- | --- | --- | --- |
 | `llms_txt_description` | Override the project description set in `llms.txt` | `str` | Uses the project description from `pyproject.toml` by default |
 | `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
+| `llms_txt_suffix_mode` | Suffix mode for generated markdown files when using `dirhtml` builder. Options: `"file-suffix"` (only `page/index.html.md`), `"url-suffix"` (only `page.md`), or `"both"` (generates both formats). | `str` | `"both"` |
 <!-- markdownlint-enable MD013 -->
 
 ### Docref

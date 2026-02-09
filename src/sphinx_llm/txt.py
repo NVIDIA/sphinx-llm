@@ -46,6 +46,7 @@ class MarkdownGenerator:
         self.outdir = Path(app.builder.outdir)
         self.md_build_dir = self.outdir / "_markdown_build"
         self.parallel = getattr(self.app.config, "llms_txt_build_parallel", True)
+        self.suffix_mode = getattr(self.app.config, "llms_txt_suffix_mode", "both")
 
         if app.builder and app.builder.name == "markdown":
             return
@@ -161,33 +162,52 @@ class MarkdownGenerator:
             base_name = rel_path.stem
             new_name = f"{base_name}.html.md"
 
-            # Determine target file location based on builder and file type
+            # Determine target file locations based on builder and file type
+            target_files = []
+
             if self.app.builder and self.app.builder.name == "dirhtml":
                 # dirhtml builder has special handling for index files
                 if base_name == "index" and rel_path.parent == Path("."):
-                    # Root index file
-                    target_file = self.outdir / new_name
+                    # Root index file - always use index.html.md
+                    file_suffix_target = self.outdir / new_name
+                    if self.suffix_mode in ["file-suffix", "both"]:
+                        target_files.append(file_suffix_target)
                 elif base_name == "index":
                     # Nested index file
-                    target_file = self.outdir / rel_path.parent / new_name
+                    file_suffix_target = self.outdir / rel_path.parent / new_name
+                    if self.suffix_mode in ["file-suffix", "both"]:
+                        target_files.append(file_suffix_target)
                 else:
-                    # Non-index file gets its own directory
-                    target_file = (
+                    # Non-index file gets different treatment based on suffix mode
+                    # File-suffix mode: foo/index.html.md
+                    file_suffix_target = (
                         self.outdir / rel_path.with_suffix("") / "index.html.md"
                     )
+                    # URL-suffix mode: foo.md
+                    url_suffix_target = self.outdir / rel_path.with_suffix(".md")
+
+                    if self.suffix_mode == "file-suffix":
+                        target_files.append(file_suffix_target)
+                    elif self.suffix_mode == "url-suffix":
+                        target_files.append(url_suffix_target)
+                    elif self.suffix_mode == "both":
+                        target_files.extend([file_suffix_target, url_suffix_target])
             else:
                 # Other builders use simpler path structure
                 if rel_path.parent != Path("."):
                     target_file = self.outdir / rel_path.parent / new_name
                 else:
                     target_file = self.outdir / new_name
+                target_files.append(target_file)
 
-            # Ensure target directory exists
-            target_file.parent.mkdir(parents=True, exist_ok=True)
+            # Copy the file to all target locations
+            for target_file in target_files:
+                # Ensure target directory exists
+                target_file.parent.mkdir(parents=True, exist_ok=True)
 
-            # Copy the file with the new name
-            shutil.copy2(md_file, target_file)
-            self.generated_markdown_files.append(target_file)
+                # Copy the file with the new name
+                shutil.copy2(md_file, target_file)
+                self.generated_markdown_files.append(target_file)
 
         logger.info(f"Generated {len(self.generated_markdown_files)} context files")
 
@@ -341,6 +361,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
+    app.add_config_value("llms_txt_suffix_mode", "both", "env")
     generator = MarkdownGenerator(app)
     generator.setup()
 
