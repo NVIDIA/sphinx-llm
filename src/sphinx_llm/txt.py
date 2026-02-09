@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Union
 
 from sphinx.application import Sphinx
+from sphinx.errors import ExtensionError
 from sphinx.util import logging
 
 from .version import __version__
@@ -51,7 +52,7 @@ class MarkdownGenerator:
         # Validate suffix_mode configuration
         valid_modes = {"file-suffix", "url-suffix", "both"}
         if self.suffix_mode not in valid_modes:
-            raise ValueError(
+            raise ExtensionError(
                 f"Invalid llms_txt_suffix_mode: {self.suffix_mode!r}. "
                 f"Must be one of {valid_modes}"
             )
