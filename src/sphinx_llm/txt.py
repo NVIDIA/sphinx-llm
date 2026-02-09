@@ -164,6 +164,8 @@ class MarkdownGenerator:
 
             # Determine target file locations based on builder and file type
             target_files = []
+            # Track the primary file for llms-full.txt and llms.txt (to avoid duplicates)
+            primary_target = None
 
             if self.app.builder and self.app.builder.name == "dirhtml":
                 # dirhtml builder has special handling for index files
@@ -172,11 +174,13 @@ class MarkdownGenerator:
                     file_suffix_target = self.outdir / new_name
                     if self.suffix_mode in ["file-suffix", "both"]:
                         target_files.append(file_suffix_target)
+                        primary_target = file_suffix_target
                 elif base_name == "index":
                     # Nested index file
                     file_suffix_target = self.outdir / rel_path.parent / new_name
                     if self.suffix_mode in ["file-suffix", "both"]:
                         target_files.append(file_suffix_target)
+                        primary_target = file_suffix_target
                 else:
                     # Non-index file gets different treatment based on suffix mode
                     # File-suffix mode: foo/index.html.md
@@ -188,10 +192,14 @@ class MarkdownGenerator:
 
                     if self.suffix_mode == "file-suffix":
                         target_files.append(file_suffix_target)
+                        primary_target = file_suffix_target
                     elif self.suffix_mode == "url-suffix":
                         target_files.append(url_suffix_target)
+                        primary_target = url_suffix_target
                     elif self.suffix_mode == "both":
                         target_files.extend([file_suffix_target, url_suffix_target])
+                        # Use file-suffix as primary for llms-full.txt and llms.txt (spec-compliant)
+                        primary_target = file_suffix_target
             else:
                 # Other builders use simpler path structure
                 if rel_path.parent != Path("."):
@@ -199,6 +207,7 @@ class MarkdownGenerator:
                 else:
                     target_file = self.outdir / new_name
                 target_files.append(target_file)
+                primary_target = target_file
 
             # Copy the file to all target locations
             for target_file in target_files:
@@ -207,7 +216,10 @@ class MarkdownGenerator:
 
                 # Copy the file with the new name
                 shutil.copy2(md_file, target_file)
-                self.generated_markdown_files.append(target_file)
+
+            # Only add the primary target to generated_markdown_files to avoid duplicates in llms-full.txt
+            if primary_target:
+                self.generated_markdown_files.append(primary_target)
 
         logger.info(f"Generated {len(self.generated_markdown_files)} context files")
 
