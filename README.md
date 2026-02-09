@@ -95,8 +95,9 @@ configuration option:
   `html`, generates the standard `.html.md` format
 - `"url-suffix"`: For `dirhtml`, only generates `page.md`; for `html`,
   generates the standard `.html.md` format
-- `"replace"`: Replaces the `.html` extension with `.md` for both builders
-  (e.g., `page.md` instead of `page.html.md`)
+- `"replace"`: Replaces the `.html` extension with `.md` in the HTML output
+  path. For `html` builder: `page.html` → `page.md`. For `dirhtml` builder:
+  `page/index.html` → `page/index.md`
 
 > [!NOTE]
 > This extension only works with HTML builders (like `html` and `dirhtml`).

@@ -185,7 +185,8 @@ class MarkdownGenerator:
                 if base_name == "index" and rel_path.parent == Path("."):
                     # Root index file
                     if self.suffix_mode == "replace":
-                        # Replace mode: index.md
+                        # Replace mode: replace .html with .md in HTML path
+                        # index.html -> index.md
                         replace_target = self.outdir / "index.md"
                         target_files.append(replace_target)
                         primary_target = replace_target
@@ -206,8 +207,9 @@ class MarkdownGenerator:
                 elif base_name == "index":
                     # Nested index file (e.g., subdir/index.rst)
                     if self.suffix_mode == "replace":
-                        # Replace mode: subdir.md
-                        replace_target = self.outdir / f"{rel_path.parent}.md"
+                        # Replace mode: replace .html with .md in HTML path
+                        # subdir/index.html -> subdir/index.md
+                        replace_target = self.outdir / rel_path.parent / "index.md"
                         target_files.append(replace_target)
                         primary_target = replace_target
                     else:
@@ -231,8 +233,11 @@ class MarkdownGenerator:
                 else:
                     # Non-index file gets different treatment based on suffix mode
                     if self.suffix_mode == "replace":
-                        # Replace mode: foo.md
-                        replace_target = self.outdir / rel_path.with_suffix(".md")
+                        # Replace mode: replace .html with .md in HTML path
+                        # foo/index.html -> foo/index.md
+                        replace_target = (
+                            self.outdir / rel_path.with_suffix("") / "index.md"
+                        )
                         target_files.append(replace_target)
                         primary_target = replace_target
                     else:

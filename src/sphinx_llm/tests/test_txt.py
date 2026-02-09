@@ -397,21 +397,22 @@ def test_replace_suffix_mode(sphinx_build_with_suffix_mode_config):
         # Calculate relative path from source directory
         rel_path = rst_file.relative_to(source_dir)
 
-        # For replace mode, foo.rst should create foo.md (not foo.html.md)
+        # For replace mode: replaces .html with .md in the HTML path
         if app.builder.name == "dirhtml":
+            # dirhtml: foo.rst -> foo/index.html -> foo/index.md
             if rel_path.stem == "index":
                 # For index files in dirhtml:
-                # - Root index.rst -> index.md
-                # - subdir/index.rst -> subdir.md
+                # - Root index.rst -> index.html -> index.md
+                # - subdir/index.rst -> subdir/index.html -> subdir/index.md
                 if rel_path.parent == Path("."):
                     replace_md = build_dir / "index.md"
                 else:
-                    replace_md = build_dir / f"{rel_path.parent}.md"
+                    replace_md = build_dir / rel_path.parent / "index.md"
             else:
-                # For non-index files: foo.rst -> foo.md
-                replace_md = build_dir / rel_path.with_suffix(".md")
+                # For non-index files: foo.rst -> foo/index.html -> foo/index.md
+                replace_md = build_dir / rel_path.with_suffix("") / "index.md"
         else:  # html builder
-            # For html builder: foo.rst -> foo.md
+            # html: foo.rst -> foo.html -> foo.md
             replace_md = build_dir / rel_path.with_suffix(".md")
 
         assert replace_md.exists(), (
@@ -424,6 +425,18 @@ def test_replace_suffix_mode(sphinx_build_with_suffix_mode_config):
         # Ensure .html.md files do NOT exist with replace mode
         if app.builder.name == "html":
             html_md = build_dir / rel_path.with_suffix(".html.md")
+            assert not html_md.exists(), (
+                f"File with .html.md extension should not exist in replace mode: {html_md}"
+            )
+        elif app.builder.name == "dirhtml":
+            # For dirhtml, check that index.html.md files don't exist
+            if rel_path.stem == "index":
+                if rel_path.parent == Path("."):
+                    html_md = build_dir / "index.html.md"
+                else:
+                    html_md = build_dir / rel_path.parent / "index.html.md"
+            else:
+                html_md = build_dir / rel_path.with_suffix("") / "index.html.md"
             assert not html_md.exists(), (
                 f"File with .html.md extension should not exist in replace mode: {html_md}"
             )
