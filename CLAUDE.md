@@ -47,7 +47,7 @@ uv run pre-commit run ruff-format --all-files
 
 # Run all pre-commit hooks (includes ruff, prettier, markdownlint, codespell,
 # license headers)
-pre-commit run --all-files
+uv run pre-commit run --all-files
 ```
 
 ### Building Documentation
