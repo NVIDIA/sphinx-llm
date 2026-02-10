@@ -175,7 +175,9 @@ class MarkdownGenerator:
         elif self.suffix_mode == "auto":
             # Use file-suffix as primary (spec-compliant)
             return [file_suffix_target, url_suffix_target], file_suffix_target
-        return [], None
+        raise ExtensionError(
+            f"Unhandled suffix mode in _determine_suffix_targets: {self.suffix_mode!r}"
+        )
 
     def _get_dirhtml_root_index_targets(self, new_name: str) -> tuple[list[Path], Path]:
         """Get targets for root index file in dirhtml builder."""
@@ -280,7 +282,7 @@ class MarkdownGenerator:
             # Sort files to ensure index.html.md comes first
             sorted_files = sorted(
                 self.generated_markdown_files,
-                key=lambda x: (x.name != "index.html.md", x.name),
+                key=lambda x: (x.name not in ("index.html.md", "index.md"), x.name),
             )
 
             for md_file in sorted_files:
@@ -335,7 +337,7 @@ class MarkdownGenerator:
             # Sort files to ensure index.html.md comes first
             sorted_files = sorted(
                 self.generated_markdown_files,
-                key=lambda x: (x.name != "index.html.md", x.name),
+                key=lambda x: (x.name not in ("index.html.md", "index.md"), x.name),
             )
 
             for md_file in sorted_files:
