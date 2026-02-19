@@ -111,7 +111,8 @@ class MarkdownGenerator:
             self.copy_markdown_files()
 
             # Concatenate all markdown files into llms-full.txt
-            self.build_llms_full_txt()
+            if getattr(self.app.config, "llms_txt_full_build", True):
+                self.build_llms_full_txt()
 
             # Create sitemap in llms.txt
             self.create_sitemap()
@@ -426,6 +427,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
+    app.add_config_value("llms_txt_full_build", True, "env")
     generator = MarkdownGenerator(app)
     generator.setup()
 

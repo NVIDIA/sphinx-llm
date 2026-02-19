@@ -499,3 +499,113 @@ def test_invalid_suffix_mode_raises_error():
         # Verify error message
         assert "Invalid llms_txt_suffix_mode: 'invalid-mode'" in str(exc_info.value)
         assert "Must be one of" in str(exc_info.value)
+
+
+def test_llms_full_txt_created_by_default(sphinx_build):
+    """Test that llms-full.txt is created by default."""
+    app, build_dir, source_dir = sphinx_build
+
+    llms_full_txt_path = build_dir / "llms-full.txt"
+    assert llms_full_txt_path.exists(), "llms-full.txt should be created by default"
+    assert llms_full_txt_path.stat().st_size > 0, "llms-full.txt should not be empty"
+
+
+@pytest.fixture
+def sphinx_build_no_llms_full(
+    request,
+) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+    """
+    Build Sphinx documentation with llms_txt_full_build set to False.
+
+    Yields:
+        Tuple of (Sphinx app, temporary build directory path, source directory path)
+    """
+    builder = request.param
+    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        build_dir = temp_path / "build"
+        doctree_dir = temp_path / "doctrees"
+
+        app = Sphinx(
+            srcdir=str(docs_source_dir),
+            confdir=str(docs_source_dir),
+            outdir=str(build_dir),
+            doctreedir=str(doctree_dir),
+            buildername=builder,
+            warningiserror=False,
+            freshenv=True,
+            confoverrides={
+                "llms_txt_build_parallel": True,
+                "llms_txt_full_build": False,
+            },
+        )
+
+        app.build()
+
+        yield app, build_dir, docs_source_dir
+
+
+@pytest.mark.parametrize(
+    "sphinx_build_no_llms_full",
+    ["html", "dirhtml"],
+    indirect=True,
+)
+def test_llms_full_txt_not_created_when_disabled(sphinx_build_no_llms_full):
+    """Test that llms-full.txt is NOT created when llms_txt_full_build is False."""
+    app, build_dir, source_dir = sphinx_build_no_llms_full
+
+    llms_full_txt_path = build_dir / "llms-full.txt"
+    assert not llms_full_txt_path.exists(), (
+        "llms-full.txt should not be created when llms_txt_full_build is False"
+    )
+
+
+@pytest.mark.parametrize(
+    "sphinx_build_no_llms_full",
+    ["html", "dirhtml"],
+    indirect=True,
+)
+def test_llms_txt_sitemap_still_created_when_full_disabled(sphinx_build_no_llms_full):
+    """Test that llms.txt sitemap is still created when llms-full.txt is disabled."""
+    app, build_dir, source_dir = sphinx_build_no_llms_full
+
+    llms_txt_path = build_dir / "llms.txt"
+    assert llms_txt_path.exists(), (
+        "llms.txt should still be created when llms_txt_full_build is False"
+    )
+    assert llms_txt_path.stat().st_size > 0, "llms.txt should not be empty"
+
+
+@pytest.mark.parametrize(
+    "sphinx_build_no_llms_full",
+    ["html", "dirhtml"],
+    indirect=True,
+)
+def test_markdown_files_still_created_when_full_disabled(sphinx_build_no_llms_full):
+    """Test that per-page markdown files are still created when llms-full.txt is disabled."""
+    app, build_dir, source_dir = sphinx_build_no_llms_full
+
+    rst_files = list(source_dir.rglob("*.rst"))
+    assert len(rst_files) > 0, "No RST files found in source directory"
+
+    # Check that markdown files are still generated for each page
+    for rst_file in rst_files:
+        rel_path = rst_file.relative_to(source_dir)
+
+        if app.builder.name == "html":
+            md_path = build_dir / rel_path.with_suffix(".html.md")
+        else:
+            # dirhtml: index files stay as-is, others get index.html.md
+            if rel_path.stem == "index":
+                if rel_path.parent == Path("."):
+                    md_path = build_dir / "index.html.md"
+                else:
+                    md_path = build_dir / rel_path.parent / "index.html.md"
+            else:
+                md_path = build_dir / rel_path.with_suffix("") / "index.html.md"
+
+        assert md_path.exists(), (
+            f"Markdown file should still be created when llms-full.txt is disabled: {md_path}"
+        )
