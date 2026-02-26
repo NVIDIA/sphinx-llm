@@ -4,6 +4,9 @@
 Tests for the sphinx_llm.txt module.
 """
 
+from __future__ import annotations
+
+import re
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
@@ -15,33 +18,24 @@ from sphinx.errors import ExtensionError
 from sphinx_llm.txt import MarkdownGenerator
 
 
-@pytest.fixture(
-    params=[
-        # builder, parallel
-        ("html", True),
-        ("dirhtml", True),
-        ("html", False),
-        ("dirhtml", False),
-    ]
-)
-def sphinx_build(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
-    """
-    Build Sphinx documentation into a temporary directory.
+def _build_sphinx(
+    builder: str, confoverrides: dict | None = None
+) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+    """Build Sphinx documentation into a temporary directory.
 
     Yields:
         Tuple of (Sphinx app, temporary build directory path, source directory path)
     """
-    builder, parallel = request.param
-    # Get the docs source directory
     docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
+    overrides = {"llms_txt_build_parallel": True}
+    if confoverrides:
+        overrides.update(confoverrides)
 
-    # Create a temporary directory for the build
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         build_dir = temp_path / "build"
         doctree_dir = temp_path / "doctrees"
 
-        # Create the Sphinx application
         app = Sphinx(
             srcdir=str(docs_source_dir),
             confdir=str(docs_source_dir),
@@ -50,42 +44,53 @@ def sphinx_build(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
             buildername=builder,
             warningiserror=False,
             freshenv=True,
-            confoverrides={"llms_txt_build_parallel": parallel},
+            confoverrides=overrides,
         )
-
-        # Build the documentation
         app.build()
-
         yield app, build_dir, docs_source_dir
 
 
-def test_sphinx_build_fixture(sphinx_build):
-    """Test that the sphinx_build fixture works correctly."""
-    app, build_dir, source_dir = sphinx_build
+def assert_file_exists_with_content(path: Path) -> None:
+    """Assert a file exists and is non-empty."""
+    assert path.exists(), f"File not found: {path}"
+    assert path.stat().st_size > 0, f"File is empty: {path}"
 
-    # Verify the app is a Sphinx application
-    assert isinstance(app, Sphinx)
 
-    # Verify the build directory exists and contains files
-    assert build_dir.exists()
-    assert build_dir.is_dir()
+def get_non_index_rst_files(source_dir: Path) -> list[Path]:
+    """Get all non-index RST files from source directory."""
+    rst_files = [f for f in source_dir.rglob("*.rst") if f.stem != "index"]
+    assert len(rst_files) > 0, "No non-index RST files found in source directory"
+    return rst_files
 
-    # Verify the source directory exists
-    assert source_dir.exists()
-    assert source_dir.is_dir()
 
-    # Check that index.html exists in the build directory
-    index_html = build_dir / "index.html"
-    assert index_html.exists(), f"{index_html} does not exist"
+@pytest.fixture(
+    params=[
+        ("html", True),
+        ("dirhtml", True),
+        ("html", False),
+        ("dirhtml", False),
+    ]
+)
+def sphinx_build(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+    """Build Sphinx docs with different builder and parallel combinations."""
+    builder, parallel = request.param
+    yield from _build_sphinx(builder, {"llms_txt_build_parallel": parallel})
+
+
+@pytest.fixture
+def sphinx_build_with_suffix_mode_config(
+    request,
+) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+    """Build Sphinx docs with specific llms_txt_suffix_mode configuration."""
+    builder, suffix_mode = request.param
+    yield from _build_sphinx(builder, {"llms_txt_suffix_mode": suffix_mode})
 
 
 def test_markdown_generator_init(sphinx_build):
     """Test MarkdownGenerator initialization."""
     app, _, _ = sphinx_build
     generator = MarkdownGenerator(app)
-
     assert generator.app == app
-    # No builder attribute to check anymore
 
 
 def test_markdown_generator_setup(sphinx_build):
@@ -93,7 +98,6 @@ def test_markdown_generator_setup(sphinx_build):
     app, _, _ = sphinx_build
     generator = MarkdownGenerator(app)
 
-    # Patch app.connect to record calls
     connect_calls = []
     original_connect = app.connect
 
@@ -102,20 +106,16 @@ def test_markdown_generator_setup(sphinx_build):
         return original_connect(event, callback)
 
     app.connect = record_connect
-
     generator.setup()
 
-    # Check that the correct event is connected
     events = [call[0] for call in connect_calls]
     assert "builder-inited" in events
 
 
-def test_build_llms_txt_with_exception(sphinx_build):
-    """Test that build_llms_txt returns early on exception."""
+def test_combine_builds_with_exception(sphinx_build):
+    """Test that combine_builds returns early on exception."""
     app, _, _ = sphinx_build
     generator = MarkdownGenerator(app)
-
-    # Should not raise
     generator.combine_builds(app, Exception("fail"))
 
 
@@ -123,17 +123,12 @@ def test_rst_files_have_corresponding_output_files(sphinx_build):
     """Test that all RST files have corresponding HTML and HTML.MD files in output."""
     app, build_dir, source_dir = sphinx_build
 
-    # Find all RST files in the source directory
     rst_files = list(source_dir.rglob("*.rst"))
     assert len(rst_files) > 0, "No RST files found in source directory"
 
-    # For each RST file, check that corresponding HTML and HTML.MD files exist
     for rst_file in rst_files:
-        # Calculate relative path from source directory
         rel_path = rst_file.relative_to(source_dir)
 
-        # For html builder remove .rst extension and add .html
-        # For dirhtml builder remove .rst extension and add directory containing index.html
         html_or_index = rel_path.stem == "index" or app.builder.name == "html"
         html_name = (
             rel_path.with_suffix(".html")
@@ -142,241 +137,93 @@ def test_rst_files_have_corresponding_output_files(sphinx_build):
         )
         html_md_name = html_name.with_suffix(".html.md")
 
-        # Check HTML file exists
-        html_path = build_dir / html_name
-        assert html_path.exists(), f"HTML file not found: {html_path}"
-
-        # Check HTML.MD file exists
-        html_md_path = build_dir / html_md_name
-        assert html_md_path.exists(), f"HTML.MD file not found: {html_md_path}"
-
-        # Verify both files have content
-        assert html_path.stat().st_size > 0, f"HTML file is empty: {html_path}"
-        assert html_md_path.stat().st_size > 0, f"HTML.MD file is empty: {html_md_path}"
+        assert_file_exists_with_content(build_dir / html_name)
+        assert_file_exists_with_content(build_dir / html_md_name)
 
 
 def test_llms_txt_sitemap_links_exist(sphinx_build):
     """Test that all markdown pages listed in the llms.txt sitemap actually exist."""
-    app, build_dir, source_dir = sphinx_build
+    _, build_dir, _ = sphinx_build
 
-    # Check that llms.txt exists
     llms_txt_path = build_dir / "llms.txt"
     assert llms_txt_path.exists(), f"llms.txt not found: {llms_txt_path}"
 
-    # Read the sitemap and extract URLs
-    with open(llms_txt_path, encoding="utf-8") as f:
-        content = f.read()
-
-    # Find all markdown URLs in the sitemap
-    # URLs are in the format: [title](url)
-    import re
+    content = llms_txt_path.read_text(encoding="utf-8")
 
     url_pattern = r"\[([^\]]+)\]\(([^)]+)\)"
     matches = re.findall(url_pattern, content)
-
     assert len(matches) > 0, "No URLs found in llms.txt sitemap"
 
-    # Check that each URL points to an existing markdown file
-    for title, url in matches:
-        # Convert URL to file path relative to build directory
-        md_file_path = build_dir / url
-
-        assert md_file_path.exists(), (
-            f"Markdown file not found for URL '{url}' (title: '{title}'): {md_file_path}"
-        )
-        assert md_file_path.stat().st_size > 0, (
-            f"Markdown file is empty for URL '{url}' (title: '{title}'): {md_file_path}"
-        )
-
-
-def test_dirhtml_url_style_markdown_files(sphinx_build):
-    """Test that dirhtml builder creates URL-style .md files (e.g., foo.md) by default."""
-    app, build_dir, source_dir = sphinx_build
-
-    # This test only applies to dirhtml builder
-    if app.builder.name != "dirhtml":
-        pytest.skip("Only applicable to dirhtml builder")
-
-    # Find all RST files in the source directory (except index.rst)
-    rst_files = [f for f in source_dir.rglob("*.rst") if f.stem != "index"]
-    assert len(rst_files) > 0, "No non-index RST files found in source directory"
-
-    # For each RST file, check that URL-style markdown file exists
-    for rst_file in rst_files:
-        # Calculate relative path from source directory
-        rel_path = rst_file.relative_to(source_dir)
-
-        # For dirhtml, foo.rst should create both:
-        # - foo/index.html.md (current default)
-        # - foo.md (new URL-style)
-        url_style_md = build_dir / rel_path.with_suffix(".md")
-
-        assert url_style_md.exists(), (
-            f"URL-style markdown file not found: {url_style_md}"
-        )
-        assert url_style_md.stat().st_size > 0, (
-            f"URL-style markdown file is empty: {url_style_md}"
-        )
-
-
-def test_dirhtml_both_markdown_formats_by_default(sphinx_build):
-    """Test that dirhtml builder creates both index.html.md and .md files by default."""
-    app, build_dir, source_dir = sphinx_build
-
-    # This test only applies to dirhtml builder
-    if app.builder.name != "dirhtml":
-        pytest.skip("Only applicable to dirhtml builder")
-
-    # Find all RST files in the source directory (except index.rst)
-    rst_files = [f for f in source_dir.rglob("*.rst") if f.stem != "index"]
-    assert len(rst_files) > 0, "No non-index RST files found in source directory"
-
-    # For each RST file, check that both formats exist
-    for rst_file in rst_files:
-        # Calculate relative path from source directory
-        rel_path = rst_file.relative_to(source_dir)
-
-        # For dirhtml, foo.rst should create both:
-        # - foo/index.html.md (spec-compliant)
-        # - foo.md (URL-style)
-        spec_compliant_md = build_dir / rel_path.with_suffix("") / "index.html.md"
-        url_style_md = build_dir / rel_path.with_suffix(".md")
-
-        assert spec_compliant_md.exists(), (
-            f"Spec-compliant markdown file not found: {spec_compliant_md}"
-        )
-        assert url_style_md.exists(), (
-            f"URL-style markdown file not found: {url_style_md}"
-        )
-
-        # Verify content is the same (they should be copies of each other)
-        with open(spec_compliant_md, encoding="utf-8") as f1:
-            content1 = f1.read()
-        with open(url_style_md, encoding="utf-8") as f2:
-            content2 = f2.read()
-
-        assert content1 == content2, (
-            f"Content mismatch between {spec_compliant_md} and {url_style_md}"
-        )
-
-
-@pytest.fixture
-def sphinx_build_with_suffix_mode_config(
-    request,
-) -> Generator[tuple[Sphinx, Path, Path], None, None]:
-    """
-    Build Sphinx documentation with specific llms_txt_suffix_mode configuration.
-
-    Yields:
-        Tuple of (Sphinx app, temporary build directory path, source directory path)
-    """
-    builder, suffix_mode_config = request.param
-    # Get the docs source directory
-    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
-
-    # Create a temporary directory for the build
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-        build_dir = temp_path / "build"
-        doctree_dir = temp_path / "doctrees"
-
-        # Create the Sphinx application
-        app = Sphinx(
-            srcdir=str(docs_source_dir),
-            confdir=str(docs_source_dir),
-            outdir=str(build_dir),
-            doctreedir=str(doctree_dir),
-            buildername=builder,
-            warningiserror=False,
-            freshenv=True,
-            confoverrides={
-                "llms_txt_build_parallel": True,
-                "llms_txt_suffix_mode": suffix_mode_config,
-            },
-        )
-
-        # Build the documentation
-        app.build()
-
-        yield app, build_dir, docs_source_dir
+    for _, url in matches:
+        assert_file_exists_with_content(build_dir / url)
 
 
 @pytest.mark.parametrize(
     "sphinx_build_with_suffix_mode_config",
-    [("dirhtml", "file-suffix"), ("dirhtml", "url-suffix"), ("dirhtml", "auto")],
+    [
+        ("dirhtml", "file-suffix"),
+        ("dirhtml", "url-suffix"),
+        ("dirhtml", "auto"),
+        ("dirhtml", "both"),
+    ],
     indirect=True,
 )
 def test_dirhtml_suffix_mode_configuration(sphinx_build_with_suffix_mode_config):
-    """Test that llms_txt_suffix_mode configuration controls which markdown files are generated."""
+    """Test that llms_txt_suffix_mode configuration controls which markdown files are generated.
+
+    Also tests that 'both' mode works as a backward-compatible alias for 'auto'.
+    """
     app, build_dir, source_dir = sphinx_build_with_suffix_mode_config
-    suffix_mode_config = app.config.llms_txt_suffix_mode
+    suffix_mode = app.config.llms_txt_suffix_mode
 
-    # Find all RST files in the source directory (except index.rst)
-    rst_files = [f for f in source_dir.rglob("*.rst") if f.stem != "index"]
-    assert len(rst_files) > 0, "No non-index RST files found in source directory"
+    # "both" is treated as "auto" internally
+    effective_mode = "auto" if suffix_mode == "both" else suffix_mode
 
-    # For each RST file, check that the correct format exists
+    rst_files = get_non_index_rst_files(source_dir)
+
     for rst_file in rst_files:
-        # Calculate relative path from source directory
         rel_path = rst_file.relative_to(source_dir)
 
-        # Define both possible paths
         file_suffix_md = build_dir / rel_path.with_suffix("") / "index.html.md"
         url_suffix_md = build_dir / rel_path.with_suffix(".md")
 
-        if suffix_mode_config == "file-suffix":
-            # Only file-suffix should exist
-            assert file_suffix_md.exists(), (
-                f"File-suffix markdown file not found: {file_suffix_md}"
-            )
+        if effective_mode == "file-suffix":
+            assert_file_exists_with_content(file_suffix_md)
             assert not url_suffix_md.exists(), (
-                f"URL-suffix markdown file should not exist with suffix_mode='file-suffix': {url_suffix_md}"
+                f"URL-suffix file should not exist with suffix_mode='file-suffix': {url_suffix_md}"
             )
-        elif suffix_mode_config == "url-suffix":
-            # Only URL-suffix should exist
-            assert url_suffix_md.exists(), (
-                f"URL-suffix markdown file not found: {url_suffix_md}"
-            )
+        elif effective_mode == "url-suffix":
+            assert_file_exists_with_content(url_suffix_md)
             assert not file_suffix_md.exists(), (
-                f"File-suffix markdown file should not exist with suffix_mode='url-suffix': {file_suffix_md}"
+                f"File-suffix file should not exist with suffix_mode='url-suffix': {file_suffix_md}"
             )
-        elif suffix_mode_config == "auto":
-            # Both should exist
-            assert file_suffix_md.exists(), (
-                f"File-suffix markdown file not found: {file_suffix_md}"
-            )
-            assert url_suffix_md.exists(), (
-                f"URL-suffix markdown file not found: {url_suffix_md}"
+        elif effective_mode == "auto":
+            assert_file_exists_with_content(file_suffix_md)
+            assert_file_exists_with_content(url_suffix_md)
+            # Verify content is the same (they should be copies)
+            assert file_suffix_md.read_text(
+                encoding="utf-8"
+            ) == url_suffix_md.read_text(encoding="utf-8"), (
+                f"Content mismatch between {file_suffix_md} and {url_suffix_md}"
             )
 
     # Root index should always be generated regardless of suffix mode
     index_file_suffix_md = build_dir / "index.html.md"
     index_url_suffix_md = build_dir / "index.md"
 
-    if suffix_mode_config == "file-suffix":
-        # Only file-suffix should exist
-        assert index_file_suffix_md.exists(), (
-            f"Root index file-suffix markdown file not found with suffix_mode={suffix_mode_config!r}: {index_file_suffix_md}"
-        )
+    if effective_mode == "file-suffix":
+        assert_file_exists_with_content(index_file_suffix_md)
         assert not index_url_suffix_md.exists(), (
-            f"Root index url-suffix markdown file should not exist with suffix_mode='file-suffix': {index_url_suffix_md}"
+            "Root index url-suffix file should not exist with suffix_mode='file-suffix'"
         )
-    elif suffix_mode_config == "url-suffix":
-        # Only URL-suffix should exist
-        assert index_url_suffix_md.exists(), (
-            f"Root index url-suffix markdown file not found with suffix_mode={suffix_mode_config!r}: {index_url_suffix_md}"
-        )
+    elif effective_mode == "url-suffix":
+        assert_file_exists_with_content(index_url_suffix_md)
         assert not index_file_suffix_md.exists(), (
-            f"Root index file-suffix markdown file should not exist with suffix_mode='url-suffix': {index_file_suffix_md}"
+            "Root index file-suffix file should not exist with suffix_mode='url-suffix'"
         )
-    elif suffix_mode_config == "auto":
-        # Both should exist
-        assert index_file_suffix_md.exists(), (
-            f"Root index file-suffix markdown file not found with suffix_mode={suffix_mode_config!r}: {index_file_suffix_md}"
-        )
-        assert index_url_suffix_md.exists(), (
-            f"Root index url-suffix markdown file not found with suffix_mode={suffix_mode_config!r}: {index_url_suffix_md}"
-        )
+    elif effective_mode == "auto":
+        assert_file_exists_with_content(index_file_suffix_md)
+        assert_file_exists_with_content(index_url_suffix_md)
 
 
 @pytest.mark.parametrize(
@@ -388,122 +235,50 @@ def test_replace_suffix_mode(sphinx_build_with_suffix_mode_config):
     """Test that replace mode replaces .html with .md for both html and dirhtml builders."""
     app, build_dir, source_dir = sphinx_build_with_suffix_mode_config
 
-    # Find all RST files in the source directory
     rst_files = list(source_dir.rglob("*.rst"))
     assert len(rst_files) > 0, "No RST files found in source directory"
 
-    # For each RST file, check that .md file exists (not .html.md)
     for rst_file in rst_files:
-        # Calculate relative path from source directory
         rel_path = rst_file.relative_to(source_dir)
 
-        # For replace mode: replaces .html with .md in the HTML path
         if app.builder.name == "dirhtml":
-            # dirhtml: foo.rst -> foo/index.html -> foo/index.md
             if rel_path.stem == "index":
-                # For index files in dirhtml:
-                # - Root index.rst -> index.html -> index.md
-                # - subdir/index.rst -> subdir/index.html -> subdir/index.md
                 if rel_path.parent == Path("."):
                     replace_md = build_dir / "index.md"
                 else:
                     replace_md = build_dir / rel_path.parent / "index.md"
             else:
-                # For non-index files: foo.rst -> foo/index.html -> foo/index.md
                 replace_md = build_dir / rel_path.with_suffix("") / "index.md"
-        else:  # html builder
-            # html: foo.rst -> foo.html -> foo.md
+        else:
             replace_md = build_dir / rel_path.with_suffix(".md")
 
-        assert replace_md.exists(), (
-            f"Replace mode markdown file not found: {replace_md}"
-        )
-        assert replace_md.stat().st_size > 0, (
-            f"Replace mode markdown file is empty: {replace_md}"
-        )
+        assert_file_exists_with_content(replace_md)
 
         # Ensure .html.md files do NOT exist with replace mode
         if app.builder.name == "html":
             html_md = build_dir / rel_path.with_suffix(".html.md")
-            assert not html_md.exists(), (
-                f"File with .html.md extension should not exist in replace mode: {html_md}"
-            )
-        elif app.builder.name == "dirhtml":
-            # For dirhtml, check that index.html.md files don't exist
-            if rel_path.stem == "index":
-                if rel_path.parent == Path("."):
-                    html_md = build_dir / "index.html.md"
-                else:
-                    html_md = build_dir / rel_path.parent / "index.html.md"
+        elif rel_path.stem == "index":
+            if rel_path.parent == Path("."):
+                html_md = build_dir / "index.html.md"
             else:
-                html_md = build_dir / rel_path.with_suffix("") / "index.html.md"
-            assert not html_md.exists(), (
-                f"File with .html.md extension should not exist in replace mode: {html_md}"
-            )
+                html_md = build_dir / rel_path.parent / "index.html.md"
+        else:
+            html_md = build_dir / rel_path.with_suffix("") / "index.html.md"
 
-
-@pytest.mark.parametrize(
-    "sphinx_build_with_suffix_mode_config",
-    [("dirhtml", "both")],
-    indirect=True,
-)
-def test_both_mode_backward_compatibility(sphinx_build_with_suffix_mode_config):
-    """Test that 'both' mode still works for backward compatibility (treated as 'auto')."""
-    app, build_dir, source_dir = sphinx_build_with_suffix_mode_config
-
-    # Find all RST files in the source directory (except index.rst)
-    rst_files = [f for f in source_dir.rglob("*.rst") if f.stem != "index"]
-    assert len(rst_files) > 0, "No non-index RST files found in source directory"
-
-    # For each RST file, check that both formats exist (same as auto mode)
-    for rst_file in rst_files:
-        rel_path = rst_file.relative_to(source_dir)
-
-        file_suffix_md = build_dir / rel_path.with_suffix("") / "index.html.md"
-        url_suffix_md = build_dir / rel_path.with_suffix(".md")
-
-        # Both should exist (backward compatible with "auto")
-        assert file_suffix_md.exists(), (
-            f"File-suffix markdown file not found: {file_suffix_md}"
-        )
-        assert url_suffix_md.exists(), (
-            f"URL-suffix markdown file not found: {url_suffix_md}"
+        assert not html_md.exists(), (
+            f"File with .html.md extension should not exist in replace mode: {html_md}"
         )
 
 
 def test_invalid_suffix_mode_raises_error():
     """Test that invalid llms_txt_suffix_mode values raise an error."""
-    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-        build_dir = temp_path / "build"
-        doctree_dir = temp_path / "doctrees"
-
-        # Create Sphinx app with invalid suffix mode - should raise ExtensionError
-        with pytest.raises(ExtensionError) as exc_info:
-            app = Sphinx(
-                srcdir=str(docs_source_dir),
-                confdir=str(docs_source_dir),
-                outdir=str(build_dir),
-                doctreedir=str(doctree_dir),
-                buildername="dirhtml",
-                warningiserror=False,
-                freshenv=True,
-                confoverrides={
-                    "llms_txt_suffix_mode": "invalid-mode",
-                },
-            )
-            app.build()
-
-        # Verify error message
-        assert "Invalid llms_txt_suffix_mode: 'invalid-mode'" in str(exc_info.value)
-        assert "Must be one of" in str(exc_info.value)
+    with pytest.raises(ExtensionError, match="Invalid llms_txt_suffix_mode"):
+        list(_build_sphinx("dirhtml", {"llms_txt_suffix_mode": "invalid-mode"}))
 
 
 def test_llms_full_txt_created_by_default(sphinx_build):
     """Test that llms-full.txt is created by default."""
-    app, build_dir, source_dir = sphinx_build
+    _, build_dir, _ = sphinx_build
 
     llms_full_txt_path = build_dir / "llms-full.txt"
     assert llms_full_txt_path.exists(), "llms-full.txt should be created by default"
@@ -514,37 +289,9 @@ def test_llms_full_txt_created_by_default(sphinx_build):
 def sphinx_build_no_llms_full(
     request,
 ) -> Generator[tuple[Sphinx, Path, Path], None, None]:
-    """
-    Build Sphinx documentation with llms_txt_full_build set to False.
-
-    Yields:
-        Tuple of (Sphinx app, temporary build directory path, source directory path)
-    """
+    """Build Sphinx docs with llms_txt_full_build set to False."""
     builder = request.param
-    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-        build_dir = temp_path / "build"
-        doctree_dir = temp_path / "doctrees"
-
-        app = Sphinx(
-            srcdir=str(docs_source_dir),
-            confdir=str(docs_source_dir),
-            outdir=str(build_dir),
-            doctreedir=str(doctree_dir),
-            buildername=builder,
-            warningiserror=False,
-            freshenv=True,
-            confoverrides={
-                "llms_txt_build_parallel": True,
-                "llms_txt_full_build": False,
-            },
-        )
-
-        app.build()
-
-        yield app, build_dir, docs_source_dir
+    yield from _build_sphinx(builder, {"llms_txt_full_build": False})
 
 
 @pytest.mark.parametrize(
@@ -554,7 +301,7 @@ def sphinx_build_no_llms_full(
 )
 def test_llms_full_txt_not_created_when_disabled(sphinx_build_no_llms_full):
     """Test that llms-full.txt is NOT created when llms_txt_full_build is False."""
-    app, build_dir, source_dir = sphinx_build_no_llms_full
+    _, build_dir, _ = sphinx_build_no_llms_full
 
     llms_full_txt_path = build_dir / "llms-full.txt"
     assert not llms_full_txt_path.exists(), (
@@ -569,7 +316,7 @@ def test_llms_full_txt_not_created_when_disabled(sphinx_build_no_llms_full):
 )
 def test_llms_txt_sitemap_still_created_when_full_disabled(sphinx_build_no_llms_full):
     """Test that llms.txt sitemap is still created when llms-full.txt is disabled."""
-    app, build_dir, source_dir = sphinx_build_no_llms_full
+    _, build_dir, _ = sphinx_build_no_llms_full
 
     llms_txt_path = build_dir / "llms.txt"
     assert llms_txt_path.exists(), (
@@ -590,21 +337,18 @@ def test_markdown_files_still_created_when_full_disabled(sphinx_build_no_llms_fu
     rst_files = list(source_dir.rglob("*.rst"))
     assert len(rst_files) > 0, "No RST files found in source directory"
 
-    # Check that markdown files are still generated for each page
     for rst_file in rst_files:
         rel_path = rst_file.relative_to(source_dir)
 
         if app.builder.name == "html":
             md_path = build_dir / rel_path.with_suffix(".html.md")
-        else:
-            # dirhtml: index files stay as-is, others get index.html.md
-            if rel_path.stem == "index":
-                if rel_path.parent == Path("."):
-                    md_path = build_dir / "index.html.md"
-                else:
-                    md_path = build_dir / rel_path.parent / "index.html.md"
+        elif rel_path.stem == "index":
+            if rel_path.parent == Path("."):
+                md_path = build_dir / "index.html.md"
             else:
-                md_path = build_dir / rel_path.with_suffix("") / "index.html.md"
+                md_path = build_dir / rel_path.parent / "index.html.md"
+        else:
+            md_path = build_dir / rel_path.with_suffix("") / "index.html.md"
 
         assert md_path.exists(), (
             f"Markdown file should still be created when llms-full.txt is disabled: {md_path}"
