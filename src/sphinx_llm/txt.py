@@ -392,13 +392,14 @@ class MarkdownGenerator:
                 # Skip HTML comments and look for the first meaningful paragraph
                 for line in lines:
                     line = line.strip()
-                    # Skip empty lines, headings, and HTML comments
+                    # Skip empty lines, headings, anchors, and HTML comments
                     if (
                         line
                         and not line.startswith("#")
                         and not line.startswith("<!--")
                         and not line.startswith("-->")
                         and not line.startswith("..")
+                        and not line.startswith("<a id=")
                         and len(line) > 10
                     ):  # Ensure it's substantial content
                         return line[:100] + "..." if len(line) > 100 else line

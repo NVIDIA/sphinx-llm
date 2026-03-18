@@ -158,6 +158,16 @@ def test_llms_txt_sitemap_links_exist(sphinx_build):
         assert_file_exists_with_content(build_dir / url)
 
 
+def test_llms_txt_does_not_use_anchor_tag_as_description(sphinx_build):
+    """Test that anchor-only HTML tags are not used as page descriptions in llms.txt."""
+    _, build_dir, _ = sphinx_build
+
+    llms_txt_path = build_dir / "llms.txt"
+    content = llms_txt_path.read_text(encoding="utf-8")
+
+    assert re.search(r'<a\s+id="[^"]+"\s*></a>', content) is None
+
+
 @pytest.mark.parametrize(
     "sphinx_build_with_suffix_mode_config",
     [
