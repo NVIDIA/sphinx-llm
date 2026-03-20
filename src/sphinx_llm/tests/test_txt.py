@@ -165,7 +165,14 @@ def test_llms_txt_does_not_use_anchor_tag_as_description(sphinx_build):
     llms_txt_path = build_dir / "llms.txt"
     content = llms_txt_path.read_text(encoding="utf-8")
 
-    assert re.search(r'<a\s+id="[^"]+"\s*></a>', content) is None
+    assert (
+        re.search(
+            r"""^-\s+\[[^\]]*\]\([^)]*\):\s*<a\s+id=["'][^"']+["'][^>]*></a>""",
+            content,
+            flags=re.MULTILINE | re.IGNORECASE,
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize(

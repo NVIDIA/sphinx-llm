@@ -7,6 +7,7 @@ This extension hooks into the Sphinx build process to create markdown versions
 of all documents using the sphinx_markdown_builder.
 """
 
+import re
 import shutil
 import subprocess
 import sys
@@ -388,6 +389,7 @@ class MarkdownGenerator:
             with open(md_file, encoding="utf-8") as f:
                 content = f.read()
                 lines = content.split("\n")
+                anchor = re.compile(r"^<a\b[^>]*>\s*</a>$", re.IGNORECASE)
 
                 # Skip HTML comments and look for the first meaningful paragraph
                 for line in lines:
@@ -399,7 +401,7 @@ class MarkdownGenerator:
                         and not line.startswith("<!--")
                         and not line.startswith("-->")
                         and not line.startswith("..")
-                        and not line.startswith("<a id=")
+                        and not anchor.match(line)
                         and len(line) > 10
                     ):  # Ensure it's substantial content
                         return line[:100] + "..." if len(line) > 100 else line
