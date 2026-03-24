@@ -155,7 +155,9 @@ def test_llms_txt_sitemap_links_exist(sphinx_build):
     assert len(matches) > 0, "No URLs found in llms.txt sitemap"
 
     for _, url in matches:
-        assert_file_exists_with_content(build_dir / url)
+        # Limit the check to relative paths
+        if not url.startswith(("http://", "https://")):
+            assert_file_exists_with_content(build_dir / url)
 
 
 def test_llms_txt_does_not_use_anchor_tag_as_description(sphinx_build):
@@ -173,6 +175,42 @@ def test_llms_txt_does_not_use_anchor_tag_as_description(sphinx_build):
         )
         is None
     )
+
+
+@pytest.fixture(
+    params=[
+        ("html", "https://example.com/docs/"),
+        ("dirhtml", "https://example.com/docs/"),
+        ("dirhtml", "https://example.com/docs"),  # trailing slash is optional
+    ]
+)
+def sphinx_build_with_http_base(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+    """Build Sphinx docs with markdown_http_base set."""
+    builder, http_base = request.param
+    yield from _build_sphinx(builder, {"markdown_http_base": http_base})
+
+
+def test_llms_txt_sitemap_uses_markdown_http_base(sphinx_build_with_http_base):
+    """Test that llms.txt links are absolute when markdown_http_base is configured."""
+    app, build_dir, _ = sphinx_build_with_http_base
+
+    http_base = app.config._raw_config.get("markdown_http_base", "").rstrip("/")
+
+    llms_txt_path = build_dir / "llms.txt"
+    assert llms_txt_path.exists(), f"llms.txt not found: {llms_txt_path}"
+
+    content = llms_txt_path.read_text(encoding="utf-8")
+    url_pattern = r"\[([^\]]+)\]\(([^)]+)\)"
+    matches = re.findall(url_pattern, content)
+    assert len(matches) > 0, "No URLs found in llms.txt sitemap"
+
+    for _, url in matches:
+        assert url.startswith(http_base), (
+            f"Expected URL to start with {http_base!r}, got {url!r}"
+        )
+        # The path after the base should point to an existing markdown file
+        rel = url[len(http_base):].lstrip("/")
+        assert_file_exists_with_content(build_dir / rel)
 
 
 @pytest.mark.parametrize(

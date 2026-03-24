@@ -342,13 +342,26 @@ class MarkdownGenerator:
                 key=lambda x: (x.name not in ("index.html.md", "index.md"), x.name),
             )
 
+            # Read markdown_http_base from raw conf.py values, so it works
+            # even when sphinx_markdown_builder is not listed in extensions
+            # (it is only loaded in the markdown subprocess build).
+            http_base = (
+                self.app.config._raw_config.get("markdown_http_base")
+                or getattr(self.app.config, "markdown_http_base", "")
+            ).rstrip("/")
+
             for md_file in sorted_files:
                 # Extract title from the markdown file
                 title = self.extract_title_from_markdown(md_file)
 
-                # Create the URL based on the relative path from output directory
+                # Create the URL based either on
+                # - the relative path from output directory, or
+                # - markdown_http_base + the relative path
                 rel_path = md_file.relative_to(self.outdir)
-                url = str(rel_path)
+                if http_base:
+                    url = f"{http_base}/{rel_path}"
+                else:
+                    url = str(rel_path)
 
                 # Write the link
                 sitemap.write(
