@@ -115,6 +115,11 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_full_build` | Whether to generate the `llms-full.txt` file. Set to `False` to disable generation, which is useful for large documentation sites where the concatenated file would be too large. | `bool` | `True` |
 <!-- markdownlint-enable MD013 -->
 
+Each page's entry in `llms.txt` includes a short description. If a page defines
+an `html_meta` description — via `.. meta:: :description:` in rST or
+`html_meta: description:` in MyST frontmatter — that value is used. Otherwise
+the extension falls back to the first 100 characters of the page content.
+
 ### Docref
 
 The `sphinx_llm.docref` extension adds a directive for summarising and

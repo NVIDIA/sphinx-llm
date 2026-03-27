@@ -16,6 +16,7 @@ from importlib.metadata import PackageNotFoundError, metadata
 from pathlib import Path
 from typing import Any, Union
 
+import docutils.nodes
 from sphinx.application import Sphinx
 from sphinx.errors import ExtensionError
 from sphinx.util import logging
@@ -31,6 +32,7 @@ class MarkdownGenerator:
     def __init__(self, app: Sphinx):
         self.app = app
         self.generated_markdown_files = []  # Track generated markdown files
+        self._docname_by_output_file: dict[Path, str] = {}  # output file → docname
         self.outdir = None
         self.md_build_dir = None
         self.md_build_process = None
@@ -262,9 +264,11 @@ class MarkdownGenerator:
         """Copy markdown files from build directory to output directory."""
         md_files = list(self.md_build_dir.rglob("*.md"))
         self.generated_markdown_files = []
+        self._docname_by_output_file = {}
 
         for md_file in md_files:
             target_files, primary_target = self._get_target_paths(md_file)
+            docname = self._get_docname_from_md_file(md_file)
 
             # Copy the file to all target locations
             for target_file in target_files:
@@ -274,6 +278,7 @@ class MarkdownGenerator:
             # Only add the primary target to avoid duplicates in llms-full.txt
             if primary_target:
                 self.generated_markdown_files.append(primary_target)
+                self._docname_by_output_file[primary_target] = docname
 
         logger.info(f"Generated {len(self.generated_markdown_files)} context files")
 
@@ -396,8 +401,42 @@ class MarkdownGenerator:
                 return "Home"
             return base_name.replace("_", " ").title()
 
+    def _get_docname_from_md_file(self, md_file: Path) -> str:
+        """Return the Sphinx docname for a markdown build output file."""
+        rel_path = md_file.relative_to(self.md_build_dir)
+        return rel_path.with_suffix("").as_posix()
+
     def get_page_description(self, md_file: Path) -> str:
-        """Get a brief description of the page content."""
+        """Get a brief description of the page content.
+
+        If the source page defines an ``html_meta`` description (via
+        ``.. meta:: :description:`` in rST or ``html_meta:`` frontmatter in
+        MyST), that value is used.  Otherwise the first 100 characters of the
+        first meaningful paragraph in the generated markdown are returned.
+        """
+        docname = self._docname_by_output_file.get(md_file, "")
+        if docname:
+            try:
+                doctree = self.app.env.get_doctree(docname)
+                for node in doctree.traverse(docutils.nodes.meta):
+                    if node.get("name") == "description" and node.get("content"):
+                        return node["content"]
+            except Exception:
+                logger.exception(
+                    "Failed to read html_meta description from doctree for '%s'; "
+                    "falling back to content-based description",
+                    docname,
+                )
+
+        return self.extract_description_from_markdown(md_file)
+
+    @staticmethod
+    def extract_description_from_markdown(md_file: Path) -> str:
+        """Extract a content-based description from a markdown file.
+
+        Returns the first 100 characters of the first meaningful paragraph,
+        or a filename-based fallback if no suitable paragraph is found.
+        """
         try:
             with open(md_file, encoding="utf-8") as f:
                 content = f.read()
