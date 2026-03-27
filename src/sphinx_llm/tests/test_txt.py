@@ -184,7 +184,9 @@ def test_llms_txt_does_not_use_anchor_tag_as_description(sphinx_build):
         ("dirhtml", "https://example.com/docs"),  # trailing slash is optional
     ]
 )
-def sphinx_build_with_http_base(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+def sphinx_build_with_http_base(
+    request,
+) -> Generator[tuple[Sphinx, Path, Path], None, None]:
     """Build Sphinx docs with markdown_http_base set."""
     builder, http_base = request.param
     yield from _build_sphinx(builder, {"markdown_http_base": http_base})
@@ -209,7 +211,7 @@ def test_llms_txt_sitemap_uses_markdown_http_base(sphinx_build_with_http_base):
             f"Expected URL to start with {http_base!r}, got {url!r}"
         )
         # The path after the base should point to an existing markdown file
-        rel = url[len(http_base):].lstrip("/")
+        rel = url[len(http_base) :].lstrip("/")
         assert_file_exists_with_content(build_dir / rel)
 
 
