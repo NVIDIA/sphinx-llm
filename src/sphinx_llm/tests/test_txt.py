@@ -10,6 +10,7 @@ import re
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from sphinx.application import Sphinx
@@ -331,6 +332,41 @@ def test_invalid_suffix_mode_raises_error():
     """Test that invalid llms_txt_suffix_mode values raise an error."""
     with pytest.raises(ExtensionError, match="Invalid llms_txt_suffix_mode"):
         list(_build_sphinx("dirhtml", {"llms_txt_suffix_mode": "invalid-mode"}))
+
+
+@pytest.mark.parametrize("builder", ["html", "dirhtml"])
+def test_llms_txt_disabled(builder):
+    """Test that setting llms_txt_enabled=False prevents the extension from running.
+
+    Spies on MarkdownGenerator.combine_builds. If the early return
+    in build_llms_txt happens, combine_builds is never connected
+    to build-finished, and its call count stays at zero.
+    """
+    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+
+        with patch.object(MarkdownGenerator, "combine_builds") as mock_combine:
+            app = Sphinx(
+                srcdir=str(docs_source_dir),
+                confdir=str(docs_source_dir),
+                outdir=str(tmp_path / "build"),
+                doctreedir=str(tmp_path / "doctrees"),
+                buildername=builder,
+                warningiserror=False,
+                freshenv=True,
+                confoverrides={
+                    "llms_txt_build_parallel": False,
+                    "llms_txt_enabled": False,
+                },
+            )
+            app.build()
+
+        assert mock_combine.call_count == 0, (
+            f"combine_builds was called {mock_combine.call_count} time(s) "
+            "despite llms_txt_enabled=False — extension ran when it should not have"
+        )
 
 
 def test_llms_full_txt_created_by_default(sphinx_build):

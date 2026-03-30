@@ -45,6 +45,10 @@ class MarkdownGenerator:
 
     def build_llms_txt(self, app: Sphinx):
         """Generate markdown files using sphinx_markdown_builder and concatenate them into llms.txt."""
+        if not getattr(self.app.config, "llms_txt_enabled", True):
+            logger.info("llms.txt generation is disabled (llms_txt_enabled=False), skipping...")
+            return
+
         self.outdir = Path(app.builder.outdir)
         self.md_build_dir = self.outdir / "_markdown_build"
         self.parallel = getattr(self.app.config, "llms_txt_build_parallel", True)
@@ -440,6 +444,7 @@ class MarkdownGenerator:
 
 def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
+    app.add_config_value("llms_txt_enabled", True, "")
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
