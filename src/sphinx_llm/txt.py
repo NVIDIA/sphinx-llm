@@ -46,7 +46,9 @@ class MarkdownGenerator:
     def build_llms_txt(self, app: Sphinx):
         """Generate markdown files using sphinx_markdown_builder and concatenate them into llms.txt."""
         if not getattr(self.app.config, "llms_txt_enabled", True):
-            logger.info("llms.txt generation is disabled (llms_txt_enabled=False), skipping...")
+            logger.info(
+                "llms.txt generation is disabled (llms_txt_enabled=False), skipping..."
+            )
             return
 
         self.outdir = Path(app.builder.outdir)
