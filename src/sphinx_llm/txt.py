@@ -134,13 +134,17 @@ class MarkdownGenerator:
         # Create temporary markdown build directory
         self.md_build_dir.mkdir(exist_ok=True)
         try:
-            # Build markdown files using sphinx-markdown-builder
+            # Build markdown files using sphinx-markdown-builder.
+            # The configuration directory is passed explicitly as it does not
+            # necessarily live in the source directory (sphinx-build -c option).
             sphinx_build_cmd = [
                 sys.executable,
                 "-m",
                 "sphinx",
                 "-b",
                 "markdown",
+                "-c",
+                str(self.app.confdir),
                 str(self.app.srcdir),
                 str(self.md_build_dir),
             ]
