@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Forwarded the primary build's tags (`sphinx-build -t` option, including the
+  dynamic builder-derived tags such as `html`) to the markdown sub-build so
+  that conditional content (e.g. `.. only::` directives) renders the same in
+  the markdown output as in the HTML build.
+
 ### Changed
 
 - Reworked the `docref` directive around Sphinx's environment lifecycle,

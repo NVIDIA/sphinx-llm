@@ -1115,3 +1115,49 @@ def test_confdir_outside_srcdir():
         assert_file_exists_with_content(build_dir / "llms.txt")
         assert_file_exists_with_content(build_dir / "llms-full.txt")
         assert_file_exists_with_content(build_dir / "index.html.md")
+
+
+def test_tags_forwarded_to_markdown_build():
+    """Tags of the primary build (sphinx-build -t option) must be forwarded
+    to the markdown sub-build so that conditional content (".. only::")
+    renders the same in both outputs."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        srcdir = temp_path / "source"
+        build_dir = temp_path / "build"
+        doctree_dir = temp_path / "doctrees"
+
+        srcdir.mkdir()
+        (srcdir / "conf.py").write_text('extensions = ["sphinx_llm.txt"]\n')
+        (srcdir / "index.rst").write_text(
+            "Test\n"
+            "====\n"
+            "\n"
+            "Always visible.\n"
+            "\n"
+            ".. only:: custom_tag\n"
+            "\n"
+            "   Tagged content marker.\n"
+        )
+
+        app = Sphinx(
+            srcdir=str(srcdir),
+            confdir=str(srcdir),
+            outdir=str(build_dir),
+            doctreedir=str(doctree_dir),
+            buildername="html",
+            warningiserror=False,
+            freshenv=True,
+            tags=["custom_tag"],
+            confoverrides={"llms_txt_build_parallel": True},
+        )
+        app.build()
+
+        index_md = build_dir / "index.html.md"
+        assert_file_exists_with_content(index_md)
+        content = index_md.read_text()
+        assert "Always visible." in content
+        assert "Tagged content marker." in content, (
+            "Content behind a tag of the primary build is missing from the "
+            "markdown output; tags were not forwarded to the sub-build"
+        )
