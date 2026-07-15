@@ -94,6 +94,11 @@ class MarkdownGenerator:
         """Combine the markdown files into llms-full.txt and llms.txt and merge the build outputs together."""
         if exception:
             logger.warning("Skipping build combination due to build error")
+            # Don't leave a markdown build subprocess behind (parallel mode)
+            if self.md_build_process and self.md_build_process.poll() is None:
+                logger.info("Terminating markdown build subprocess...")
+                self.md_build_process.terminate()
+                self.md_build_process.wait()
             return
 
         if not self.md_build_process:
@@ -130,7 +135,14 @@ class MarkdownGenerator:
             if self.md_build_dir.exists():
                 shutil.rmtree(self.md_build_dir)
 
-    def build_markdown_files(self, *_):
+    def build_markdown_files(self, *args):
+        # When invoked from the build-finished event (llms_txt_build_parallel
+        # set to False), args is (app, exception): don't bother building the
+        # markdown files if the primary build failed.
+        if len(args) == 2 and args[1] is not None:
+            logger.info("Skipping markdown build because the primary build failed")
+            return
+
         # Create temporary markdown build directory
         self.md_build_dir.mkdir(exist_ok=True)
         try:

@@ -10,7 +10,7 @@ import re
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import docutils.nodes
 import pytest
@@ -657,3 +657,33 @@ def test_html_meta_description_used_in_incremental_build():
                 f"Entry:    {line!r}\n"
                 f"Expected: {expected!r}"
             )
+
+
+def test_markdown_build_skipped_when_primary_build_failed(sphinx_build):
+    """No markdown sub-build should be spawned from build-finished when the
+    primary build failed."""
+    app, _, _ = sphinx_build
+    generator = MarkdownGenerator(app)
+    generator.md_build_dir = Path(app.outdir) / "_markdown_build_test"
+    generator.parallel = False
+
+    with patch("sphinx_llm.txt.subprocess.Popen") as mock_popen:
+        generator.build_markdown_files(app, Exception("primary build failed"))
+
+    mock_popen.assert_not_called()
+    assert generator.md_build_process is None
+
+
+def test_combine_builds_terminates_orphan_subprocess_on_exception(sphinx_build):
+    """A still-running markdown sub-build (parallel mode) must be reaped when
+    the primary build failed, not left behind as an orphan."""
+    app, _, _ = sphinx_build
+    generator = MarkdownGenerator(app)
+    mock_process = MagicMock()
+    mock_process.poll.return_value = None
+    generator.md_build_process = mock_process
+
+    generator.combine_builds(app, Exception("primary build failed"))
+
+    mock_process.terminate.assert_called_once()
+    mock_process.wait.assert_called_once()
