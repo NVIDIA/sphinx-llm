@@ -114,6 +114,7 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
 | `llms_txt_suffix_mode` | Suffix mode for generated markdown files. Options: `"auto"` (default behavior for each builder), `"file-suffix"` (spec-compliant format), `"url-suffix"` (URL-style format), or `"replace"` (replaces `.html` with `.md`). Note: `"both"` is deprecated but still supported (treated as `"auto"`). | `str` | `"auto"` |
 | `llms_txt_full_build` | Whether to generate the `llms-full.txt` file. Set to `False` to disable generation, which is useful for large documentation sites where the concatenated file would be too large. | `bool` | `True` |
+| `llms_txt_exclude` | A list of document name patterns (e.g. `"reference/generated/**"`) to exclude from `llms.txt` and `llms-full.txt`. The individual markdown files for excluded documents are still generated. Useful for large auto-generated reference sections that would otherwise dwarf the hand-written documentation in the aggregated outputs. | `list[str]` | `[]` |
 <!-- markdownlint-enable MD013 -->
 
 Each page's entry in `llms.txt` includes a short description. If a page defines

@@ -657,3 +657,59 @@ def test_html_meta_description_used_in_incremental_build():
                 f"Entry:    {line!r}\n"
                 f"Expected: {expected!r}"
             )
+
+
+@pytest.fixture(params=["html", "dirhtml"])
+def sphinx_build_with_exclude(
+    request,
+) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+    """Build Sphinx docs with llms_txt_exclude set."""
+    yield from _build_sphinx(
+        request.param, {"llms_txt_exclude": ["apples", "nested/**"]}
+    )
+
+
+# Body text unique to the excluded pages: unlike their titles (which other
+# pages may reference, e.g. in toctrees), these strings only ever appear in
+# the pages themselves.
+_APPLES_BODY_TEXT = "wonderful experience for both you and the pig"
+_NESTED_BODY_TEXT = "This is an example."
+
+
+def test_excluded_documents_not_in_llms_txt(sphinx_build_with_exclude):
+    """Documents matching llms_txt_exclude must not be listed in llms.txt."""
+    _, build_dir, _ = sphinx_build_with_exclude
+    llms_txt = build_dir / "llms.txt"
+    assert_file_exists_with_content(llms_txt)
+    content = llms_txt.read_text()
+
+    assert _APPLES_BODY_TEXT not in content
+    # Non-excluded documents are still listed
+    assert "test" in content
+
+
+def test_excluded_documents_not_in_llms_full_txt(sphinx_build_with_exclude):
+    """Documents matching llms_txt_exclude must not be part of llms-full.txt."""
+    _, build_dir, _ = sphinx_build_with_exclude
+    llms_full = build_dir / "llms-full.txt"
+    assert_file_exists_with_content(llms_full)
+    content = llms_full.read_text()
+
+    assert _APPLES_BODY_TEXT not in content
+    assert _NESTED_BODY_TEXT not in content
+
+
+def test_excluded_documents_still_have_markdown_files(sphinx_build_with_exclude):
+    """Documents matching llms_txt_exclude still get their individual
+    markdown files."""
+    app, build_dir, _ = sphinx_build_with_exclude
+
+    if app.builder.name == "dirhtml":
+        apples_md = build_dir / "apples" / "index.html.md"
+        nested_md = build_dir / "nested" / "example" / "index.html.md"
+    else:
+        apples_md = build_dir / "apples.html.md"
+        nested_md = build_dir / "nested" / "example.html.md"
+
+    assert_file_exists_with_content(apples_md)
+    assert_file_exists_with_content(nested_md)

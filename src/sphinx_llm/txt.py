@@ -20,6 +20,7 @@ import docutils.nodes
 from sphinx.application import Sphinx
 from sphinx.errors import ExtensionError
 from sphinx.util import logging
+from sphinx.util.matching import patmatch
 
 from .version import __version__
 
@@ -266,11 +267,17 @@ class MarkdownGenerator:
             # Other builders (html) use simpler path structure
             return self._get_html_targets(rel_path, base_name, new_name)
 
+    def _is_excluded(self, docname: str) -> bool:
+        """Check whether a document is excluded from llms.txt and llms-full.txt."""
+        exclude_patterns = getattr(self.app.config, "llms_txt_exclude", [])
+        return any(patmatch(docname, pattern) for pattern in exclude_patterns)
+
     def copy_markdown_files(self):
         """Copy markdown files from build directory to output directory."""
         md_files = list(self.md_build_dir.rglob("*.md"))
         self.generated_markdown_files = []
         self._docname_by_output_file = {}
+        num_excluded = 0
 
         for md_file in md_files:
             target_files, primary_target = self._get_target_paths(md_file)
@@ -281,12 +288,23 @@ class MarkdownGenerator:
                 target_file.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(md_file, target_file)
 
+            # Documents matching one of the llms_txt_exclude patterns still
+            # get their individual markdown files (copied above) but are left
+            # out of llms.txt and llms-full.txt.
+            if self._is_excluded(docname):
+                num_excluded += 1
+                continue
+
             # Only add the primary target to avoid duplicates in llms-full.txt
             if primary_target:
                 self.generated_markdown_files.append(primary_target)
                 self._docname_by_output_file[primary_target] = docname
 
         logger.info(f"Generated {len(self.generated_markdown_files)} context files")
+        if num_excluded:
+            logger.info(
+                f"Excluded {num_excluded} documents from llms.txt and llms-full.txt"
+            )
 
     def build_llms_full_txt(self):
         # Concatenate all markdown files into llms-full.txt
@@ -500,6 +518,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_build_parallel", True, "env")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", True, "env")
+    app.add_config_value("llms_txt_exclude", [], "env")
     generator = MarkdownGenerator(app)
     generator.setup()
 
