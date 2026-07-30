@@ -259,12 +259,6 @@ def test_dirhtml_suffix_mode_configuration(sphinx_build_with_suffix_mode_config)
         elif effective_mode == "auto":
             assert_file_exists_with_content(file_suffix_md)
             assert_file_exists_with_content(url_suffix_md)
-            # Verify content is the same (they should be copies)
-            assert file_suffix_md.read_text(
-                encoding="utf-8"
-            ) == url_suffix_md.read_text(encoding="utf-8"), (
-                f"Content mismatch between {file_suffix_md} and {url_suffix_md}"
-            )
 
     # Root index should always be generated regardless of suffix mode
     index_file_suffix_md = build_dir / "index.html.md"
@@ -283,6 +277,67 @@ def test_dirhtml_suffix_mode_configuration(sphinx_build_with_suffix_mode_config)
     elif effective_mode == "auto":
         assert_file_exists_with_content(index_file_suffix_md)
         assert_file_exists_with_content(index_url_suffix_md)
+
+
+def test_dirhtml_links_match_published_locations(tmp_path: Path):
+    source_dir = tmp_path / "source"
+    output_dir = tmp_path / "output"
+    guide_dir = source_dir / "guide"
+    guide_dir.mkdir(parents=True)
+
+    (source_dir / "conf.py").write_text(
+        'extensions = ["sphinx_llm.txt"]\n'
+        'project = "Link test"\n'
+        'root_doc = "index"\n'
+        "llms_txt_build_parallel = False\n"
+        'llms_txt_suffix_mode = "auto"\n'
+        "markdown_anchor_sections = True\n",
+        encoding="utf-8",
+    )
+    (source_dir / "index.rst").write_text(
+        "Index\n=====\n\n.. toctree::\n\n   guide/page\n   guide/target\n",
+        encoding="utf-8",
+    )
+    (guide_dir / "page.rst").write_text(
+        "Page\n"
+        "====\n\n"
+        "See :doc:`Target <target>`.\n\n"
+        ".. _page-details:\n\n"
+        "Details\n"
+        "-------\n\n"
+        "See :ref:`Details <page-details>`.\n",
+        encoding="utf-8",
+    )
+    (guide_dir / "target.rst").write_text(
+        "Target\n======\n",
+        encoding="utf-8",
+    )
+
+    app = Sphinx(
+        srcdir=str(source_dir),
+        confdir=str(source_dir),
+        outdir=str(output_dir),
+        doctreedir=str(tmp_path / "doctrees"),
+        buildername="dirhtml",
+        warningiserror=False,
+        freshenv=True,
+    )
+    app.build()
+
+    file_suffix_page = (output_dir / "guide/page/index.html.md").read_text(
+        encoding="utf-8"
+    )
+    url_suffix_page = (output_dir / "guide/page.md").read_text(encoding="utf-8")
+    llms_full = (output_dir / "llms-full.txt").read_text(encoding="utf-8")
+
+    assert "[Target](../target/index.html.md)" in file_suffix_page
+    assert "[Details](#page-details)" in file_suffix_page
+    assert "[Target](target.md)" in url_suffix_page
+    assert "[Details](#page-details)" in url_suffix_page
+    assert "# guide/page/index.html.md" in llms_full
+    assert "[Target](guide/target/index.html.md)" in llms_full
+    assert "[Details](guide/page/index.html.md#page-details)" in llms_full
+    assert "sphinx-llm:" not in file_suffix_page + url_suffix_page + llms_full
 
 
 @pytest.mark.parametrize(

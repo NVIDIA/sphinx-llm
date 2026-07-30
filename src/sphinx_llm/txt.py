@@ -7,6 +7,7 @@ This extension hooks into the Sphinx build process to create markdown versions
 of all documents using the sphinx_markdown_builder.
 """
 
+import posixpath
 import re
 import shutil
 import subprocess
@@ -14,16 +15,25 @@ import sys
 import tempfile
 from importlib.metadata import PackageNotFoundError, metadata
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Optional, Union
+from urllib.parse import unquote
 
 import docutils.nodes
 from sphinx.application import Sphinx
 from sphinx.errors import ExtensionError
 from sphinx.util import logging
 
+from .markdown_builder import (
+    LINK_TOKEN_PREFIX,
+    SphinxLlmMarkdownBuilder,
+)
 from .version import __version__
 
 logger = logging.getLogger(__name__)
+LINK_TOKEN_PATTERN = re.compile(
+    rf"{re.escape(LINK_TOKEN_PREFIX)}(?P<docname>[^#\s)>]+)"
+    r"(?:#(?P<fragment>[^\s)>]+))?"
+)
 
 
 class MarkdownGenerator:
@@ -33,6 +43,7 @@ class MarkdownGenerator:
         self.app = app
         self.generated_markdown_files = []  # Track generated markdown files
         self._docname_by_output_file: dict[Path, str] = {}  # output file → docname
+        self._markdown_file_by_docname: dict[str, Path] = {}
         self.outdir = None
         self.md_build_dir = None
         self.md_build_process = None
@@ -140,7 +151,9 @@ class MarkdownGenerator:
                 "-m",
                 "sphinx",
                 "-b",
-                "markdown",
+                SphinxLlmMarkdownBuilder.name,
+                "-t",
+                "sphinx_llm_markdown",
                 str(self.app.srcdir),
                 str(self.md_build_dir),
             ]
@@ -271,15 +284,26 @@ class MarkdownGenerator:
         md_files = list(self.md_build_dir.rglob("*.md"))
         self.generated_markdown_files = []
         self._docname_by_output_file = {}
+        self._markdown_file_by_docname = {}
 
         for md_file in md_files:
             target_files, primary_target = self._get_target_paths(md_file)
             docname = self._get_docname_from_md_file(md_file)
+            content = md_file.read_text(encoding="utf-8")
+            self._markdown_file_by_docname[docname] = md_file
 
-            # Copy the file to all target locations
-            for target_file in target_files:
+            # Write the file with links for its published location.
+            for layout_index, target_file in enumerate(target_files):
                 target_file.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(md_file, target_file)
+                target_file.write_text(
+                    self._materialize_links(
+                        content,
+                        source_docname=docname,
+                        source_target=target_file,
+                        layout_index=layout_index,
+                    ),
+                    encoding="utf-8",
+                )
 
             # Only add the primary target to avoid duplicates in llms-full.txt
             if primary_target:
@@ -288,6 +312,53 @@ class MarkdownGenerator:
 
         logger.info(f"Generated {len(self.generated_markdown_files)} context files")
 
+    def _target_paths_for_docname(self, docname: str) -> list[Path]:
+        markdown_file = self.md_build_dir / f"{docname}.md"
+        target_files, _ = self._get_target_paths(markdown_file)
+        return target_files
+
+    def _markdown_http_base(self) -> str:
+        return (
+            self.app.config._raw_config.get("markdown_http_base")
+            or getattr(self.app.config, "markdown_http_base", "")
+        ).rstrip("/")
+
+    def _materialize_links(
+        self,
+        content: str,
+        source_docname: str,
+        source_target: Optional[Path],
+        layout_index: int,
+    ) -> str:
+        """Resolve document link tokens for one published location."""
+
+        def replace_link(match: re.Match) -> str:
+            target_docname = unquote(match.group("docname"))
+            fragment = match.group("fragment")
+            if (
+                source_target is not None
+                and target_docname == source_docname
+                and fragment
+            ):
+                return f"#{fragment}"
+
+            target_file = self._target_paths_for_docname(target_docname)[layout_index]
+            relative_target = target_file.relative_to(self.outdir).as_posix()
+            http_base = self._markdown_http_base()
+            if http_base:
+                uri = f"{http_base}/{relative_target}"
+            elif source_target is None:
+                uri = relative_target
+            else:
+                source_dir = source_target.parent.relative_to(self.outdir).as_posix()
+                uri = posixpath.relpath(relative_target, start=source_dir or ".")
+
+            if fragment:
+                uri = f"{uri}#{fragment}"
+            return uri
+
+        return LINK_TOKEN_PATTERN.sub(replace_link, content)
+
     def build_llms_full_txt(self):
         # Concatenate all markdown files into llms-full.txt
         llms_txt_path = self.outdir / "llms-full.txt"
@@ -295,14 +366,28 @@ class MarkdownGenerator:
             # Sort files to ensure index.html.md comes first
             sorted_files = sorted(
                 self.generated_markdown_files,
-                key=lambda x: (x.name not in ("index.html.md", "index.md"), x.name),
+                key=lambda path: (
+                    path.relative_to(self.outdir).as_posix()
+                    not in {"index.html.md", "index.md"},
+                    path.relative_to(self.outdir).as_posix(),
+                ),
             )
 
             for md_file in sorted_files:
-                with open(md_file, encoding="utf-8") as f:
-                    llms_txt.write(f"# {md_file.name}\n\n")
-                    llms_txt.write(f.read())
-                    llms_txt.write("\n\n")
+                docname = self._docname_by_output_file[md_file]
+                content = self._markdown_file_by_docname[docname].read_text(
+                    encoding="utf-8"
+                )
+                content = self._materialize_links(
+                    content,
+                    source_docname=docname,
+                    source_target=None,
+                    layout_index=0,
+                )
+                relative_path = md_file.relative_to(self.outdir).as_posix()
+                llms_txt.write(f"# {relative_path}\n\n")
+                llms_txt.write(content)
+                llms_txt.write("\n\n")
         logger.info(f"Concatenated full context into: {llms_txt_path}")
 
     def get_project_description(self) -> str:
@@ -356,10 +441,7 @@ class MarkdownGenerator:
             # Read markdown_http_base from raw conf.py values, so it works
             # even when sphinx_markdown_builder is not listed in extensions
             # (it is only loaded in the markdown subprocess build).
-            http_base = (
-                self.app.config._raw_config.get("markdown_http_base")
-                or getattr(self.app.config, "markdown_http_base", "")
-            ).rstrip("/")
+            http_base = self._markdown_http_base()
 
             for md_file in sorted_files:
                 # Extract title from the markdown file
@@ -495,6 +577,9 @@ class MarkdownGenerator:
 
 def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
+    if app.tags.has("sphinx_llm_markdown"):
+        app.setup_extension("sphinx_markdown_builder")
+    app.add_builder(SphinxLlmMarkdownBuilder)
     app.add_config_value("llms_txt_enabled", True, "")
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
