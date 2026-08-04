@@ -94,6 +94,7 @@ class Docref(BaseAdmonition, SphinxDirective):
         llm_client = ChatOllama(
             base_url=OLLAMA_BASE_URL,
             model=model,
+            reasoning=False,
             temperature=0,
         )
         doc_summary = llm_client.invoke(
