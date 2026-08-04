@@ -28,12 +28,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Checkout Downstream Project
         uses: actions/checkout@v7.0.1
         with:
           repository: ${{ matrix.downstream-project.repo }}
           path: ${{ matrix.downstream-project.repo }}
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
