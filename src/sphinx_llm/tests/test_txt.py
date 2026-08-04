@@ -162,6 +162,26 @@ def test_llms_txt_sitemap_links_exist(sphinx_build):
             assert_file_exists_with_content(build_dir / url)
 
 
+def test_llms_txt_sitemap_follows_toctree_order(sphinx_build):
+    """Test that pages in llms.txt follow the Sphinx toctree order."""
+    _, build_dir, _ = sphinx_build
+
+    content = (build_dir / "llms.txt").read_text(encoding="utf-8")
+    page_titles = [
+        match.group(1)
+        for line in content.splitlines()
+        if (match := re.match(r"^- \[([^]]+)]\(", line))
+    ]
+
+    assert page_titles == [
+        "Welcome to sphinx-llm’s documentation!",
+        "Testing page",
+        "Feeding Apples to a Friendly Pig",
+        "Page with html_meta description",
+        "Example",
+    ]
+
+
 def test_llms_txt_does_not_use_anchor_tag_as_description(sphinx_build):
     """Test that anchor-only HTML tags are not used as page descriptions in llms.txt."""
     _, build_dir, _ = sphinx_build

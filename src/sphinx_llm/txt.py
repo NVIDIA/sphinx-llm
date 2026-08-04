@@ -347,10 +347,19 @@ class MarkdownGenerator:
             # Write the main content section
             sitemap.write("## Pages\n\n")
 
-            # Sort files to ensure index.html.md comes first
+            # Follow the Sphinx toctree, with orphaned documents sorted last.
+            toctree_order = {
+                docname: index
+                for index, docname in enumerate(self.app.env.collect_relations())
+            }
             sorted_files = sorted(
                 self.generated_markdown_files,
-                key=lambda x: (x.name not in ("index.html.md", "index.md"), x.name),
+                key=lambda path: (
+                    toctree_order.get(
+                        self._docname_by_output_file[path], len(toctree_order)
+                    ),
+                    self._docname_by_output_file[path],
+                ),
             )
 
             # Read markdown_http_base from raw conf.py values, so it works
