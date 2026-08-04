@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import tempfile
 from collections.abc import Generator
+from html.parser import HTMLParser
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,6 +19,35 @@ from sphinx.application import Sphinx
 from sphinx.errors import ExtensionError
 
 from sphinx_llm.txt import MarkdownGenerator
+
+
+class _ToctreeLinkParser(HTMLParser):
+    """Collect links from toctree wrappers in generated HTML."""
+
+    def __init__(self):
+        super().__init__()
+        self._div_depth = 0
+        self._toctree_depth = None
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        if tag == "div":
+            self._div_depth += 1
+            classes = (attributes.get("class") or "").split()
+            if self._toctree_depth is None and "toctree-wrapper" in classes:
+                self._toctree_depth = self._div_depth
+        elif tag == "a" and self._toctree_depth is not None:
+            href = attributes.get("href")
+            if href:
+                self.links.append(href)
+
+    def handle_endtag(self, tag):
+        if tag != "div":
+            return
+        if self._toctree_depth == self._div_depth:
+            self._toctree_depth = None
+        self._div_depth -= 1
 
 
 def _build_sphinx(
@@ -163,23 +193,36 @@ def test_llms_txt_sitemap_links_exist(sphinx_build):
 
 
 def test_llms_txt_sitemap_follows_toctree_order(sphinx_build):
-    """Test that pages in llms.txt follow the Sphinx toctree order."""
+    """Test that pages in llms.txt follow the order in the HTML index."""
     _, build_dir, _ = sphinx_build
 
+    parser = _ToctreeLinkParser()
+    parser.feed((build_dir / "index.html").read_text(encoding="utf-8"))
+
+    html_page_urls = []
+    for href in parser.links:
+        page_url = href.partition("#")[0]
+        if not page_url or page_url.startswith(("http://", "https://")):
+            continue
+        if page_url not in html_page_urls:
+            html_page_urls.append(page_url)
+
+    assert html_page_urls, "No page links found in the HTML toctree"
+
+    expected_markdown_urls = ["index.html.md"]
+    for page_url in html_page_urls:
+        if page_url.endswith("/"):
+            page_url = f"{page_url}index.html"
+        expected_markdown_urls.append(f"{page_url}.md")
+
     content = (build_dir / "llms.txt").read_text(encoding="utf-8")
-    page_titles = [
+    llms_page_urls = [
         match.group(1)
         for line in content.splitlines()
-        if (match := re.match(r"^- \[([^]]+)]\(", line))
+        if (match := re.match(r"^- \[[^]]+\]\(([^)]+)\):", line))
     ]
 
-    assert page_titles == [
-        "Welcome to sphinx-llm’s documentation!",
-        "Testing page",
-        "Feeding Apples to a Friendly Pig",
-        "Page with html_meta description",
-        "Example",
-    ]
+    assert llms_page_urls[: len(expected_markdown_urls)] == expected_markdown_urls
 
 
 def test_llms_txt_does_not_use_anchor_tag_as_description(sphinx_build):
