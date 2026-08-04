@@ -91,7 +91,7 @@ uv run --dev sphinx-build docs/source docs/build/html
 - Caches summaries using MD5 hash of document content
 - **Modifies source files in-place** to persist generated summaries (RST only currently)
 - Requires Ollama running at `OLLAMA_BASE_URL` (default: `http://localhost:11434`)
-- Default model: `llama3.2:3b`
+- Default model: `qwen3.5:2b`
 
 ## Test Structure
 
