@@ -20,6 +20,8 @@ jobs:
 
       - name: Setup Ollama
         uses: ai-action/setup-ollama@fc020bb65890f31d60475232b35cea07152316ee
+        with:
+          version: 0.32.5
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6.3.1
@@ -34,7 +36,7 @@ jobs:
 
       - name: Build Sphinx documentation
         run: |
-          uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -b html docs/source docs/build/html
+          uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -D llms_txt_build_parallel=0 -b html docs/source docs/build/html
 
       - name: DEBUG Output updated source file
         run: |
