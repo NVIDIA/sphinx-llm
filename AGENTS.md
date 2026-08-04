@@ -87,11 +87,12 @@ uv run --dev sphinx-build docs/source docs/build/html
 **`sphinx_llm.docref` (src/sphinx_llm/docref.py)**
 
 - Custom Sphinx directive extending `BaseAdmonition`
-- Generates LLM summaries of referenced documents using Ollama
-- Caches summaries using MD5 hash of document content
+- Generates LLM summaries through an OpenAI-compatible chat endpoint
+- Caches summaries using a prompt-versioned hash of the document content and
+  resolved generation settings
 - **Modifies source files in-place** to persist generated summaries (RST only currently)
-- Requires Ollama running at `OLLAMA_BASE_URL` (default: `http://localhost:11434`)
-- Default model: `llama3.2:3b`
+- Requires the `gen` dependencies, an explicitly configured model, and either
+  an API key or an OpenAI-compatible base URL
 
 ## Test Structure
 

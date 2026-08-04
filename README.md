@@ -128,12 +128,22 @@ referencing other pages in your documentation. Instead of just linking to a
 page the extension will generate a summary of the page being linked to and
 include that too.
 
-To use this extension you need to have [ollama](https://github.com/ollama/ollama)
-running.
+The extension calls an OpenAI-compatible chat-completions endpoint. Set
+`OPENAI_API_KEY` for the default OpenAI endpoint, or configure a different
+endpoint and credential environment variable with `sphinx_llm_options`:
 
-If you have a GPU then generation will be much faster, but it is optional. See
-[the GitHub Actions](.github/workflows/build-docs.yml) for an example of using
-it in CI.
+```python
+sphinx_llm_options = {
+    "model": "your-model",
+    "base_url": "http://localhost:8000/v1",
+    "api_key_env": "OPENAI_API_KEY",
+}
+```
+
+The `base_url` and `api_key_env` settings are optional. Local endpoints that
+do not require authentication can omit the named API key. A model must be set
+either here or on the directive, and authenticated non-loopback endpoints must
+use HTTPS.
 
 ![Docref summary example](docs/source/_static/images/pig-feeding-summary.png)
 
@@ -170,7 +180,7 @@ Testing page
 
 
 .. docref:: apples
-   :hash: 31ec12a54205539af3cde39b254ec766
+   :hash: 98eb12bd4bb85f32a2fa9a010173baa224689dfb24325c25ac811a08b6698bc7
    :model: llama3.2:3b
 
    Feeding apples to a friendly pig involves selecting ripe, pesticide-free

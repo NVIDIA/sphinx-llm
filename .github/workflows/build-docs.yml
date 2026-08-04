@@ -21,6 +21,9 @@ jobs:
       - name: Setup Ollama
         uses: ai-action/setup-ollama@fc020bb65890f31d60475232b35cea07152316ee
 
+      - name: Pull test model
+        run: ollama pull llama3.2:3b
+
       - name: Install uv
         uses: astral-sh/setup-uv@v6.3.1
         with:
@@ -33,6 +36,8 @@ jobs:
           cp docs/source/test.rst docs/source/test.rst.bak
 
       - name: Build Sphinx documentation
+        env:
+          OPENAI_BASE_URL: http://localhost:11434/v1
         run: |
           uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -b html docs/source docs/build/html
 
