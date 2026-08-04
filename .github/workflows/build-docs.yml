@@ -23,8 +23,12 @@ jobs:
         with:
           version: 0.32.5
 
-      - name: Pull test model
+      - name: Pull documentation model
         run: ollama pull qwen3.5:2b
+
+      - name: Pull live-test model
+        if: matrix.sphinx-version == '>=7,<8'
+        run: ollama pull smollm2:135m
 
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
@@ -35,7 +39,7 @@ jobs:
       - name: Test OpenAI-compatible generation
         if: matrix.sphinx-version == '>=7,<8'
         env:
-          OPENAI_MODEL: qwen3.5:2b
+          OPENAI_MODEL: smollm2:135m
           OPENAI_BASE_URL: http://localhost:11434/v1
           SPHINX_LLM_LIVE_TEST: "1"
         run: |

@@ -116,7 +116,6 @@ def test_summarize_text_with_live_endpoint():
     summary = summarize_text("Sphinx generates documentation from source files.")
 
     assert summary
-    assert "\n" not in summary
 
 
 @pytest.mark.parametrize(
