@@ -72,8 +72,16 @@ class Docref(BaseAdmonition, SphinxDirective):
             doc_name
         ).astext()
 
+        # Select the model before checking the cache so switching models invalidates it
+        if "model" in self.options and self.options["model"]:
+            model = self.options["model"]
+        elif hasattr(self.config, "sphinx_llm_options"):
+            model = self.config.sphinx_llm_options.get("model", DEFAULT_MODEL)
+        else:
+            model = DEFAULT_MODEL
+
         # Check the cached summary
-        doc_hash = hashlib.md5(doc_contents.encode()).hexdigest()
+        doc_hash = hashlib.md5(f"{model}\n{doc_contents}".encode()).hexdigest()
         if "hash" in self.options and self.options["hash"] == doc_hash:
             return doc_hash, "\n".join(self.content.data)
         if hasattr(
@@ -84,12 +92,6 @@ class Docref(BaseAdmonition, SphinxDirective):
             )
 
         # Generate a summary using the LLM
-        if "model" in self.options and self.options["model"]:
-            model = self.options["model"]
-        elif hasattr(self.config, "sphinx_llm_options"):
-            model = self.config.sphinx_llm_options.get("model", DEFAULT_MODEL)
-        else:
-            model = DEFAULT_MODEL
         self.ensure_model(model)
         llm_client = ChatOllama(
             base_url=OLLAMA_BASE_URL,
