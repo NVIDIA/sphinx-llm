@@ -91,8 +91,8 @@ uv run --dev sphinx-build docs/source docs/build/html
 - Caches summaries using a prompt-versioned hash of the document content and
   resolved generation settings
 - **Modifies source files in-place** to persist generated summaries (RST only currently)
-- Requires the `gen` dependencies, an explicitly configured model, and either
-  an API key or an OpenAI-compatible base URL
+- Requires the `gen` dependencies and a model configured through the directive,
+  `sphinx_llm_options`, or `OPENAI_MODEL`; endpoint and credentials are optional
 
 ## Test Structure
 

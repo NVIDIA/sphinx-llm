@@ -21,7 +21,7 @@ extensions = [
 ]
 
 sphinx_llm_options = {
-    "model": "llama3.2:3b",
+    "model": "qwen3.5:2b",
 }
 llms_txt_description = """A collection of Sphinx extensions for working with LLMs in your documentation.
 This includes:
