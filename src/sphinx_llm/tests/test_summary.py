@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the shared OpenAI-compatible summary client."""
 
+import os
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -42,16 +43,21 @@ def test_summarize_text_uses_openai_compatible_endpoint(monkeypatch):
                 "role": "user",
                 "content": (
                     "Page contents.\n\n"
-                    "Here's a concise one-sentence summary of the above:"
+                    "Respond only with a concise one-sentence summary of the above."
                 ),
             },
         ],
     )
 
 
-def test_summarize_text_allows_unauthenticated_local_endpoint(monkeypatch):
-    """Test that local compatible endpoints do not require a credential."""
+@pytest.mark.parametrize(
+    "base_url",
+    ["", "http://localhost:8000/v1", "http://models.internal/v1"],
+)
+def test_summarize_text_allows_missing_api_key(monkeypatch, base_url):
+    """Test that any compatible endpoint can use a dummy credential."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     response = SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
     )
@@ -61,44 +67,56 @@ def test_summarize_text_allows_unauthenticated_local_endpoint(monkeypatch):
         summarize_text(
             "Page contents.",
             "test-model",
-            base_url="http://localhost:8000/v1",
+            base_url=base_url,
         )
 
-    mock_openai.assert_called_once_with(
-        api_key="not-used", base_url="http://localhost:8000/v1"
-    )
-
-
-def test_summarize_text_requires_key_for_default_endpoint(monkeypatch):
-    """Test that the default hosted endpoint requires configured credentials."""
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-
-    with pytest.raises(ExtensionError, match="OPENAI_API_KEY"):
-        summarize_text("Page contents.", "test-model")
+    expected_options = {"api_key": "not-used"}
+    if base_url:
+        expected_options["base_url"] = base_url
+    mock_openai.assert_called_once_with(**expected_options)
 
 
 def test_summarize_text_requires_an_explicit_model(monkeypatch):
     """Test that a local-server model is never sent to OpenAI by default."""
     monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
 
     with pytest.raises(ExtensionError, match="summary model"):
         summarize_text("Page contents.")
 
 
-def test_summarize_text_rejects_api_key_over_remote_http(monkeypatch):
-    """Test that credentials are not sent to unencrypted remote endpoints."""
-    monkeypatch.setenv("TEST_API_KEY", "secret")
+def test_summarize_text_uses_environment_configuration(monkeypatch):
+    """Test model, endpoint, and credential environment variables."""
+    monkeypatch.setenv("OPENAI_MODEL", "env-model")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://models.example.com/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
+    )
 
     with patch("openai.OpenAI") as mock_openai:
-        with pytest.raises(ExtensionError, match="unencrypted"):
-            summarize_text(
-                "Page contents.",
-                "test-model",
-                base_url="http://example.com/v1",
-                api_key_env="TEST_API_KEY",
-            )
+        mock_openai.return_value.chat.completions.create.return_value = response
+        assert summarize_text("Page contents.") == "Summary."
 
-    mock_openai.assert_not_called()
+    mock_openai.assert_called_once_with(
+        api_key="secret", base_url="https://models.example.com/v1"
+    )
+    assert (
+        mock_openai.return_value.chat.completions.create.call_args.kwargs["model"]
+        == "env-model"
+    )
+
+
+@pytest.mark.skipif(
+    os.environ.get("SPHINX_LLM_LIVE_TEST") != "1",
+    reason="requires a live OpenAI-compatible endpoint",
+)
+def test_summarize_text_with_live_endpoint():
+    """Test summary generation against the CI Ollama service."""
+    summary = summarize_text("Sphinx generates documentation from source files.")
+
+    assert summary
+    assert "\n" not in summary
 
 
 @pytest.mark.parametrize(

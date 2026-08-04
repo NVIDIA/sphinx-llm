@@ -128,9 +128,19 @@ referencing other pages in your documentation. Instead of just linking to a
 page the extension will generate a summary of the page being linked to and
 include that too.
 
-The extension calls an OpenAI-compatible chat-completions endpoint. Set
-`OPENAI_API_KEY` for the default OpenAI endpoint, or configure a different
-endpoint and credential environment variable with `sphinx_llm_options`:
+The extension calls an OpenAI-compatible chat-completions endpoint. Generation
+can be configured entirely with environment variables:
+
+```shell
+export OPENAI_MODEL=your-model
+export OPENAI_BASE_URL=http://localhost:8000/v1
+export OPENAI_API_KEY=your-api-key
+```
+
+`OPENAI_BASE_URL` and `OPENAI_API_KEY` are optional. When the endpoint does not
+require authentication, the extension supplies the placeholder key required by
+the OpenAI client. The same settings can be configured in `conf.py`; these
+values take precedence over the environment:
 
 ```python
 sphinx_llm_options = {
@@ -140,10 +150,8 @@ sphinx_llm_options = {
 }
 ```
 
-The `base_url` and `api_key_env` settings are optional. Local endpoints that
-do not require authentication can omit the named API key. A model must be set
-either here or on the directive, and authenticated non-loopback endpoints must
-use HTTPS.
+The `base_url` and `api_key_env` settings are optional. A model must be set on
+the directive, in `sphinx_llm_options`, or with `OPENAI_MODEL`.
 
 ![Docref summary example](docs/source/_static/images/pig-feeding-summary.png)
 
@@ -180,7 +188,7 @@ Testing page
 
 
 .. docref:: apples
-   :hash: 98eb12bd4bb85f32a2fa9a010173baa224689dfb24325c25ac811a08b6698bc7
+   :hash: 27fd7ec27c4ff37c1bc7fd32ad9178ff97dd3ebd9232d03fdc9b3268f6ff558a
    :model: llama3.2:3b
 
    Feeding apples to a friendly pig involves selecting ripe, pesticide-free

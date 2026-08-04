@@ -13,12 +13,25 @@ from sphinx.util.docutils import SphinxDirective
 from .summary import (
     DEFAULT_API_KEY_ENV,
     DEFAULT_MODEL,
+    DEFAULT_MODEL_ENV,
     summarize_text,
     summary_fingerprint,
 )
 from .version import __version__
 
 logger = logging.getLogger(__name__)
+
+
+def _escape_rst_directives(summary: str) -> str:
+    """Escape directive-like lines before persisting generated RST."""
+    escaped_lines = []
+    for line in summary.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith(".. "):
+            indentation = line[: len(line) - len(stripped)]
+            line = f"{indentation}\\{stripped}"
+        escaped_lines.append(line)
+    return "\n".join(escaped_lines)
 
 
 class Docref(BaseAdmonition, SphinxDirective):
@@ -76,7 +89,11 @@ class Docref(BaseAdmonition, SphinxDirective):
         if "model" in self.options and self.options["model"]:
             model = self.options["model"]
         else:
-            model = shared_options.get("model") or DEFAULT_MODEL
+            model = (
+                shared_options.get("model")
+                or os.environ.get(DEFAULT_MODEL_ENV, "")
+                or DEFAULT_MODEL
+            )
         base_url = shared_options.get("base_url", "") or os.environ.get(
             "OPENAI_BASE_URL", ""
         )
@@ -106,6 +123,7 @@ class Docref(BaseAdmonition, SphinxDirective):
         return doc_hash, doc_summary
 
     def update_content(self, hash: str, summary: str):
+        summary = _escape_rst_directives(summary)
         self.content.data = summary.splitlines()
 
         # Update the source file with the new summary
