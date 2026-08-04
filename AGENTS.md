@@ -1,7 +1,7 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository.
+This file provides guidance to coding agents working with code in this
+repository.
 
 ## Project Overview
 
@@ -15,6 +15,8 @@ serves two purposes:
    content during builds (e.g., the `docref` directive for page summaries)
 
 ## Development Commands
+
+Prefer using Git worktrees for development.
 
 ### Setup
 
