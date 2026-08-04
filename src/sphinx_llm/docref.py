@@ -17,7 +17,7 @@ from sphinx.util.docutils import SphinxDirective
 from .version import __version__
 
 logger = logging.getLogger(__name__)
-DEFAULT_MODEL = "llama3.2:3b"
+DEFAULT_MODEL = "qwen3.5:2b"
 SYSTEM_PROMPT = "Keep responses concise and focused, avoiding unnecessary elaboration or additional context unless explicitly requested. Do not use bullet points, lists, or nested structures unless specifically asked. If a response requires further detail, prioritize the most relevant information and conclude promptly. Avoid apologies or mentions of limitations; simply deliver the most direct and straightforward answer."
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
