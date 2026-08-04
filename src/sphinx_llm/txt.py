@@ -7,16 +7,17 @@ This extension hooks into the Sphinx build process to create markdown versions
 of all documents using the sphinx_markdown_builder.
 """
 
+import json
 import posixpath
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from enum import Enum
 from importlib.metadata import PackageNotFoundError, metadata
 from pathlib import Path
 from typing import Any, Optional, Union
-from urllib.parse import unquote
 
 import docutils.nodes
 from sphinx.application import Sphinx
@@ -24,16 +25,24 @@ from sphinx.errors import ExtensionError
 from sphinx.util import logging
 
 from .markdown_builder import (
+    LINK_TARGETS_FILENAME,
     LINK_TOKEN_PREFIX,
+    LinkTarget,
     SphinxLlmMarkdownBuilder,
 )
 from .version import __version__
 
 logger = logging.getLogger(__name__)
-LINK_TOKEN_PATTERN = re.compile(
-    rf"{re.escape(LINK_TOKEN_PREFIX)}(?P<docname>[^#\s)>]+)"
-    r"(?:#(?P<fragment>[^\s)>]+))?"
-)
+LINK_TOKEN_PATTERN = re.compile(rf"{re.escape(LINK_TOKEN_PREFIX)}[0-9a-f]{{32}}")
+
+
+class MarkdownLayout(str, Enum):
+    """Published Markdown path layout."""
+
+    FILE_SUFFIX = "file-suffix"
+    URL_SUFFIX = "url-suffix"
+    REPLACE = "replace"
+    HTML = "html"
 
 
 class MarkdownGenerator:
@@ -44,6 +53,7 @@ class MarkdownGenerator:
         self.generated_markdown_files = []  # Track generated markdown files
         self._docname_by_output_file: dict[Path, str] = {}  # output file → docname
         self._markdown_file_by_docname: dict[str, Path] = {}
+        self._link_target_by_token: dict[str, LinkTarget] = {}
         self.outdir = None
         self.md_build_dir = None
         self.md_build_process = None
@@ -185,28 +195,41 @@ class MarkdownGenerator:
 
     def _determine_suffix_targets(
         self, file_suffix_target: Path, url_suffix_target: Path
-    ) -> tuple[list[Path], Path]:
+    ) -> tuple[dict[MarkdownLayout, Path], MarkdownLayout]:
         """Determine target file paths based on suffix mode.
 
         Returns:
-            Tuple of (list of all targets, primary target)
+            Tuple of (targets by layout, primary layout)
         """
         if self.suffix_mode == "file-suffix":
-            return [file_suffix_target], file_suffix_target
+            return (
+                {MarkdownLayout.FILE_SUFFIX: file_suffix_target},
+                MarkdownLayout.FILE_SUFFIX,
+            )
         elif self.suffix_mode == "url-suffix":
-            return [url_suffix_target], url_suffix_target
+            return (
+                {MarkdownLayout.URL_SUFFIX: url_suffix_target},
+                MarkdownLayout.URL_SUFFIX,
+            )
         elif self.suffix_mode == "auto":
-            # Use file-suffix as primary (spec-compliant)
-            return [file_suffix_target, url_suffix_target], file_suffix_target
+            return (
+                {
+                    MarkdownLayout.FILE_SUFFIX: file_suffix_target,
+                    MarkdownLayout.URL_SUFFIX: url_suffix_target,
+                },
+                MarkdownLayout.FILE_SUFFIX,
+            )
         raise ExtensionError(
             f"Unhandled suffix mode in _determine_suffix_targets: {self.suffix_mode!r}"
         )
 
-    def _get_dirhtml_root_index_targets(self, new_name: str) -> tuple[list[Path], Path]:
+    def _get_dirhtml_root_index_targets(
+        self, new_name: str
+    ) -> tuple[dict[MarkdownLayout, Path], MarkdownLayout]:
         """Get targets for root index file in dirhtml builder."""
         if self.suffix_mode == "replace":
             replace_target = self.outdir / "index.md"
-            return [replace_target], replace_target
+            return {MarkdownLayout.REPLACE: replace_target}, MarkdownLayout.REPLACE
 
         file_suffix_target = self.outdir / new_name  # index.html.md
         url_suffix_target = self.outdir / "index.md"  # index.md
@@ -214,11 +237,11 @@ class MarkdownGenerator:
 
     def _get_dirhtml_nested_index_targets(
         self, rel_path: Path, new_name: str
-    ) -> tuple[list[Path], Path]:
+    ) -> tuple[dict[MarkdownLayout, Path], MarkdownLayout]:
         """Get targets for nested index file in dirhtml builder (e.g., subdir/index.rst)."""
         if self.suffix_mode == "replace":
             replace_target = self.outdir / rel_path.parent / "index.md"
-            return [replace_target], replace_target
+            return {MarkdownLayout.REPLACE: replace_target}, MarkdownLayout.REPLACE
 
         file_suffix_target = (
             self.outdir / rel_path.parent / new_name
@@ -226,11 +249,13 @@ class MarkdownGenerator:
         url_suffix_target = self.outdir / f"{rel_path.parent}.md"  # subdir.md
         return self._determine_suffix_targets(file_suffix_target, url_suffix_target)
 
-    def _get_dirhtml_non_index_targets(self, rel_path: Path) -> tuple[list[Path], Path]:
+    def _get_dirhtml_non_index_targets(
+        self, rel_path: Path
+    ) -> tuple[dict[MarkdownLayout, Path], MarkdownLayout]:
         """Get targets for non-index file in dirhtml builder."""
         if self.suffix_mode == "replace":
             replace_target = self.outdir / rel_path.with_suffix("") / "index.md"
-            return [replace_target], replace_target
+            return {MarkdownLayout.REPLACE: replace_target}, MarkdownLayout.REPLACE
 
         file_suffix_target = self.outdir / rel_path.with_suffix("") / "index.html.md"
         url_suffix_target = self.outdir / rel_path.with_suffix(".md")
@@ -238,7 +263,7 @@ class MarkdownGenerator:
 
     def _get_html_targets(
         self, rel_path: Path, base_name: str, new_name: str
-    ) -> tuple[list[Path], Path]:
+    ) -> tuple[dict[MarkdownLayout, Path], MarkdownLayout]:
         """Get targets for html builder."""
         if self.suffix_mode == "replace":
             # Replace mode: foo.md (replace .html with .md)
@@ -247,7 +272,7 @@ class MarkdownGenerator:
                 if rel_path.parent != Path(".")
                 else self.outdir / f"{base_name}.md"
             )
-            return [replace_target], replace_target
+            return {MarkdownLayout.REPLACE: replace_target}, MarkdownLayout.REPLACE
 
         # Default behavior: foo.html.md
         target_file = (
@@ -255,13 +280,15 @@ class MarkdownGenerator:
             if rel_path.parent != Path(".")
             else self.outdir / new_name
         )
-        return [target_file], target_file
+        return {MarkdownLayout.HTML: target_file}, MarkdownLayout.HTML
 
-    def _get_target_paths(self, md_file: Path) -> tuple[list[Path], Path]:
+    def _get_target_paths(
+        self, md_file: Path
+    ) -> tuple[dict[MarkdownLayout, Path], MarkdownLayout]:
         """Determine target file locations based on builder and file type.
 
         Returns:
-            Tuple of (list of all target files, primary target for llms-full.txt)
+            Tuple of (targets by layout, primary layout)
         """
         rel_path = md_file.relative_to(self.md_build_dir)
         base_name = rel_path.stem
@@ -285,37 +312,42 @@ class MarkdownGenerator:
         self.generated_markdown_files = []
         self._docname_by_output_file = {}
         self._markdown_file_by_docname = {}
+        link_targets_path = self.md_build_dir / LINK_TARGETS_FILENAME
+        self._link_target_by_token = json.loads(
+            link_targets_path.read_text(encoding="utf-8")
+        )
 
         for md_file in md_files:
-            target_files, primary_target = self._get_target_paths(md_file)
+            target_files, primary_layout = self._get_target_paths(md_file)
+            primary_target = target_files[primary_layout]
             docname = self._get_docname_from_md_file(md_file)
             content = md_file.read_text(encoding="utf-8")
             self._markdown_file_by_docname[docname] = md_file
 
             # Write the file with links for its published location.
-            for layout_index, target_file in enumerate(target_files):
+            for layout, target_file in target_files.items():
                 target_file.parent.mkdir(parents=True, exist_ok=True)
                 target_file.write_text(
                     self._materialize_links(
                         content,
                         source_docname=docname,
                         source_target=target_file,
-                        layout_index=layout_index,
+                        target_layout=layout,
                     ),
                     encoding="utf-8",
                 )
 
             # Only add the primary target to avoid duplicates in llms-full.txt
-            if primary_target:
-                self.generated_markdown_files.append(primary_target)
-                self._docname_by_output_file[primary_target] = docname
+            self.generated_markdown_files.append(primary_target)
+            self._docname_by_output_file[primary_target] = docname
 
         logger.info(f"Generated {len(self.generated_markdown_files)} context files")
 
-    def _target_paths_for_docname(self, docname: str) -> list[Path]:
+    def _target_paths_for_docname(
+        self, docname: str
+    ) -> tuple[dict[MarkdownLayout, Path], MarkdownLayout]:
         markdown_file = self.md_build_dir / f"{docname}.md"
-        target_files, _ = self._get_target_paths(markdown_file)
-        return target_files
+        return self._get_target_paths(markdown_file)
 
     def _markdown_http_base(self) -> str:
         return (
@@ -328,13 +360,18 @@ class MarkdownGenerator:
         content: str,
         source_docname: str,
         source_target: Optional[Path],
-        layout_index: int,
+        target_layout: Optional[MarkdownLayout],
     ) -> str:
         """Resolve document link tokens for one published location."""
 
         def replace_link(match: re.Match) -> str:
-            target_docname = unquote(match.group("docname"))
-            fragment = match.group("fragment")
+            token = match.group(0)
+            link_target = self._link_target_by_token.get(token)
+            if link_target is None:
+                return token
+
+            target_docname = link_target["docname"]
+            fragment = link_target["fragment"]
             if (
                 source_target is not None
                 and target_docname == source_docname
@@ -342,7 +379,17 @@ class MarkdownGenerator:
             ):
                 return f"#{fragment}"
 
-            target_file = self._target_paths_for_docname(target_docname)[layout_index]
+            target_files, primary_layout = self._target_paths_for_docname(
+                target_docname
+            )
+            selected_layout = target_layout or primary_layout
+            try:
+                target_file = target_files[selected_layout]
+            except KeyError as exc:
+                raise ExtensionError(
+                    f"Document {target_docname!r} does not have the "
+                    f"{selected_layout.value!r} Markdown layout"
+                ) from exc
             relative_target = target_file.relative_to(self.outdir).as_posix()
             http_base = self._markdown_http_base()
             if http_base:
@@ -382,7 +429,7 @@ class MarkdownGenerator:
                     content,
                     source_docname=docname,
                     source_target=None,
-                    layout_index=0,
+                    target_layout=None,
                 )
                 relative_path = md_file.relative_to(self.outdir).as_posix()
                 llms_txt.write(f"# {relative_path}\n\n")
@@ -579,7 +626,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
     if app.tags.has("sphinx_llm_markdown"):
         app.setup_extension("sphinx_markdown_builder")
-    app.add_builder(SphinxLlmMarkdownBuilder)
+        app.add_builder(SphinxLlmMarkdownBuilder)
     app.add_config_value("llms_txt_enabled", True, "")
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")

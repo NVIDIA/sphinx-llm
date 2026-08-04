@@ -2,22 +2,24 @@
 # SPDX-License-Identifier: Apache-2.0
 """Markdown builder that preserves Sphinx document targets."""
 
-from typing import Optional
-from urllib.parse import quote
+import json
+from pathlib import Path
+from typing import Optional, TypedDict
+from uuid import uuid4
 
 from docutils import nodes
 from sphinx_markdown_builder.builder import MarkdownBuilder
 from sphinx_markdown_builder.translator import MarkdownTranslator
 
 LINK_TOKEN_PREFIX = "sphinx-llm:"
+LINK_TARGETS_FILENAME = ".sphinx-llm-link-targets.json"
 
 
-def link_token(docname: str, fragment: Optional[str] = None) -> str:
-    """Return a link token for a Sphinx document target."""
-    token = f"{LINK_TOKEN_PREFIX}{quote(docname, safe='/')}"
-    if fragment:
-        token = f"{token}#{quote(fragment, safe='')}"
-    return token
+class LinkTarget(TypedDict):
+    """Sphinx document target stored for an opaque link token."""
+
+    docname: str
+    fragment: Optional[str]
 
 
 class SphinxLlmMarkdownTranslator(MarkdownTranslator):
@@ -32,9 +34,9 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
         if node.get("internal", self.status.default_ref_internal):
             ref_id = node.get("refid")
             if ref_id is not None:
-                return link_token(self.builder.current_doc_name, ref_id)
+                return self.builder.link_token(self.builder.current_doc_name, ref_id)
             if not node.get("refuri", ""):
-                return link_token(self.builder.current_doc_name)
+                return self.builder.link_token(self.builder.current_doc_name)
         return super()._fetch_ref_uri(node)
 
 
@@ -44,8 +46,34 @@ class SphinxLlmMarkdownBuilder(MarkdownBuilder):
     name = "llms-markdown"
     default_translator_class = SphinxLlmMarkdownTranslator
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._link_target_by_token: dict[str, LinkTarget] = {}
+        self._link_token_by_target: dict[tuple[str, Optional[str]], str] = {}
+
+    def link_token(self, docname: str, fragment: Optional[str] = None) -> str:
+        """Return an opaque token for a Sphinx document target."""
+        target = (docname, fragment)
+        token = self._link_token_by_target.get(target)
+        if token is None:
+            token = f"{LINK_TOKEN_PREFIX}{uuid4().hex}"
+            self._link_token_by_target[target] = token
+            self._link_target_by_token[token] = {
+                "docname": docname,
+                "fragment": fragment,
+            }
+        return token
+
     def get_target_uri(self, docname: str, typ: Optional[str] = None) -> str:
-        return link_token(docname)
+        return self.link_token(docname)
 
     def get_relative_uri(self, from_: str, to: str, typ: Optional[str] = None) -> str:
-        return link_token(to)
+        return self.link_token(to)
+
+    def finish(self):
+        super().finish()
+        targets_path = Path(self.outdir) / LINK_TARGETS_FILENAME
+        targets_path.write_text(
+            json.dumps(self._link_target_by_token, sort_keys=True),
+            encoding="utf-8",
+        )

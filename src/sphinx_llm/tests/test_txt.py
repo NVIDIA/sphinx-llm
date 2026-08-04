@@ -305,7 +305,11 @@ def test_dirhtml_links_match_published_locations(tmp_path: Path):
         ".. _page-details:\n\n"
         "Details\n"
         "-------\n\n"
-        "See :ref:`Details <page-details>`.\n",
+        "See :ref:`Details <page-details>`.\n\n"
+        "The URI ``sphinx-llm:example`` is literal content.\n\n"
+        ".. code-block:: text\n\n"
+        "   sphinx-llm:example\n\n"
+        "`Custom scheme <sphinx-llm:example>`_\n",
         encoding="utf-8",
     )
     (guide_dir / "target.rst").write_text(
@@ -323,6 +327,7 @@ def test_dirhtml_links_match_published_locations(tmp_path: Path):
         freshenv=True,
     )
     app.build()
+    assert "llms-markdown" not in app.registry.builders
 
     file_suffix_page = (output_dir / "guide/page/index.html.md").read_text(
         encoding="utf-8"
@@ -337,7 +342,11 @@ def test_dirhtml_links_match_published_locations(tmp_path: Path):
     assert "# guide/page/index.html.md" in llms_full
     assert "[Target](guide/target/index.html.md)" in llms_full
     assert "[Details](guide/page/index.html.md#page-details)" in llms_full
-    assert "sphinx-llm:" not in file_suffix_page + url_suffix_page + llms_full
+    for content in (file_suffix_page, url_suffix_page, llms_full):
+        assert "`sphinx-llm:example`" in content
+        assert "[Custom scheme](sphinx-llm:example)" in content
+        assert "sphinx-llm:example\n```" in content
+        assert re.search(r"sphinx-llm:[0-9a-f]{32}", content) is None
 
 
 @pytest.mark.parametrize(
