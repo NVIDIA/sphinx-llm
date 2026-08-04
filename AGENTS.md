@@ -16,6 +16,8 @@ serves two purposes:
 
 ## Development Commands
 
+Prefer using Git worktrees for development.
+
 ### Setup
 
 ```bash
