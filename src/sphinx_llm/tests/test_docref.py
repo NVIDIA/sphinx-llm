@@ -16,6 +16,7 @@ def _make_docref() -> tuple[Docref, dict[str, object]]:
         "model": "model-a",
         "base_url": "https://example.com/v1",
         "api_key_env": "TEST_API_KEY",
+        "reasoning_effort": "none",
         "warn_on_cache_miss": False,
     }
     doctree = SimpleNamespace(astext=lambda: "Referenced page contents.")
@@ -39,6 +40,7 @@ def _make_docref() -> tuple[Docref, dict[str, object]]:
         ("model", "model-b"),
         ("base_url", "https://other.example.com/v1"),
         ("api_key_env", "OTHER_API_KEY"),
+        ("reasoning_effort", "low"),
     ],
 )
 def test_docref_cache_invalidates_when_generation_settings_change(setting, new_value):
@@ -70,8 +72,10 @@ def test_docref_uses_environment_generation_settings(monkeypatch):
     shared_options.pop("model")
     shared_options.pop("base_url")
     shared_options.pop("api_key_env")
+    shared_options.pop("reasoning_effort")
     monkeypatch.setenv("OPENAI_MODEL", "env-model")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://models.example.com/v1")
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "low")
 
     with patch(
         "sphinx_llm.docref.summarize_text",
@@ -84,6 +88,7 @@ def test_docref_uses_environment_generation_settings(monkeypatch):
         "env-model",
         base_url="https://models.example.com/v1",
         api_key_env="OPENAI_API_KEY",
+        reasoning_effort="low",
     )
 
 

@@ -3,7 +3,7 @@ Testing page
 
 
 .. docref:: apples
-   :hash: a0e6a518f83115458ed28c9a4af2f6e1f3227c6a0d1473d9a3e3f13f9fb07855
+   :hash: 3c94530219643f449f8d8622ba92798ffcf3b0f3eb92741c5d1bf23ac4e93f0b
    :model: qwen3.5:2b
    
    Feeding apples to pigs involves selecting ripe, pesticide-free fruit; washing

@@ -135,22 +135,28 @@ can be configured entirely with environment variables:
 export OPENAI_MODEL=your-model
 export OPENAI_BASE_URL=http://localhost:8000/v1
 export OPENAI_API_KEY=your-api-key
+export OPENAI_REASONING_EFFORT=none
 ```
 
 `OPENAI_BASE_URL` and `OPENAI_API_KEY` are optional. When the endpoint does not
 require authentication, the extension supplies the placeholder key required by
-the OpenAI client. The same settings can be configured in `conf.py`; these
-values take precedence over the environment:
+the OpenAI client. Reasoning defaults to `none` so that reasoning models spend
+their response budget on the summary. Set `OPENAI_REASONING_EFFORT` to an empty
+string to omit the field for an endpoint or model that does not support it. The
+same settings can be configured in `conf.py`; these values take precedence over
+the environment:
 
 ```python
 sphinx_llm_options = {
     "model": "your-model",
     "base_url": "http://localhost:8000/v1",
     "api_key_env": "OPENAI_API_KEY",
+    "reasoning_effort": "none",
 }
 ```
 
-The `base_url` and `api_key_env` settings are optional. A model must be set on
+The `base_url`, `api_key_env`, and `reasoning_effort` settings are optional. Set
+`reasoning_effort` to an empty string to omit the field. A model must be set on
 the directive, in `sphinx_llm_options`, or with `OPENAI_MODEL`.
 
 ![Docref summary example](docs/source/_static/images/pig-feeding-summary.png)
@@ -188,7 +194,7 @@ Testing page
 
 
 .. docref:: apples
-   :hash: a0e6a518f83115458ed28c9a4af2f6e1f3227c6a0d1473d9a3e3f13f9fb07855
+   :hash: 3c94530219643f449f8d8622ba92798ffcf3b0f3eb92741c5d1bf23ac4e93f0b
    :model: qwen3.5:2b
 
    Feeding apples to pigs involves selecting ripe, pesticide-free fruit; washing

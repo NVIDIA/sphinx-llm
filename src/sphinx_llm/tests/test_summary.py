@@ -15,6 +15,7 @@ from sphinx_llm.summary import SYSTEM_PROMPT, summarize_text
 def test_summarize_text_uses_openai_compatible_endpoint(monkeypatch):
     """Test model, endpoint, credentials, and prompt forwarding."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
     response = SimpleNamespace(
         choices=[
             SimpleNamespace(message=SimpleNamespace(content=" Generated summary. "))
@@ -37,6 +38,7 @@ def test_summarize_text_uses_openai_compatible_endpoint(monkeypatch):
     mock_openai.return_value.chat.completions.create.assert_called_once_with(
         model="test-model",
         temperature=0,
+        extra_body={"reasoning_effort": "none"},
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {
@@ -86,10 +88,11 @@ def test_summarize_text_requires_an_explicit_model(monkeypatch):
 
 
 def test_summarize_text_uses_environment_configuration(monkeypatch):
-    """Test model, endpoint, and credential environment variables."""
+    """Test model, endpoint, credential, and reasoning environment variables."""
     monkeypatch.setenv("OPENAI_MODEL", "env-model")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://models.example.com/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "low")
     response = SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
     )
@@ -104,6 +107,27 @@ def test_summarize_text_uses_environment_configuration(monkeypatch):
     assert (
         mock_openai.return_value.chat.completions.create.call_args.kwargs["model"]
         == "env-model"
+    )
+    assert mock_openai.return_value.chat.completions.create.call_args.kwargs[
+        "extra_body"
+    ] == {"reasoning_effort": "low"}
+
+
+def test_summarize_text_can_omit_reasoning_effort(monkeypatch):
+    """Test endpoints without reasoning support can omit the setting."""
+    monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "high")
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
+    )
+
+    with patch("openai.OpenAI") as mock_openai:
+        mock_openai.return_value.chat.completions.create.return_value = response
+        summarize_text("Page contents.", "test-model", reasoning_effort="")
+
+    assert (
+        "extra_body"
+        not in mock_openai.return_value.chat.completions.create.call_args.kwargs
     )
 
 

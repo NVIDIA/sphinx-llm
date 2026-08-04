@@ -4,11 +4,14 @@
 
 import hashlib
 import os
+from typing import Optional
 
 from sphinx.errors import ExtensionError
 
 DEFAULT_MODEL = ""
 DEFAULT_MODEL_ENV = "OPENAI_MODEL"
+DEFAULT_REASONING_EFFORT = "none"
+DEFAULT_REASONING_EFFORT_ENV = "OPENAI_REASONING_EFFORT"
 SYSTEM_PROMPT = "Keep responses concise and focused, avoiding unnecessary elaboration or additional context unless explicitly requested. Do not use bullet points, lists, or nested structures unless specifically asked. If a response requires further detail, prioritize the most relevant information and conclude promptly. Avoid apologies or mentions of limitations; simply deliver the most direct and straightforward answer."
 DEFAULT_API_KEY_ENV = "OPENAI_API_KEY"
 SUMMARY_PROMPT_VERSION = 2
@@ -30,11 +33,13 @@ def summary_fingerprint(
     *,
     base_url: str = "",
     api_key_env: str = DEFAULT_API_KEY_ENV,
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
 ) -> str:
     """Return a stable cache key for text and every generation setting."""
     return hashlib.sha256(
         (
-            f"{SUMMARY_PROMPT_VERSION}\0{model}\0{base_url}\0{api_key_env}\0{text}"
+            f"{SUMMARY_PROMPT_VERSION}\0{model}\0{base_url}\0{api_key_env}"
+            f"\0{reasoning_effort}\0{text}"
         ).encode()
     ).hexdigest()
 
@@ -58,6 +63,7 @@ def summarize_text(
     *,
     base_url: str = "",
     api_key_env: str = DEFAULT_API_KEY_ENV,
+    reasoning_effort: Optional[str] = None,
 ) -> str:
     """Generate a concise summary using an OpenAI-compatible chat endpoint."""
     model = model or os.environ.get(DEFAULT_MODEL_ENV, "")
@@ -77,15 +83,19 @@ def summarize_text(
     # The OpenAI client requires a non-empty value even when the endpoint does
     # not authenticate requests.
     api_key = configured_api_key or "not-used"
+    if reasoning_effort is None:
+        reasoning_effort = os.environ.get(
+            DEFAULT_REASONING_EFFORT_ENV, DEFAULT_REASONING_EFFORT
+        )
 
     client_options = {"api_key": api_key}
     if effective_base_url:
         client_options["base_url"] = effective_base_url
     client = OpenAI(**client_options)
-    response = client.chat.completions.create(
-        model=model,
-        temperature=0,
-        messages=[
+    completion_options = {
+        "model": model,
+        "temperature": 0,
+        "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
@@ -95,5 +105,10 @@ def summarize_text(
                 ),
             },
         ],
-    )
+    }
+    if reasoning_effort:
+        # extra_body retains compatibility with openai 1.0, while forwarding
+        # the standard field understood by newer OpenAI-compatible endpoints.
+        completion_options["extra_body"] = {"reasoning_effort": reasoning_effort}
+    response = client.chat.completions.create(**completion_options)
     return _extract_summary(response)

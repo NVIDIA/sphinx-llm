@@ -14,6 +14,8 @@ from .summary import (
     DEFAULT_API_KEY_ENV,
     DEFAULT_MODEL,
     DEFAULT_MODEL_ENV,
+    DEFAULT_REASONING_EFFORT,
+    DEFAULT_REASONING_EFFORT_ENV,
     summarize_text,
     summary_fingerprint,
 )
@@ -98,6 +100,10 @@ class Docref(BaseAdmonition, SphinxDirective):
             "OPENAI_BASE_URL", ""
         )
         api_key_env = shared_options.get("api_key_env") or DEFAULT_API_KEY_ENV
+        reasoning_effort = shared_options.get(
+            "reasoning_effort",
+            os.environ.get(DEFAULT_REASONING_EFFORT_ENV, DEFAULT_REASONING_EFFORT),
+        )
 
         # Include the prompt version and all endpoint settings in the cache key.
         doc_hash = summary_fingerprint(
@@ -105,6 +111,7 @@ class Docref(BaseAdmonition, SphinxDirective):
             model,
             base_url=base_url,
             api_key_env=api_key_env,
+            reasoning_effort=reasoning_effort,
         )
         if "hash" in self.options and self.options["hash"] == doc_hash:
             return doc_hash, "\n".join(self.content.data)
@@ -118,6 +125,7 @@ class Docref(BaseAdmonition, SphinxDirective):
             model,
             base_url=base_url,
             api_key_env=api_key_env,
+            reasoning_effort=reasoning_effort,
         )
 
         return doc_hash, doc_summary
