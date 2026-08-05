@@ -419,7 +419,7 @@ def test_dirhtml_links_match_published_locations(tmp_path: Path):
     ("sphinx_build", "expected_page_paths", "expected_link"),
     [
         pytest.param(
-            ("html", parallel, {"llms_txt_source": "index.rst"}),
+            ("html", parallel, {"llms_txt_override_source": "index.rst"}),
             ("index.html.md", "test.html.md"),
             "test.html.md",
             id=f"html-parallel-{parallel}",
@@ -432,7 +432,7 @@ def test_dirhtml_links_match_published_locations(tmp_path: Path):
                 "dirhtml",
                 parallel,
                 {
-                    "llms_txt_source": "index",
+                    "llms_txt_override_source": "index",
                     "llms_txt_suffix_mode": suffix_mode,
                 },
             ),
@@ -473,7 +473,7 @@ def test_dirhtml_links_match_published_locations(tmp_path: Path):
     ],
     indirect=["sphinx_build"],
 )
-def test_custom_llms_txt_source_preserves_other_outputs(
+def test_llms_txt_override_source_preserves_other_outputs(
     sphinx_build,
     expected_page_paths: tuple[str, ...],
     expected_link: str,
@@ -494,7 +494,31 @@ def test_custom_llms_txt_source_preserves_other_outputs(
     assert "# Welcome to sphinx-llm" in llms_full.read_text(encoding="utf-8")
 
 
-def test_missing_custom_llms_txt_source_raises_error(tmp_path: Path):
+@pytest.mark.parametrize(
+    "sphinx_build",
+    [
+        (
+            "html",
+            False,
+            {
+                "llms_txt_override_source": "index.rst",
+                "llms_txt_full_build": False,
+            },
+        )
+    ],
+    indirect=True,
+)
+def test_llms_txt_override_source_respects_full_build(sphinx_build):
+    """A custom llms.txt does not force llms-full.txt generation."""
+    _, output_dir, _ = sphinx_build
+
+    llms_txt = (output_dir / "llms.txt").read_text(encoding="utf-8")
+    assert "# Welcome to sphinx-llm" in llms_txt
+    assert "## Pages" not in llms_txt
+    assert not (output_dir / "llms-full.txt").exists()
+
+
+def test_missing_llms_txt_override_source_raises_error(tmp_path: Path):
     """A configured source must identify a rendered Sphinx document."""
     source_dir = tmp_path / "source"
     source_dir.mkdir()
@@ -502,7 +526,7 @@ def test_missing_custom_llms_txt_source_raises_error(tmp_path: Path):
         'extensions = ["sphinx_llm.txt"]\n'
         'project = "Custom llms.txt test"\n'
         "llms_txt_build_parallel = False\n"
-        'llms_txt_source = "missing.rst"\n',
+        'llms_txt_override_source = "missing.rst"\n',
         encoding="utf-8",
     )
     (source_dir / "index.rst").write_text("Index\n=====\n", encoding="utf-8")
@@ -517,7 +541,9 @@ def test_missing_custom_llms_txt_source_raises_error(tmp_path: Path):
         freshenv=True,
     )
 
-    with pytest.raises(ExtensionError, match=r"llms_txt_source 'missing\.rst'"):
+    with pytest.raises(
+        ExtensionError, match=r"llms_txt_override_source 'missing\.rst'"
+    ):
         app.build()
 
 

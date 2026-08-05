@@ -145,7 +145,7 @@ class MarkdownGenerator:
                 self.build_llms_full_txt()
 
             # Create llms.txt from a custom source or the generated sitemap
-            if getattr(self.app.config, "llms_txt_source", ""):
+            if getattr(self.app.config, "llms_txt_override_source", ""):
                 self.build_custom_llms_txt()
             else:
                 self.create_sitemap()
@@ -442,7 +442,7 @@ class MarkdownGenerator:
 
     def build_custom_llms_txt(self):
         """Write a configured rendered source document to llms.txt."""
-        configured_source = str(self.app.config.llms_txt_source)
+        configured_source = str(self.app.config.llms_txt_override_source)
         normalized_source = configured_source.replace("\\", "/").removeprefix("./")
         candidate_docnames = [normalized_source]
         without_suffix = str(Path(normalized_source).with_suffix(""))
@@ -459,7 +459,7 @@ class MarkdownGenerator:
         )
         if docname is None:
             raise ExtensionError(
-                f"llms_txt_source {configured_source!r} did not match a rendered "
+                f"llms_txt_override_source {configured_source!r} did not match a rendered "
                 "Sphinx document"
             )
 
@@ -684,7 +684,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_build_parallel", True, "env")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", True, "env")
-    app.add_config_value("llms_txt_source", "", "env")
+    app.add_config_value("llms_txt_override_source", "", "env")
     generator = MarkdownGenerator(app)
     generator.setup()
 
