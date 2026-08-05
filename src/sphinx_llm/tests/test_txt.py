@@ -105,8 +105,11 @@ def get_non_index_rst_files(source_dir: Path) -> list[Path]:
 )
 def sphinx_build(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
     """Build Sphinx docs with different builder and parallel combinations."""
-    builder, parallel = request.param
-    yield from _build_sphinx(builder, {"llms_txt_build_parallel": parallel})
+    builder, parallel, *additional_overrides = request.param
+    overrides = {"llms_txt_build_parallel": parallel}
+    if additional_overrides:
+        overrides.update(additional_overrides[0])
+    yield from _build_sphinx(builder, overrides)
 
 
 @pytest.fixture
@@ -413,76 +416,82 @@ def test_dirhtml_links_match_published_locations(tmp_path: Path):
 
 
 @pytest.mark.parametrize(
-    ("builder", "custom_page_path", "guide_page_path", "expected_link"),
+    ("sphinx_build", "expected_page_paths", "expected_link"),
     [
-        ("html", "custom.html.md", "guide.html.md", "guide.html.md"),
-        (
-            "dirhtml",
-            "custom/index.html.md",
-            "guide/index.html.md",
-            "guide/index.html.md",
-        ),
+        pytest.param(
+            ("html", parallel, {"llms_txt_source": "index.rst"}),
+            ("index.html.md", "test.html.md"),
+            "test.html.md",
+            id=f"html-parallel-{parallel}",
+        )
+        for parallel in (True, False)
+    ]
+    + [
+        pytest.param(
+            (
+                "dirhtml",
+                parallel,
+                {
+                    "llms_txt_source": "index",
+                    "llms_txt_suffix_mode": suffix_mode,
+                },
+            ),
+            expected_page_paths,
+            expected_link,
+            id=f"dirhtml-{suffix_mode}-parallel-{parallel}",
+        )
+        for parallel in (True, False)
+        for suffix_mode, expected_page_paths, expected_link in (
+            (
+                "auto",
+                (
+                    "index.html.md",
+                    "index.md",
+                    "test/index.html.md",
+                    "test.md",
+                ),
+                "test/index.html.md",
+            ),
+            (
+                "both",
+                (
+                    "index.html.md",
+                    "index.md",
+                    "test/index.html.md",
+                    "test.md",
+                ),
+                "test/index.html.md",
+            ),
+            (
+                "file-suffix",
+                ("index.html.md", "test/index.html.md"),
+                "test/index.html.md",
+            ),
+            ("url-suffix", ("index.md", "test.md"), "test.md"),
+            ("replace", ("index.md", "test/index.md"), "test/index.md"),
+        )
     ],
+    indirect=["sphinx_build"],
 )
 def test_custom_llms_txt_source_preserves_other_outputs(
-    tmp_path: Path,
-    builder: str,
-    custom_page_path: str,
-    guide_page_path: str,
+    sphinx_build,
+    expected_page_paths: tuple[str, ...],
     expected_link: str,
 ):
     """A rendered custom source replaces only the generated llms.txt sitemap."""
-    source_dir = tmp_path / "source"
-    output_dir = tmp_path / "output"
-    source_dir.mkdir()
-
-    (source_dir / "conf.py").write_text(
-        'extensions = ["sphinx_llm.txt"]\n'
-        'project = "Custom llms.txt test"\n'
-        'root_doc = "index"\n'
-        "llms_txt_build_parallel = False\n"
-        'llms_txt_source = "custom.rst"\n',
-        encoding="utf-8",
-    )
-    (source_dir / "index.rst").write_text(
-        "Index\n=====\n\n.. toctree::\n\n   guide\n",
-        encoding="utf-8",
-    )
-    (source_dir / "guide.rst").write_text(
-        "Guide\n=====\n\nGuide content.\n",
-        encoding="utf-8",
-    )
-    (source_dir / "custom.rst").write_text(
-        ":orphan:\n\n"
-        "Custom LLM index\n"
-        "================\n\n"
-        "This content was supplied by the documentation author.\n\n"
-        "See :doc:`Guide <guide>`.\n",
-        encoding="utf-8",
-    )
-
-    app = Sphinx(
-        srcdir=str(source_dir),
-        confdir=str(source_dir),
-        outdir=str(output_dir),
-        doctreedir=str(tmp_path / "doctrees"),
-        buildername=builder,
-        warningiserror=False,
-        freshenv=True,
-    )
-    app.build()
+    _, output_dir, _ = sphinx_build
 
     llms_txt = (output_dir / "llms.txt").read_text(encoding="utf-8")
-    assert "# Custom LLM index" in llms_txt
-    assert "This content was supplied by the documentation author." in llms_txt
-    assert f"[Guide]({expected_link})" in llms_txt
+    assert "# Welcome to sphinx-llm" in llms_txt
+    assert f"]({expected_link})" in llms_txt
     assert "## Pages" not in llms_txt
 
-    assert_file_exists_with_content(output_dir / custom_page_path)
-    assert_file_exists_with_content(output_dir / guide_page_path)
+    for page_path in expected_page_paths:
+        assert_file_exists_with_content(output_dir / page_path)
+
     llms_full = output_dir / "llms-full.txt"
     assert_file_exists_with_content(llms_full)
-    assert "# Custom LLM index" in llms_full.read_text(encoding="utf-8")
+    assert "# Welcome to sphinx-llm" in llms_full.read_text(encoding="utf-8")
 
 
 def test_missing_custom_llms_txt_source_raises_error(tmp_path: Path):
@@ -508,7 +517,7 @@ def test_missing_custom_llms_txt_source_raises_error(tmp_path: Path):
         freshenv=True,
     )
 
-    with pytest.raises(ExtensionError, match="llms_txt_source 'missing.rst'"):
+    with pytest.raises(ExtensionError, match=r"llms_txt_source 'missing\.rst'"):
         app.build()
 
 
