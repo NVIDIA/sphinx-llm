@@ -144,8 +144,11 @@ class MarkdownGenerator:
             if getattr(self.app.config, "llms_txt_full_build", True):
                 self.build_llms_full_txt()
 
-            # Create sitemap in llms.txt
-            self.create_sitemap()
+            # Create llms.txt from a custom source or the generated sitemap
+            if getattr(self.app.config, "llms_txt_source", ""):
+                self.build_custom_llms_txt()
+            else:
+                self.create_sitemap()
         finally:
             # Clean up temporary build directory
             if self.md_build_dir.exists():
@@ -437,6 +440,46 @@ class MarkdownGenerator:
                 llms_txt.write("\n\n")
         logger.info(f"Concatenated full context into: {llms_txt_path}")
 
+    def build_custom_llms_txt(self):
+        """Write a configured rendered source document to llms.txt."""
+        configured_source = str(self.app.config.llms_txt_source)
+        normalized_source = configured_source.replace("\\", "/").removeprefix("./")
+        candidate_docnames = [normalized_source]
+        without_suffix = str(Path(normalized_source).with_suffix(""))
+        if without_suffix != normalized_source:
+            candidate_docnames.append(without_suffix)
+
+        docname = next(
+            (
+                candidate
+                for candidate in candidate_docnames
+                if candidate in self._markdown_file_by_docname
+            ),
+            None,
+        )
+        if docname is None:
+            raise ExtensionError(
+                f"llms_txt_source {configured_source!r} did not match a rendered "
+                "Sphinx document"
+            )
+
+        source_file = self._markdown_file_by_docname[docname]
+        content = source_file.read_text(encoding="utf-8")
+        _, primary_layout = self._target_paths_for_docname(docname)
+        llms_txt_path = self.outdir / "llms.txt"
+        llms_txt_path.write_text(
+            self._materialize_links(
+                content,
+                source_docname=docname,
+                source_target=llms_txt_path,
+                target_layout=primary_layout,
+            ),
+            encoding="utf-8",
+        )
+        logger.info(
+            "Created llms.txt from configured source document: %s", configured_source
+        )
+
     def get_project_description(self) -> str:
         """Get the description of the project."""
         project_title = getattr(self.app.config, "project", "Documentation")
@@ -641,6 +684,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_build_parallel", True, "env")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", True, "env")
+    app.add_config_value("llms_txt_source", "", "env")
     generator = MarkdownGenerator(app)
     generator.setup()
 

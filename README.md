@@ -114,12 +114,25 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
 | `llms_txt_suffix_mode` | Suffix mode for generated markdown files. Options: `"auto"` (default behavior for each builder), `"file-suffix"` (spec-compliant format), `"url-suffix"` (URL-style format), or `"replace"` (replaces `.html` with `.md`). Note: `"both"` is deprecated but still supported (treated as `"auto"`). | `str` | `"auto"` |
 | `llms_txt_full_build` | Whether to generate the `llms-full.txt` file. Set to `False` to disable generation, which is useful for large documentation sites where the concatenated file would be too large. | `bool` | `True` |
+| `llms_txt_source` | Use the rendered contents of this Sphinx source document for `llms.txt` instead of generating a sitemap. Specify a docname or source path relative to the source directory, such as `"llms-txt"` or `"llms-txt.rst"`. | `str` | `""` |
 <!-- markdownlint-enable MD013 -->
 
 Each page's entry in `llms.txt` includes a short description. If a page defines
 an `html_meta` description — via `.. meta:: :description:` in rST or
 `html_meta: description:` in MyST frontmatter — that value is used. Otherwise
 the extension falls back to the first 100 characters of the page content.
+
+To write `llms.txt` manually while retaining Sphinx features such as cross
+references, create a source document and configure it in `conf.py`:
+
+```python
+llms_txt_source = "llms-txt.rst"
+```
+
+The document is rendered with the other Markdown pages, then its rendered
+contents replace the automatically generated `llms.txt` sitemap. All per-page
+Markdown files and `llms-full.txt` are still generated normally. The custom
+source document may be included in a toctree or marked with `:orphan:`.
 
 ### Docref
 
