@@ -41,7 +41,6 @@ jobs:
         env:
           OPENAI_MODEL: qwen3.5:2b
           OPENAI_BASE_URL: http://localhost:11434/v1
-          OPENAI_REASONING_EFFORT: none
         run: |
           uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -D llms_txt_build_parallel=0 -b html docs/source docs/build/html
 
