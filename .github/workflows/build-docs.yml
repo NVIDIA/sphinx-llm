@@ -23,6 +23,9 @@ jobs:
         with:
           version: 0.32.5
 
+      - name: Pull documentation model
+        run: ollama pull qwen3.5:2b
+
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
         with:
@@ -35,9 +38,16 @@ jobs:
           cp docs/source/test.rst docs/source/test.rst.bak
 
       - name: Build Sphinx documentation
+        env:
+          OPENAI_MODEL: qwen3.5:2b
+          OPENAI_BASE_URL: http://localhost:11434/v1
         run: |
           uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -D llms_txt_build_parallel=0 -b html docs/source docs/build/html
 
-      - name: DEBUG Output updated source file
+      - name: Verify generated summary updated source hash
         run: |
-          diff docs/source/test.rst docs/source/test.rst.bak || true
+          original_hash="$(sed -n 's/^   :hash: //p' docs/source/test.rst.bak)"
+          generated_hash="$(sed -n 's/^   :hash: //p' docs/source/test.rst)"
+          test -n "$original_hash"
+          test -n "$generated_hash"
+          test "$original_hash" != "$generated_hash"

@@ -1,25 +1,39 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-import hashlib
 import os
 from pathlib import Path
 
-import ollama
 from docutils.nodes import Text, admonition, inline, paragraph
 from docutils.parsers.rst.directives.admonitions import BaseAdmonition
-from langchain_ollama import ChatOllama
 from sphinx.addnodes import pending_xref
 from sphinx.application import Sphinx
-from sphinx.errors import ExtensionError
 from sphinx.util import logging
 from sphinx.util.docutils import SphinxDirective
 
+from .summary import (
+    DEFAULT_API_KEY_ENV,
+    DEFAULT_MODEL,
+    DEFAULT_MODEL_ENV,
+    DEFAULT_REASONING_EFFORT,
+    DEFAULT_REASONING_EFFORT_ENV,
+    summarize_text,
+    summary_fingerprint,
+)
 from .version import __version__
 
 logger = logging.getLogger(__name__)
-DEFAULT_MODEL = "qwen3.5:2b"
-SYSTEM_PROMPT = "Keep responses concise and focused, avoiding unnecessary elaboration or additional context unless explicitly requested. Do not use bullet points, lists, or nested structures unless specifically asked. If a response requires further detail, prioritize the most relevant information and conclude promptly. Avoid apologies or mentions of limitations; simply deliver the most direct and straightforward answer."
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+
+def _escape_rst_directives(summary: str) -> str:
+    """Escape directive-like lines before persisting generated RST."""
+    escaped_lines = []
+    for line in summary.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith(".. "):
+            indentation = line[: len(line) - len(stripped)]
+            line = f"{indentation}\\{stripped}"
+        escaped_lines.append(line)
+    return "\n".join(escaped_lines)
 
 
 class Docref(BaseAdmonition, SphinxDirective):
@@ -66,70 +80,58 @@ class Docref(BaseAdmonition, SphinxDirective):
         nodes[0] += wrapper
         return nodes
 
-    def generate_summary(self, doc_name: str) -> str:
+    def generate_summary(self, doc_name: str) -> tuple[str, str]:
         # Get the document contents
         doc_contents = self.state.document.settings.env.app.builder.env.get_doctree(
             doc_name
         ).astext()
 
-        # Select the model before checking the cache so switching models invalidates it
+        # Resolve every generation setting before checking the persisted cache.
+        shared_options = getattr(self.config, "sphinx_llm_options", {})
         if "model" in self.options and self.options["model"]:
             model = self.options["model"]
-        elif hasattr(self.config, "sphinx_llm_options"):
-            model = self.config.sphinx_llm_options.get("model", DEFAULT_MODEL)
         else:
-            model = DEFAULT_MODEL
+            model = (
+                shared_options.get("model")
+                or os.environ.get(DEFAULT_MODEL_ENV, "")
+                or DEFAULT_MODEL
+            )
+        base_url = shared_options.get("base_url", "") or os.environ.get(
+            "OPENAI_BASE_URL", ""
+        )
+        api_key_env = shared_options.get("api_key_env") or DEFAULT_API_KEY_ENV
+        reasoning_effort = shared_options.get(
+            "reasoning_effort",
+            os.environ.get(DEFAULT_REASONING_EFFORT_ENV, DEFAULT_REASONING_EFFORT),
+        )
 
-        # Check the cached summary
-        doc_hash = hashlib.md5(f"{model}\n{doc_contents}".encode()).hexdigest()
+        # Include the prompt version and all endpoint settings in the cache key.
+        doc_hash = summary_fingerprint(
+            doc_contents,
+            model,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            reasoning_effort=reasoning_effort,
+        )
         if "hash" in self.options and self.options["hash"] == doc_hash:
             return doc_hash, "\n".join(self.content.data)
-        if hasattr(
-            self.config, "sphinx_llm_options"
-        ) and self.config.sphinx_llm_options.get("warn_on_cache_miss", True):
+        if shared_options.get("warn_on_cache_miss", True):
             logger.warning(
                 f"LLM summary is out of date for document '{doc_name}', regenerating summary"
             )
 
-        # Generate a summary using the LLM
-        self.ensure_model(model)
-        llm_client = ChatOllama(
-            base_url=OLLAMA_BASE_URL,
-            model=model,
-            reasoning=False,
-            temperature=0,
+        doc_summary = summarize_text(
+            doc_contents,
+            model,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            reasoning_effort=reasoning_effort,
         )
-        doc_summary = llm_client.invoke(
-            [
-                ("system", SYSTEM_PROMPT),
-                (
-                    "human",
-                    doc_contents
-                    + "\n\nHere's a concise one-sentence summary of the above:",
-                ),
-            ]
-        ).content
 
         return doc_hash, doc_summary
 
-    def ensure_model(self, model: str):
-        # Check if the model is already loaded
-        ollama_client = ollama.Client(host=OLLAMA_BASE_URL)
-        try:
-            ollama_client.ps()
-            try:
-                ollama_client.show(model)
-                return
-            except ollama.ResponseError:
-                logger.info(f"Model {model} not found, loading...")
-                ollama_client.pull(model)
-                logger.info(f"Pulled model {model}")
-        except Exception as e:
-            raise ExtensionError(
-                f"Failed to connect to ollama at {OLLAMA_BASE_URL}", e, "sphinx-llm"
-            ) from e
-
     def update_content(self, hash: str, summary: str):
+        summary = _escape_rst_directives(summary)
         self.content.data = summary.splitlines()
 
         # Update the source file with the new summary

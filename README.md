@@ -148,12 +148,42 @@ referencing other pages in your documentation. Instead of just linking to a
 page the extension will generate a summary of the page being linked to and
 include that too.
 
-To use this extension you need to have [ollama](https://github.com/ollama/ollama)
-running.
+The extension calls an OpenAI-compatible chat-completions endpoint. Generation
+can be configured entirely with environment variables:
 
-If you have a GPU then generation will be much faster, but it is optional. See
-[the GitHub Actions](.github/workflows/build-docs.yml) for an example of using
-it in CI.
+```shell
+export OPENAI_MODEL=your-model
+export OPENAI_BASE_URL=http://localhost:8000/v1
+export OPENAI_API_KEY=your-api-key
+```
+
+`OPENAI_BASE_URL` and `OPENAI_API_KEY` are optional. When the endpoint does not
+require authentication, the extension supplies the placeholder key required by
+the OpenAI client. The same settings can be configured in `conf.py`; these
+values take precedence over the environment:
+
+```python
+sphinx_llm_options = {
+    "model": "your-model",
+    "base_url": "http://localhost:8000/v1",
+    "api_key_env": "OPENAI_API_KEY",
+}
+```
+
+A model must be set on the directive, in `sphinx_llm_options`, or with
+`OPENAI_MODEL`.
+
+Supported `sphinx_llm_options` configuration options:
+
+<!-- markdownlint-disable MD013 -->
+| **Name** | **Description** | **Type** | **Default** |
+| --- | --- | --- | --- |
+| `model` | Model used to generate summaries. Can also be set with `OPENAI_MODEL` or the directive's `:model:` option. | `str` | No default |
+| `base_url` | OpenAI-compatible endpoint URL. Can also be set with `OPENAI_BASE_URL`. | `str` | OpenAI client default |
+| `api_key_env` | Name of the environment variable containing the API key. | `str` | `OPENAI_API_KEY` |
+| `reasoning_effort` | Reasoning effort sent to the endpoint. Can also be set with `OPENAI_REASONING_EFFORT`; use an empty string to omit the field for incompatible endpoints or models. | `str` | `"none"` |
+| `warn_on_cache_miss` | Emit a warning before regenerating an outdated summary. | `bool` | `True` |
+<!-- markdownlint-enable MD013 -->
 
 ![Docref summary example](docs/source/_static/images/pig-feeding-summary.png)
 
@@ -190,7 +220,7 @@ Testing page
 
 
 .. docref:: apples
-   :hash: 839fadf86bd2a4f92c556621a26580a9
+   :hash: 3c94530219643f449f8d8622ba92798ffcf3b0f3eb92741c5d1bf23ac4e93f0b
    :model: qwen3.5:2b
 
    Feeding apples to pigs involves selecting ripe, pesticide-free fruit; washing
