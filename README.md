@@ -114,12 +114,32 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
 | `llms_txt_suffix_mode` | Suffix mode for generated markdown files. Options: `"auto"` (default behavior for each builder), `"file-suffix"` (spec-compliant format), `"url-suffix"` (URL-style format), or `"replace"` (replaces `.html` with `.md`). Note: `"both"` is deprecated but still supported (treated as `"auto"`). | `str` | `"auto"` |
 | `llms_txt_full_build` | Whether to generate the `llms-full.txt` file. Set to `False` to disable generation, which is useful for large documentation sites where the concatenated file would be too large. | `bool` | `True` |
+| `llms_txt_override_source` | Advanced option that overrides the automatically generated `llms.txt` sitemap with the rendered contents of a custom Sphinx source document. Specify a docname or source path relative to the source directory, such as `"llms-txt"` or `"llms-txt.rst"`. | `str` | `""` |
 <!-- markdownlint-enable MD013 -->
 
 Each page's entry in `llms.txt` includes a short description. If a page defines
 an `html_meta` description — via `.. meta:: :description:` in rST or
 `html_meta: description:` in MyST frontmatter — that value is used. Otherwise
 the extension falls back to the first 100 characters of the page content.
+
+#### Custom `llms.txt` override
+
+> [!IMPORTANT]
+> This is an advanced option for users who need full control over `llms.txt`.
+> Most projects should use the automatically generated sitemap.
+
+To write `llms.txt` manually while retaining Sphinx features such as cross
+references, create a source document and configure it in `conf.py`:
+
+```python
+llms_txt_override_source = "llms-txt.rst"
+```
+
+The document is rendered with the other Markdown pages, then its rendered
+contents replace the automatically generated `llms.txt` sitemap. All per-page
+Markdown files are still generated normally, while `llms-full.txt` remains
+controlled independently by `llms_txt_full_build`. The custom source document
+may be included in a toctree or marked with `:orphan:`.
 
 ### Docref
 
@@ -170,13 +190,12 @@ Testing page
 
 
 .. docref:: apples
-   :hash: 31ec12a54205539af3cde39b254ec766
-   :model: llama3.2:3b
+   :hash: 839fadf86bd2a4f92c556621a26580a9
+   :model: qwen3.5:2b
 
-   Feeding apples to a friendly pig involves selecting ripe, pesticide-free
-   apples, washing them thoroughly, cutting into manageable pieces,
-   introducing them calmly, monitoring the pig's reaction, and cleaning up
-   afterwards.
+   Feeding apples to pigs involves selecting ripe, pesticide-free fruit; washing
+   them thoroughly; cutting into manageable pieces without seeds or cores; and
+   introducing them calmly while monitoring for proper chewing.
 ```
 
 A hash of the referenced document is included to avoid generating summaries

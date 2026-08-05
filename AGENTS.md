@@ -1,7 +1,7 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository.
+This file provides guidance to coding agents working with code in this
+repository.
 
 ## Project Overview
 
@@ -15,6 +15,8 @@ serves two purposes:
    content during builds (e.g., the `docref` directive for page summaries)
 
 ## Development Commands
+
+Prefer using Git worktrees for development.
 
 ### Setup
 
@@ -89,7 +91,7 @@ uv run --dev sphinx-build docs/source docs/build/html
 - Caches summaries using MD5 hash of document content
 - **Modifies source files in-place** to persist generated summaries (RST only currently)
 - Requires Ollama running at `OLLAMA_BASE_URL` (default: `http://localhost:11434`)
-- Default model: `llama3.2:3b`
+- Default model: `qwen3.5:2b`
 
 ## Test Structure
 

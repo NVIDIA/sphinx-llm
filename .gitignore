@@ -165,6 +165,6 @@ cython_debug/
 
 _version.py
 
-# Claude Code local settings
-.claude/settings.local.json
-CLAUDE.local.md
+# Local agent settings
+.agents/settings.local.json
+AGENTS.local.md

@@ -23,9 +23,9 @@ First, retrieve the issue details:
 gh issue view <issue-number> --repo NVIDIA/sphinx-llm
 ```
 
-**If `gh` CLI is not available:**
+**If the `gh` CLI is not available:**
 
-- Use WebFetch to fetch the issue from
+- Use an available web browsing or fetching tool to retrieve the issue from
   `https://github.com/NVIDIA/sphinx-llm/issues/<issue-number>`
 - Extract the title, body, and labels
 
@@ -59,7 +59,7 @@ Once you've confirmed the issue is ready for implementation, follow this TDD wor
 #### Step 3b: Implement the Feature
 
 - Implement the minimum code necessary to make the tests pass
-- Follow the project's architecture patterns (see CLAUDE.md)
+- Follow the project's architecture patterns (see `AGENTS.md`)
 - Run tests frequently to verify progress:
 
   ```bash
@@ -98,7 +98,8 @@ User: "Resolve issue #42"
 
 You should:
 
-1. Run `gh issue view 42 --repo NVIDIA/sphinx-llm` (or use WebFetch)
+1. Run `gh issue view 42 --repo NVIDIA/sphinx-llm` (or use an available web
+   browsing or fetching tool)
 2. Check for the `ready` label
 3. If ready, write tests in `src/sphinx_llm/tests/`
 4. Implement the feature
