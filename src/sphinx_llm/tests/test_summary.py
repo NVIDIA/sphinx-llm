@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the shared OpenAI-compatible summary client."""
 
-import os
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -129,17 +128,6 @@ def test_summarize_text_can_omit_reasoning_effort(monkeypatch):
         "extra_body"
         not in mock_openai.return_value.chat.completions.create.call_args.kwargs
     )
-
-
-@pytest.mark.skipif(
-    os.environ.get("SPHINX_LLM_LIVE_TEST") != "1",
-    reason="requires a live OpenAI-compatible endpoint",
-)
-def test_summarize_text_with_live_endpoint():
-    """Test summary generation against the CI Ollama service."""
-    summary = summarize_text("Sphinx generates documentation from source files.")
-
-    assert summary
 
 
 @pytest.mark.parametrize(

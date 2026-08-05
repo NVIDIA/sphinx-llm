@@ -135,29 +135,35 @@ can be configured entirely with environment variables:
 export OPENAI_MODEL=your-model
 export OPENAI_BASE_URL=http://localhost:8000/v1
 export OPENAI_API_KEY=your-api-key
-export OPENAI_REASONING_EFFORT=none
 ```
 
 `OPENAI_BASE_URL` and `OPENAI_API_KEY` are optional. When the endpoint does not
 require authentication, the extension supplies the placeholder key required by
-the OpenAI client. Reasoning defaults to `none` so that reasoning models spend
-their response budget on the summary. Set `OPENAI_REASONING_EFFORT` to an empty
-string to omit the field for an endpoint or model that does not support it. The
-same settings can be configured in `conf.py`; these values take precedence over
-the environment:
+the OpenAI client. The same settings can be configured in `conf.py`; these
+values take precedence over the environment:
 
 ```python
 sphinx_llm_options = {
     "model": "your-model",
     "base_url": "http://localhost:8000/v1",
     "api_key_env": "OPENAI_API_KEY",
-    "reasoning_effort": "none",
 }
 ```
 
-The `base_url`, `api_key_env`, and `reasoning_effort` settings are optional. Set
-`reasoning_effort` to an empty string to omit the field. A model must be set on
-the directive, in `sphinx_llm_options`, or with `OPENAI_MODEL`.
+A model must be set on the directive, in `sphinx_llm_options`, or with
+`OPENAI_MODEL`.
+
+Supported `sphinx_llm_options` configuration options:
+
+<!-- markdownlint-disable MD013 -->
+| **Name** | **Description** | **Type** | **Default** |
+| --- | --- | --- | --- |
+| `model` | Model used to generate summaries. Can also be set with `OPENAI_MODEL` or the directive's `:model:` option. | `str` | No default |
+| `base_url` | OpenAI-compatible endpoint URL. Can also be set with `OPENAI_BASE_URL`. | `str` | OpenAI client default |
+| `api_key_env` | Name of the environment variable containing the API key. | `str` | `OPENAI_API_KEY` |
+| `reasoning_effort` | Reasoning effort sent to the endpoint. Can also be set with `OPENAI_REASONING_EFFORT`; use an empty string to omit the field for incompatible endpoints or models. | `str` | `"none"` |
+| `warn_on_cache_miss` | Emit a warning before regenerating an outdated summary. | `bool` | `True` |
+<!-- markdownlint-enable MD013 -->
 
 ![Docref summary example](docs/source/_static/images/pig-feeding-summary.png)
 

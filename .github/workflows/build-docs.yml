@@ -32,16 +32,6 @@ jobs:
           version: "latest"
           python-version: ${{ matrix.python-version }}
 
-      - name: Test OpenAI-compatible generation
-        if: matrix.sphinx-version == '>=7,<8'
-        env:
-          OPENAI_MODEL: qwen3.5:2b
-          OPENAI_BASE_URL: http://localhost:11434/v1
-          OPENAI_REASONING_EFFORT: none
-          SPHINX_LLM_LIVE_TEST: "1"
-        run: |
-          uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" pytest -q src/sphinx_llm/tests/test_summary.py::test_summarize_text_with_live_endpoint
-
       - name: Invalidate summary cache
         run: |
           echo "\n\nBuild ID: $GITHUB_RUN_ID" >> docs/source/apples.rst
@@ -49,10 +39,16 @@ jobs:
 
       - name: Build Sphinx documentation
         env:
+          OPENAI_MODEL: qwen3.5:2b
           OPENAI_BASE_URL: http://localhost:11434/v1
+          OPENAI_REASONING_EFFORT: none
         run: |
           uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -D llms_txt_build_parallel=0 -b html docs/source docs/build/html
 
-      - name: DEBUG Output updated source file
+      - name: Verify generated summary updated source hash
         run: |
-          diff docs/source/test.rst docs/source/test.rst.bak || true
+          original_hash="$(sed -n 's/^   :hash: //p' docs/source/test.rst.bak)"
+          generated_hash="$(sed -n 's/^   :hash: //p' docs/source/test.rst)"
+          test -n "$original_hash"
+          test -n "$generated_hash"
+          test "$original_hash" != "$generated_hash"
