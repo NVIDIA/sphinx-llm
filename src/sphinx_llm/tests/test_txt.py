@@ -118,6 +118,38 @@ def sphinx_build_with_suffix_mode_config(
     yield from _build_sphinx(builder, {"llms_txt_suffix_mode": suffix_mode})
 
 
+@pytest.fixture
+def llms_txt_override_build(
+    builder: str,
+    parallel: bool,
+    override_source: str,
+    suffix_mode: str | None,
+) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+    """Build docs with a custom llms.txt source and explicit build settings."""
+    overrides = {
+        "llms_txt_build_parallel": parallel,
+        "llms_txt_override_source": override_source,
+    }
+    if suffix_mode is not None:
+        overrides["llms_txt_suffix_mode"] = suffix_mode
+    yield from _build_sphinx(builder, overrides)
+
+
+@pytest.fixture
+def llms_txt_override_build_without_full() -> Generator[
+    tuple[Sphinx, Path, Path], None, None
+]:
+    """Build overridden llms.txt without generating llms-full.txt."""
+    yield from _build_sphinx(
+        "html",
+        {
+            "llms_txt_build_parallel": False,
+            "llms_txt_override_source": "index.rst",
+            "llms_txt_full_build": False,
+        },
+    )
+
+
 def test_markdown_generator_init(sphinx_build):
     """Test MarkdownGenerator initialization."""
     app, _, _ = sphinx_build
@@ -410,6 +442,134 @@ def test_dirhtml_links_match_published_locations(tmp_path: Path):
         assert "[Custom scheme](sphinx-llm:example)" in content
         assert "sphinx-llm:example\n```" in content
         assert re.search(r"sphinx-llm:[0-9a-f]{32}", content) is None
+
+
+@pytest.mark.parametrize(
+    "parallel",
+    [
+        pytest.param(True, id="parallel"),
+        pytest.param(False, id="sequential"),
+    ],
+)
+@pytest.mark.parametrize(
+    (
+        "builder",
+        "override_source",
+        "suffix_mode",
+        "expected_page_paths",
+        "expected_link",
+    ),
+    [
+        pytest.param(
+            "html",
+            "index.rst",
+            None,
+            ("index.html.md", "test.html.md"),
+            "test.html.md",
+            id="html",
+        ),
+        pytest.param(
+            "dirhtml",
+            "index",
+            "auto",
+            ("index.html.md", "index.md", "test/index.html.md", "test.md"),
+            "test/index.html.md",
+            id="dirhtml-auto",
+        ),
+        pytest.param(
+            "dirhtml",
+            "index",
+            "both",
+            ("index.html.md", "index.md", "test/index.html.md", "test.md"),
+            "test/index.html.md",
+            id="dirhtml-both",
+        ),
+        pytest.param(
+            "dirhtml",
+            "index",
+            "file-suffix",
+            ("index.html.md", "test/index.html.md"),
+            "test/index.html.md",
+            id="dirhtml-file-suffix",
+        ),
+        pytest.param(
+            "dirhtml",
+            "index",
+            "url-suffix",
+            ("index.md", "test.md"),
+            "test.md",
+            id="dirhtml-url-suffix",
+        ),
+        pytest.param(
+            "dirhtml",
+            "index",
+            "replace",
+            ("index.md", "test/index.md"),
+            "test/index.md",
+            id="dirhtml-replace",
+        ),
+    ],
+)
+def test_llms_txt_override_source_preserves_other_outputs(
+    llms_txt_override_build,
+    expected_page_paths: tuple[str, ...],
+    expected_link: str,
+):
+    """A rendered custom source replaces only the generated llms.txt sitemap."""
+    _, output_dir, _ = llms_txt_override_build
+
+    llms_txt = (output_dir / "llms.txt").read_text(encoding="utf-8")
+    assert "# Welcome to sphinx-llm" in llms_txt
+    assert f"]({expected_link})" in llms_txt
+    assert "## Pages" not in llms_txt
+
+    for page_path in expected_page_paths:
+        assert_file_exists_with_content(output_dir / page_path)
+
+    llms_full = output_dir / "llms-full.txt"
+    assert_file_exists_with_content(llms_full)
+    assert "# Welcome to sphinx-llm" in llms_full.read_text(encoding="utf-8")
+
+
+def test_llms_txt_override_source_respects_full_build(
+    llms_txt_override_build_without_full,
+):
+    """A custom llms.txt does not force llms-full.txt generation."""
+    _, output_dir, _ = llms_txt_override_build_without_full
+
+    llms_txt = (output_dir / "llms.txt").read_text(encoding="utf-8")
+    assert "# Welcome to sphinx-llm" in llms_txt
+    assert "## Pages" not in llms_txt
+    assert not (output_dir / "llms-full.txt").exists()
+
+
+def test_missing_llms_txt_override_source_raises_error(tmp_path: Path):
+    """A configured source must identify a rendered Sphinx document."""
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "conf.py").write_text(
+        'extensions = ["sphinx_llm.txt"]\n'
+        'project = "Custom llms.txt test"\n'
+        "llms_txt_build_parallel = False\n"
+        'llms_txt_override_source = "missing.rst"\n',
+        encoding="utf-8",
+    )
+    (source_dir / "index.rst").write_text("Index\n=====\n", encoding="utf-8")
+
+    app = Sphinx(
+        srcdir=str(source_dir),
+        confdir=str(source_dir),
+        outdir=str(tmp_path / "output"),
+        doctreedir=str(tmp_path / "doctrees"),
+        buildername="html",
+        warningiserror=False,
+        freshenv=True,
+    )
+
+    with pytest.raises(
+        ExtensionError, match=r"llms_txt_override_source 'missing\.rst'"
+    ):
+        app.build()
 
 
 @pytest.mark.parametrize(
