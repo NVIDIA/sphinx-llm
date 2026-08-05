@@ -20,6 +20,8 @@ jobs:
 
       - name: Setup Ollama
         uses: ai-action/setup-ollama@fc020bb65890f31d60475232b35cea07152316ee # v2.0.9
+        env:
+          OLLAMA_DEBUG_LOG_REQUESTS: "1"
         with:
           version: 0.32.5
 
@@ -51,3 +53,30 @@ jobs:
           test -n "$original_hash"
           test -n "$generated_hash"
           test "$original_hash" != "$generated_hash"
+
+      - name: Show Ollama generation logs
+        if: ${{ always() }}
+        run: |
+          echo "::group::Ollama generation request"
+          request_logs=(/tmp/ollama-request-logs-*/*_v1_chat_completions_body.json)
+          if [[ -e "${request_logs[0]}" ]]; then
+            for request_log in "${request_logs[@]}"; do
+              echo "Request log: $request_log"
+              cat "$request_log"
+            done
+          else
+            echo "No Ollama generation request log found."
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Generated summary"
+          if [[ -f docs/source/test.rst.bak && -f docs/source/test.rst ]]; then
+            if cmp -s docs/source/test.rst.bak docs/source/test.rst; then
+              echo "No generated summary change found."
+            else
+              diff --unified=0 docs/source/test.rst.bak docs/source/test.rst || true
+            fi
+          else
+            echo "Generated summary files are unavailable."
+          fi
+          echo "::endgroup::"
