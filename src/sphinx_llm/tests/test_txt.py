@@ -7,6 +7,7 @@ Tests for the sphinx_llm.txt module.
 from __future__ import annotations
 
 import re
+import shutil
 import tempfile
 from collections.abc import Generator
 from html.parser import HTMLParser
@@ -944,3 +945,36 @@ def test_html_meta_description_used_in_incremental_build():
                 f"Entry:    {line!r}\n"
                 f"Expected: {expected!r}"
             )
+
+
+def test_confdir_outside_srcdir():
+    """The markdown sub-build must honor a configuration directory that does
+    not live in the source directory (sphinx-build -c option)."""
+    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        srcdir = temp_path / "source"
+        confdir = temp_path / "config"
+        build_dir = temp_path / "build"
+        doctree_dir = temp_path / "doctrees"
+
+        shutil.copytree(docs_source_dir, srcdir)
+        confdir.mkdir()
+        (srcdir / "conf.py").rename(confdir / "conf.py")
+
+        app = Sphinx(
+            srcdir=str(srcdir),
+            confdir=str(confdir),
+            outdir=str(build_dir),
+            doctreedir=str(doctree_dir),
+            buildername="html",
+            warningiserror=False,
+            freshenv=True,
+            confoverrides={"llms_txt_build_parallel": True},
+        )
+        app.build()
+
+        assert_file_exists_with_content(build_dir / "llms.txt")
+        assert_file_exists_with_content(build_dir / "llms-full.txt")
+        assert_file_exists_with_content(build_dir / "index.html.md")
