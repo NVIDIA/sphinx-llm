@@ -99,7 +99,7 @@ class Docref(BaseAdmonition, SphinxDirective):
         base_url = shared_options.get("base_url", "") or os.environ.get(
             "OPENAI_BASE_URL", ""
         )
-        api_key_env = shared_options.get("api_key_env") or DEFAULT_API_KEY_ENV
+        api_key_env = shared_options.get("api_key_env", DEFAULT_API_KEY_ENV)
         reasoning_effort = shared_options.get(
             "reasoning_effort",
             os.environ.get(DEFAULT_REASONING_EFFORT_ENV, DEFAULT_REASONING_EFFORT),

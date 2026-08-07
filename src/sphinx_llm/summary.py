@@ -3,8 +3,10 @@
 """Shared helpers for generating summaries with an OpenAI-compatible API."""
 
 import hashlib
+import ipaddress
 import os
 from typing import Optional
+from urllib.parse import urlparse
 
 from sphinx.errors import ExtensionError
 
@@ -57,6 +59,19 @@ def _extract_summary(response: object) -> str:
     return summary.strip()
 
 
+def _is_loopback_url(url: str) -> bool:
+    """Return whether a URL targets a loopback-only hostname or address."""
+    hostname = urlparse(url).hostname
+    if not hostname:
+        return False
+    if hostname == "localhost" or hostname.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
 def summarize_text(
     text: str,
     model: str = DEFAULT_MODEL,
@@ -64,9 +79,12 @@ def summarize_text(
     base_url: str = "",
     api_key_env: str = DEFAULT_API_KEY_ENV,
     reasoning_effort: Optional[str] = None,
+    timeout: Optional[float] = None,
+    use_environment_defaults: bool = True,
 ) -> str:
     """Generate a concise summary using an OpenAI-compatible chat endpoint."""
-    model = model or os.environ.get(DEFAULT_MODEL_ENV, "")
+    if use_environment_defaults:
+        model = model or os.environ.get(DEFAULT_MODEL_ENV, "")
     if not isinstance(model, str) or not model.strip():
         raise ExtensionError(
             "No summary model is configured. Set 'model' in sphinx_llm_options "
@@ -78,19 +96,35 @@ def summarize_text(
     except ImportError as error:
         raise _missing_generation_dependencies(error) from error
 
-    effective_base_url = base_url or os.environ.get("OPENAI_BASE_URL", "")
+    effective_base_url = base_url
+    if use_environment_defaults:
+        effective_base_url = effective_base_url or os.environ.get("OPENAI_BASE_URL", "")
     configured_api_key = os.environ.get(api_key_env) if api_key_env else None
+    if (
+        configured_api_key
+        and urlparse(effective_base_url).scheme.lower() == "http"
+        and not _is_loopback_url(effective_base_url)
+    ):
+        raise ExtensionError(
+            "Refusing to send an API key to a non-loopback endpoint over plain HTTP; "
+            "use HTTPS or a loopback URL"
+        )
     # The OpenAI client requires a non-empty value even when the endpoint does
     # not authenticate requests.
     api_key = configured_api_key or "not-used"
     if reasoning_effort is None:
-        reasoning_effort = os.environ.get(
-            DEFAULT_REASONING_EFFORT_ENV, DEFAULT_REASONING_EFFORT
-        )
+        if use_environment_defaults:
+            reasoning_effort = os.environ.get(
+                DEFAULT_REASONING_EFFORT_ENV, DEFAULT_REASONING_EFFORT
+            )
+        else:
+            reasoning_effort = DEFAULT_REASONING_EFFORT
 
     client_options = {"api_key": api_key}
     if effective_base_url:
         client_options["base_url"] = effective_base_url
+    if timeout is not None:
+        client_options["timeout"] = timeout
     client = OpenAI(**client_options)
     completion_options = {
         "model": model,

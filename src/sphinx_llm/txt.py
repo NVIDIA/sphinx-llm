@@ -7,13 +7,16 @@ This extension hooks into the Sphinx build process to create markdown versions
 of all documents using the sphinx_markdown_builder.
 """
 
+import hashlib
 import json
+import os
 import posixpath
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, metadata
 from pathlib import Path
@@ -34,6 +37,22 @@ from .version import __version__
 
 logger = logging.getLogger(__name__)
 LINK_TOKEN_PATTERN = re.compile(rf"{re.escape(LINK_TOKEN_PREFIX)}[0-9a-f]{{32}}")
+SUMMARY_CACHE_VERSION = 1
+DEFAULT_SUMMARY_API_KEY_ENV = "SPHINX_LLM_SUMMARY_API_KEY"
+
+
+@dataclass(frozen=True)
+class SummaryOptions:
+    """Effective configuration for llms.txt page-summary generation."""
+
+    enabled: bool
+    provider: str
+    model: str
+    base_url: str
+    api_key_env: str
+    max_input_chars: int
+    timeout: int
+    cache_path: str
 
 
 class MarkdownLayout(str, Enum):
@@ -61,6 +80,8 @@ class MarkdownGenerator:
             mode="w", delete=False, prefix="sphinx_llm_output_", suffix=".log"
         )
         self.parallel = None
+        self._summary_cache: Optional[dict[str, dict[str, str]]] = None
+        self._loaded_summary_cache_path: Optional[Path] = None
 
     def setup(self):
         """Set up the extension."""
@@ -620,8 +641,13 @@ class MarkdownGenerator:
             try:
                 doctree = self.app.env.get_doctree(docname)
                 for node in doctree.traverse(docutils.nodes.meta):
-                    if node.get("name") == "description" and node.get("content"):
-                        return node["content"]
+                    content = node.get("content")
+                    if (
+                        node.get("name") == "description"
+                        and isinstance(content, str)
+                        and content.strip()
+                    ):
+                        return content.strip()
             except Exception:
                 logger.exception(
                     "Failed to read html_meta description from doctree for '%s'; "
@@ -629,7 +655,300 @@ class MarkdownGenerator:
                     docname,
                 )
 
+        if docname and self._summary_enabled():
+            return self.generate_page_summary(docname, md_file)
+
         return self.extract_description_from_markdown(md_file)
+
+    def _configured_summary_value(
+        self, config_name: str, env_name: str, default: Any
+    ) -> Any:
+        """Resolve one option as ``-D``, environment, conf.py, then default."""
+        config = self.app.config
+        if config_name in getattr(config, "overrides", {}):
+            return getattr(config, config_name)
+        if env_name in os.environ:
+            return os.environ[env_name]
+        return getattr(config, config_name, default)
+
+    @staticmethod
+    def _parse_summary_bool(value: Any, env_name: str) -> bool:
+        """Parse a bool from Sphinx or an environment variable."""
+        if isinstance(value, bool):
+            return value
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off", ""}:
+            return False
+        raise ExtensionError(
+            f"{env_name} must be a boolean value such as 1, 0, true, or false"
+        )
+
+    @staticmethod
+    def _parse_summary_positive_int(value: Any, env_name: str) -> int:
+        """Parse a positive integer summary setting."""
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            parsed = 0
+        if parsed <= 0:
+            raise ExtensionError(f"{env_name} must be a positive integer")
+        return parsed
+
+    def _summary_enabled(self) -> bool:
+        """Return whether page summaries are explicitly enabled."""
+        env_name = "SPHINX_LLM_SUMMARY_ENABLED"
+        value = self._configured_summary_value(
+            "llms_txt_summary_enabled", env_name, False
+        )
+        return self._parse_summary_bool(value, env_name)
+
+    def _get_summary_options(self) -> SummaryOptions:
+        """Return validated effective page-summary configuration."""
+        provider = str(
+            self._configured_summary_value(
+                "llms_txt_summary_provider",
+                "SPHINX_LLM_SUMMARY_PROVIDER",
+                "openai-compatible",
+            )
+        ).strip()
+        if provider != "openai-compatible":
+            raise ExtensionError(
+                "Invalid llms.txt summary provider "
+                f"{provider!r}; only 'openai-compatible' is supported"
+            )
+
+        model = str(
+            self._configured_summary_value(
+                "llms_txt_summary_model", "SPHINX_LLM_SUMMARY_MODEL", ""
+            )
+        ).strip()
+        base_url = str(
+            self._configured_summary_value(
+                "llms_txt_summary_base_url", "SPHINX_LLM_SUMMARY_BASE_URL", ""
+            )
+        ).strip()
+        api_key_env = str(
+            self._configured_summary_value(
+                "llms_txt_summary_api_key_env",
+                "SPHINX_LLM_SUMMARY_API_KEY_ENV",
+                DEFAULT_SUMMARY_API_KEY_ENV,
+            )
+        ).strip()
+        max_input_env = "SPHINX_LLM_SUMMARY_MAX_INPUT_CHARS"
+        max_input_chars = self._parse_summary_positive_int(
+            self._configured_summary_value(
+                "llms_txt_summary_max_input_chars", max_input_env, 12_000
+            ),
+            max_input_env,
+        )
+        timeout_env = "SPHINX_LLM_SUMMARY_TIMEOUT"
+        timeout = self._parse_summary_positive_int(
+            self._configured_summary_value("llms_txt_summary_timeout", timeout_env, 60),
+            timeout_env,
+        )
+        cache_path = str(
+            self._configured_summary_value(
+                "llms_txt_summary_cache_path",
+                "SPHINX_LLM_SUMMARY_CACHE_PATH",
+                "",
+            )
+        ).strip()
+        return SummaryOptions(
+            enabled=self._summary_enabled(),
+            provider=provider,
+            model=model,
+            base_url=base_url,
+            api_key_env=api_key_env,
+            max_input_chars=max_input_chars,
+            timeout=timeout,
+            cache_path=cache_path,
+        )
+
+    @property
+    def _summary_cache_path(self) -> Path:
+        """Return the configured cache path, defaulting under the doctree dir."""
+        configured = self._get_summary_options().cache_path
+        if not configured:
+            return Path(self.app.doctreedir) / "sphinx-llm-page-summaries.json"
+        path = Path(configured)
+        if not path.is_absolute():
+            path = Path(self.app.confdir) / path
+        return path
+
+    def _load_summary_cache(self) -> dict[str, dict[str, str]]:
+        """Load the versioned cache, recovering from bad or old files."""
+        cache_path = self._summary_cache_path
+        if (
+            self._summary_cache is not None
+            and self._loaded_summary_cache_path == cache_path
+        ):
+            return self._summary_cache
+
+        self._summary_cache = {}
+        self._loaded_summary_cache_path = cache_path
+        try:
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+            if (
+                isinstance(payload, dict)
+                and payload.get("version") == SUMMARY_CACHE_VERSION
+                and isinstance(payload.get("summaries"), dict)
+            ):
+                self._summary_cache = payload["summaries"]
+            else:
+                logger.warning(
+                    "Ignoring incompatible llms.txt page summary cache at %s",
+                    cache_path,
+                )
+        except FileNotFoundError:
+            pass
+        except (OSError, TypeError, ValueError):
+            logger.warning(
+                "Could not read the llms.txt page summary cache at %s; "
+                "summaries will be regenerated",
+                cache_path,
+            )
+        return self._summary_cache
+
+    def _save_summary_cache(self) -> None:
+        """Atomically persist the page-summary cache."""
+        cache_path = self._summary_cache_path
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": SUMMARY_CACHE_VERSION,
+            "summaries": self._load_summary_cache(),
+        }
+        temporary_path: Optional[Path] = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=cache_path.parent,
+                prefix=f".{cache_path.name}.",
+                delete=False,
+            ) as cache_file:
+                json.dump(payload, cache_file, indent=2, sort_keys=True)
+                temporary_path = Path(cache_file.name)
+            temporary_path.replace(cache_path)
+        finally:
+            if temporary_path is not None and temporary_path.exists():
+                temporary_path.unlink()
+
+    @staticmethod
+    def _summary_fingerprint(
+        markdown: str,
+        options: SummaryOptions,
+        prompt_version: int,
+        reasoning_effort: str,
+    ) -> str:
+        """Hash complete Markdown and all non-secret generation parameters."""
+        settings = {
+            "api_key_env": options.api_key_env,
+            "base_url": options.base_url,
+            "max_input_chars": options.max_input_chars,
+            "model": options.model,
+            "prompt_version": prompt_version,
+            "provider": options.provider,
+            "reasoning_effort": reasoning_effort,
+            "timeout": options.timeout,
+        }
+        fingerprint_input = json.dumps(settings, sort_keys=True) + "\0" + markdown
+        return hashlib.sha256(fingerprint_input.encode()).hexdigest()
+
+    def generate_page_summary(self, docname: str, md_file: Path) -> str:
+        """Generate or retrieve a cached summary from final Markdown."""
+        options = self._get_summary_options()
+        if not options.model:
+            raise ExtensionError(
+                "No llms.txt summary model is configured; set "
+                "llms_txt_summary_model or SPHINX_LLM_SUMMARY_MODEL"
+            )
+
+        # These helpers do not import the optional OpenAI dependency. Importing
+        # them only after opt-in keeps normal builds isolated from provider code.
+        from .summary import DEFAULT_REASONING_EFFORT, SUMMARY_PROMPT_VERSION
+
+        markdown = md_file.read_text(encoding="utf-8")
+        fingerprint = self._summary_fingerprint(
+            markdown,
+            options,
+            SUMMARY_PROMPT_VERSION,
+            DEFAULT_REASONING_EFFORT,
+        )
+        cache = self._load_summary_cache()
+        record = cache.get(docname)
+        if (
+            isinstance(record, dict)
+            and record.get("fingerprint") == fingerprint
+            and isinstance(record.get("summary"), str)
+            and record["summary"].strip()
+        ):
+            return record["summary"]
+
+        if options.api_key_env and not os.environ.get(options.api_key_env):
+            raise ExtensionError(
+                "No llms.txt summary API key is configured; set the environment "
+                f"variable named by llms_txt_summary_api_key_env ({options.api_key_env!r})"
+            )
+
+        logger.info(
+            "Generating llms.txt summary for '%s' with %s at %s",
+            docname,
+            options.model,
+            options.base_url or "the default OpenAI endpoint",
+        )
+        try:
+            # Imported only for an enabled cache miss, keeping normal builds free
+            # of the optional provider dependency.
+            from .summary import summarize_text
+
+            summary = " ".join(
+                summarize_text(
+                    markdown[: options.max_input_chars],
+                    options.model,
+                    base_url=options.base_url,
+                    api_key_env=options.api_key_env,
+                    reasoning_effort=DEFAULT_REASONING_EFFORT,
+                    timeout=options.timeout,
+                    use_environment_defaults=False,
+                ).split()
+            )
+        except ExtensionError as error:
+            message = str(error)
+            if "optional generation dependencies" in message:
+                raise ExtensionError(
+                    "LLM summarization requires the optional generation dependencies. "
+                    "Install them with 'pip install sphinx-llm[gen]'."
+                ) from None
+            if "malformed or empty summary" in message:
+                raise ExtensionError(
+                    "The OpenAI-compatible endpoint returned a malformed or empty "
+                    f"summary for document {docname!r}"
+                ) from None
+            if "non-loopback endpoint over plain HTTP" in message:
+                raise ExtensionError(
+                    "Refusing to send the llms.txt summary API key to a non-loopback "
+                    f"endpoint over plain HTTP for document {docname!r}; use HTTPS "
+                    "or a loopback URL"
+                ) from None
+            raise ExtensionError(
+                f"Failed to generate an llms.txt summary for document {docname!r}; "
+                "check the provider configuration and credentials"
+            ) from None
+        except Exception:
+            raise ExtensionError(
+                f"Failed to generate an llms.txt summary for document {docname!r}; "
+                "check the provider configuration and credentials"
+            ) from None
+        if not summary:
+            raise ExtensionError(
+                f"The provider returned an empty llms.txt summary for document {docname!r}"
+            )
+
+        cache[docname] = {"fingerprint": fingerprint, "summary": summary}
+        self._save_summary_cache()
+        return summary
 
     @staticmethod
     def extract_description_from_markdown(md_file: Path) -> str:
@@ -689,6 +1008,16 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", True, "env")
     app.add_config_value("llms_txt_override_source", "", "env")
+    app.add_config_value("llms_txt_summary_enabled", False, "env")
+    app.add_config_value("llms_txt_summary_provider", "openai-compatible", "env")
+    app.add_config_value("llms_txt_summary_model", "", "env")
+    app.add_config_value("llms_txt_summary_base_url", "", "env")
+    app.add_config_value(
+        "llms_txt_summary_api_key_env", DEFAULT_SUMMARY_API_KEY_ENV, "env"
+    )
+    app.add_config_value("llms_txt_summary_max_input_chars", 12_000, "env")
+    app.add_config_value("llms_txt_summary_timeout", 60, "env")
+    app.add_config_value("llms_txt_summary_cache_path", "", "env")
     generator = MarkdownGenerator(app)
     generator.setup()
 

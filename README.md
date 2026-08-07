@@ -115,12 +115,80 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_suffix_mode` | Suffix mode for generated markdown files. Options: `"auto"` (default behavior for each builder), `"file-suffix"` (spec-compliant format), `"url-suffix"` (URL-style format), or `"replace"` (replaces `.html` with `.md`). Note: `"both"` is deprecated but still supported (treated as `"auto"`). | `str` | `"auto"` |
 | `llms_txt_full_build` | Whether to generate the `llms-full.txt` file. Set to `False` to disable generation, which is useful for large documentation sites where the concatenated file would be too large. | `bool` | `True` |
 | `llms_txt_override_source` | Advanced option that overrides the automatically generated `llms.txt` sitemap with the rendered contents of a custom Sphinx source document. Specify a docname or source path relative to the source directory, such as `"llms-txt"` or `"llms-txt.rst"`. | `str` | `""` |
+| `llms_txt_summary_enabled` | Generate one-sentence page descriptions with an OpenAI-compatible provider. | `bool` | `False` |
+| `llms_txt_summary_provider` | Summary provider. The initial implementation supports `"openai-compatible"`. | `str` | `"openai-compatible"` |
+| `llms_txt_summary_model` | Model used for generated page descriptions. Required when generation is enabled. | `str` | `""` |
+| `llms_txt_summary_base_url` | Base URL of the OpenAI-compatible endpoint. An empty value uses the OpenAI client default. | `str` | `""` |
+| `llms_txt_summary_api_key_env` | Name of the environment variable containing the API key. Set to `""` only for an endpoint that deliberately requires no authentication. | `str` | `"SPHINX_LLM_SUMMARY_API_KEY"` |
+| `llms_txt_summary_max_input_chars` | Maximum Markdown characters sent to the provider. The complete page is still hashed for cache invalidation. | `int` | `12000` |
+| `llms_txt_summary_timeout` | Provider request timeout in seconds. | `int` | `60` |
+| `llms_txt_summary_cache_path` | JSON cache path. Relative paths use the Sphinx configuration directory; an empty value stores the cache under `app.doctreedir`. | `str` | `""` |
 <!-- markdownlint-enable MD013 -->
 
 Each page's entry in `llms.txt` includes a short description. If a page defines
-an `html_meta` description — via `.. meta:: :description:` in rST or
-`html_meta: description:` in MyST frontmatter — that value is used. Otherwise
-the extension falls back to the first 100 characters of the page content.
+an `html_meta` description, that non-empty author-provided value always wins and
+no provider request is made. In reStructuredText, use:
+
+```rst
+.. meta::
+   :description: An author-provided page description.
+```
+
+In MyST Markdown, use frontmatter:
+
+```yaml
+---
+html_meta:
+  description: An author-provided page description.
+---
+```
+
+When no authored description exists, enabled summary generation uses a cached
+or newly generated description. When generation is disabled, which is the
+default, the extension retains the existing first-paragraph fallback and makes
+no provider requests.
+
+#### Generated page summaries
+
+> [!WARNING]
+> Enabling page summaries sends rendered documentation content to the configured
+> provider. Review that provider's privacy and data-retention terms before using
+> this feature with confidential documentation.
+
+Install the optional generation dependencies and explicitly enable summaries:
+
+```console
+pip install sphinx-llm[gen]
+export SPHINX_LLM_SUMMARY_ENABLED=1
+export SPHINX_LLM_SUMMARY_MODEL=your-model
+export SPHINX_LLM_SUMMARY_BASE_URL=https://llm.example.com/v1
+export SPHINX_LLM_SUMMARY_API_KEY_ENV=NVIDIA_API_KEY
+export NVIDIA_API_KEY=your-api-key
+sphinx-build docs/source docs/build/html
+```
+
+Every setting has an environment-variable equivalent:
+`SPHINX_LLM_SUMMARY_ENABLED`, `SPHINX_LLM_SUMMARY_PROVIDER`,
+`SPHINX_LLM_SUMMARY_MODEL`, `SPHINX_LLM_SUMMARY_BASE_URL`,
+`SPHINX_LLM_SUMMARY_API_KEY_ENV`, `SPHINX_LLM_SUMMARY_MAX_INPUT_CHARS`,
+`SPHINX_LLM_SUMMARY_TIMEOUT`, and `SPHINX_LLM_SUMMARY_CACHE_PATH`. Values resolve
+in this order: a `sphinx-build -D` override, an environment variable, `conf.py`,
+then the built-in default. Finding a local CLI never enables generation.
+
+The API key itself is read only from the named environment variable; it is not
+a Sphinx configuration value and is excluded from logs, the cache, and cache
+fingerprints. For an explicitly unauthenticated endpoint, set
+`llms_txt_summary_api_key_env = ""`; this does not fall back to `OPENAI_API_KEY`.
+Configured keys are rejected for non-loopback plain-HTTP endpoints; use HTTPS,
+or a loopback URL such as `http://localhost:8000/v1` for local development.
+
+The versioned JSON cache is stored in the doctree directory by default and is
+written atomically. Cache entries hash the complete generated Markdown plus the
+provider, endpoint, model, prompt version, input limit, timeout, and credential
+environment-variable name. Only the configured Markdown prefix is sent to the
+provider, but a change anywhere in a page invalidates that page alone. Restore
+the doctree directory or configured cache path in CI to reuse summaries across
+jobs.
 
 #### Custom `llms.txt` override
 
