@@ -130,6 +130,89 @@ def test_summarize_text_can_omit_reasoning_effort(monkeypatch):
     )
 
 
+def test_summarize_text_can_disable_environment_defaults(monkeypatch):
+    """Dedicated adapters can isolate themselves from ambient OPENAI settings."""
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://ambient.example/v1")
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "high")
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
+    )
+    with patch("openai.OpenAI") as mock_openai:
+        mock_openai.return_value.chat.completions.create.return_value = response
+        summarize_text(
+            "Page contents.",
+            "test-model",
+            api_key_env="",
+            use_environment_defaults=False,
+        )
+
+    mock_openai.assert_called_once_with(api_key="not-used")
+    assert mock_openai.return_value.chat.completions.create.call_args.kwargs[
+        "extra_body"
+    ] == {"reasoning_effort": "none"}
+
+
+def test_summarize_text_rejects_key_over_remote_plain_http(monkeypatch):
+    """Credentials are never sent to non-loopback endpoints without TLS."""
+    monkeypatch.setenv("TEST_API_KEY", "top-secret")
+    with patch("openai.OpenAI") as mock_openai:
+        with pytest.raises(ExtensionError, match="plain HTTP") as error:
+            summarize_text(
+                "Page contents.",
+                "test-model",
+                base_url="http://models.example.com/v1",
+                api_key_env="TEST_API_KEY",
+            )
+    mock_openai.assert_not_called()
+    assert "top-secret" not in str(error.value)
+
+
+def test_summarize_text_can_allow_key_over_remote_plain_http(monkeypatch):
+    """An explicit override permits authentication on a trusted HTTP network."""
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
+    )
+    with patch("openai.OpenAI") as mock_openai:
+        mock_openai.return_value.chat.completions.create.return_value = response
+        summarize_text(
+            "Page contents.",
+            "test-model",
+            base_url="http://models.internal/v1",
+            api_key_env="TEST_API_KEY",
+            allow_insecure_auth=True,
+        )
+    mock_openai.assert_called_once_with(
+        api_key="secret", base_url="http://models.internal/v1"
+    )
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://localhost:8000/v1",
+        "http://service.localhost:8000/v1",
+        "http://127.0.0.1:8000/v1",
+        "http://[::1]:8000/v1",
+    ],
+)
+def test_summarize_text_allows_key_over_loopback_http(monkeypatch, base_url):
+    """Authenticated local development endpoints remain supported."""
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
+    )
+    with patch("openai.OpenAI") as mock_openai:
+        mock_openai.return_value.chat.completions.create.return_value = response
+        summarize_text(
+            "Page contents.",
+            "test-model",
+            base_url=base_url,
+            api_key_env="TEST_API_KEY",
+        )
+    mock_openai.assert_called_once_with(api_key="secret", base_url=base_url)
+
+
 @pytest.mark.parametrize(
     "response",
     [

@@ -92,6 +92,20 @@ def test_docref_uses_environment_generation_settings(monkeypatch):
     )
 
 
+def test_docref_preserves_explicit_unauthenticated_setting(monkeypatch):
+    """An empty api_key_env never falls back to ambient OPENAI_API_KEY."""
+    directive, shared_options = _make_docref()
+    shared_options["api_key_env"] = ""
+    monkeypatch.setenv("OPENAI_API_KEY", "ambient-secret")
+
+    with patch(
+        "sphinx_llm.docref.summarize_text", return_value="Generated summary."
+    ) as mock_summarize:
+        directive.generate_summary("referenced-page")
+
+    assert mock_summarize.call_args.kwargs["api_key_env"] == ""
+
+
 def test_docref_escapes_rst_directives_before_persisting(tmp_path):
     """Test endpoint output cannot persist executable reStructuredText."""
     directive, _ = _make_docref()
