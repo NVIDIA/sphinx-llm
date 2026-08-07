@@ -231,97 +231,55 @@ may be included in a toctree or marked with `:orphan:`.
 
 ### Docref
 
-The `sphinx_llm.docref` extension adds a directive for summarising and
-referencing other pages in your documentation. Instead of just linking to a
-page the extension will generate a summary of the page being linked to and
-include that too.
+The `sphinx_llm.docref` extension adds a directive that summarises and links
+to another page. It uses the same `llms_txt_summary_*` settings, environment
+variables, provider safeguards, and versioned JSON cache described in
+[Generated page summaries](#generated-page-summaries). Generation is disabled
+by default.
 
-The extension calls an OpenAI-compatible chat-completions endpoint. Generation
-can be configured entirely with environment variables:
-
-```shell
-export OPENAI_MODEL=your-model
-export OPENAI_BASE_URL=http://localhost:8000/v1
-export OPENAI_API_KEY=your-api-key
-```
-
-`OPENAI_BASE_URL` and `OPENAI_API_KEY` are optional. When the endpoint does not
-require authentication, the extension supplies the placeholder key required by
-the OpenAI client. The same settings can be configured in `conf.py`; these
-values take precedence over the environment:
+Enable the extension in `conf.py`:
 
 ```python
-sphinx_llm_options = {
-    "model": "your-model",
-    "base_url": "http://localhost:8000/v1",
-    "api_key_env": "OPENAI_API_KEY",
-}
-```
-
-A model must be set on the directive, in `sphinx_llm_options`, or with
-`OPENAI_MODEL`.
-
-Supported `sphinx_llm_options` configuration options:
-
-<!-- markdownlint-disable MD013 -->
-| **Name** | **Description** | **Type** | **Default** |
-| --- | --- | --- | --- |
-| `model` | Model used to generate summaries. Can also be set with `OPENAI_MODEL` or the directive's `:model:` option. | `str` | No default |
-| `base_url` | OpenAI-compatible endpoint URL. Can also be set with `OPENAI_BASE_URL`. | `str` | OpenAI client default |
-| `api_key_env` | Name of the environment variable containing the API key. | `str` | `OPENAI_API_KEY` |
-| `reasoning_effort` | Reasoning effort sent to the endpoint. Can also be set with `OPENAI_REASONING_EFFORT`; use an empty string to omit the field for incompatible endpoints or models. | `str` | `"none"` |
-| `warn_on_cache_miss` | Emit a warning before regenerating an outdated summary. | `bool` | `True` |
-<!-- markdownlint-enable MD013 -->
-
-![Docref summary example](docs/source/_static/images/pig-feeding-summary.png)
-
-To use the extension add it to your `conf.py`.
-
-```python
-# conf.py
-# ...
-
 extensions = [
     "sphinx_llm.docref",
 ]
 ```
 
-Then use the `docref` directive in your documents to reference other
-documents.
+An empty directive opts into automatic generation:
 
 ```rst
-Testing page
-============
-
-
 .. docref:: apples
-
-   Summary of apples page.
 ```
 
-Then when you run `sphinx-build` (or `make html`) a summary will be generated
-and your source file will be updated too.
+A non-empty body is a permanent, reference-specific manual override:
 
 ```rst
-Testing page
-============
-
-
 .. docref:: apples
-   :hash: 3c94530219643f449f8d8622ba92798ffcf3b0f3eb92741c5d1bf23ac4e93f0b
-   :model: qwen3.5:2b
 
-   Feeding apples to pigs involves selecting ripe, pesticide-free fruit; washing
-   them thoroughly; cutting into manageable pieces without seeds or cores; and
-   introducing them calmly while monitoring for proper chewing.
+   A reviewed explanation of why the apples page is relevant here.
 ```
 
-A hash of the referenced document is included to avoid generating summaries
-unnecessarily. But if the referenced page changes the summary will be
-regenerated.
+A page can also set its own description using page-level `html_meta` when you
+want this content to be static.
 
-You can also modify the summary if you need to clean up the language
-generated, and as long as the hash still matches the file it will be used.
+Summary generation follows this order of precedence:
+
+1. Non-empty directive body
+2. Target page `html_meta` description
+3. Valid generated summary from the shared page-summary cache
+4. Content-derived fallback when generation is disabled or a target is missing
+
+The optional directive `:model:` setting overrides
+`llms_txt_summary_model` for one automatic reference. Identical references
+to the same target and effective settings generate at most once. Requests and
+effective rendering state live in the Sphinx environment, while generated
+records are also persisted through `llms_txt_summary_cache_path` so clean
+builds and `llms.txt` summary generation use one inspectable cache.
+
+Each successful build writes `sphinx-llm-summaries.json` to the output
+directory. It lists each effective summary, its origin, target, consuming
+source locations, and generated-summary metadata without endpoints, API-key
+environment-variable names, or credentials.
 
 ## Building the docs
 

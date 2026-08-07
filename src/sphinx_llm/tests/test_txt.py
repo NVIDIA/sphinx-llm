@@ -156,6 +156,7 @@ def test_markdown_generator_init(sphinx_build):
     app, _, _ = sphinx_build
     generator = MarkdownGenerator(app)
     assert generator.app == app
+    assert generator.md_build_logfile is None
 
 
 def test_markdown_generator_setup(sphinx_build):

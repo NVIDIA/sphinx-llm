@@ -33,12 +33,12 @@ from .markdown_builder import (
     LinkTarget,
     SphinxLlmMarkdownBuilder,
 )
+from .summary import DEFAULT_API_KEY_ENV
 from .version import __version__
 
 logger = logging.getLogger(__name__)
 LINK_TOKEN_PATTERN = re.compile(rf"{re.escape(LINK_TOKEN_PREFIX)}[0-9a-f]{{32}}")
 SUMMARY_CACHE_VERSION = 1
-DEFAULT_SUMMARY_API_KEY_ENV = "OPENAI_API_KEY"
 
 
 @dataclass(frozen=True)
@@ -77,9 +77,7 @@ class MarkdownGenerator:
         self.outdir = None
         self.md_build_dir = None
         self.md_build_process = None
-        self.md_build_logfile = tempfile.NamedTemporaryFile(
-            mode="w", delete=False, prefix="sphinx_llm_output_", suffix=".log"
-        )
+        self.md_build_logfile = None
         self.parallel = None
         self._summary_cache: Optional[dict[str, dict[str, str]]] = None
         self._loaded_summary_cache_path: Optional[Path] = None
@@ -179,6 +177,9 @@ class MarkdownGenerator:
     def build_markdown_files(self, *_):
         # Create temporary markdown build directory
         self.md_build_dir.mkdir(exist_ok=True)
+        self.md_build_logfile = tempfile.NamedTemporaryFile(
+            mode="w", delete=False, prefix="sphinx_llm_output_", suffix=".log"
+        )
         try:
             # Build markdown files using the sphinx-llm markdown builder.
             # The configuration directory is passed explicitly as it does not
@@ -734,7 +735,7 @@ class MarkdownGenerator:
             self._configured_summary_value(
                 "llms_txt_summary_api_key_env",
                 "SPHINX_LLM_SUMMARY_API_KEY_ENV",
-                DEFAULT_SUMMARY_API_KEY_ENV,
+                DEFAULT_API_KEY_ENV,
             )
         ).strip()
         allow_insecure_auth_env = "SPHINX_LLM_SUMMARY_ALLOW_INSECURE_AUTH"
@@ -1026,6 +1027,7 @@ class MarkdownGenerator:
 
 def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
+    app.setup_extension("sphinx_llm.summary")
     if app.tags.has("sphinx_llm_markdown"):
         app.setup_extension("sphinx_markdown_builder")
         app.add_builder(SphinxLlmMarkdownBuilder)
@@ -1035,17 +1037,6 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", True, "env")
     app.add_config_value("llms_txt_override_source", "", "env")
-    app.add_config_value("llms_txt_summary_enabled", False, "env")
-    app.add_config_value("llms_txt_summary_provider", "openai-compatible", "env")
-    app.add_config_value("llms_txt_summary_model", "", "env")
-    app.add_config_value("llms_txt_summary_base_url", "", "env")
-    app.add_config_value(
-        "llms_txt_summary_api_key_env", DEFAULT_SUMMARY_API_KEY_ENV, "env"
-    )
-    app.add_config_value("llms_txt_summary_allow_insecure_auth", False, "env")
-    app.add_config_value("llms_txt_summary_max_input_chars", 12_000, "env")
-    app.add_config_value("llms_txt_summary_timeout", 60, "env")
-    app.add_config_value("llms_txt_summary_cache_path", "", "env")
     generator = MarkdownGenerator(app)
     generator.setup()
 

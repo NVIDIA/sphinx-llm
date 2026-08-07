@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 from sphinx.errors import ExtensionError
 
+from .version import __version__
+
 DEFAULT_MODEL = ""
 DEFAULT_MODEL_ENV = "OPENAI_MODEL"
 DEFAULT_REASONING_EFFORT = "none"
@@ -17,6 +19,8 @@ DEFAULT_REASONING_EFFORT_ENV = "OPENAI_REASONING_EFFORT"
 SYSTEM_PROMPT = "Keep responses concise and focused, avoiding unnecessary elaboration or additional context unless explicitly requested. Do not use bullet points, lists, or nested structures unless specifically asked. If a response requires further detail, prioritize the most relevant information and conclude promptly. Avoid apologies or mentions of limitations; simply deliver the most direct and straightforward answer."
 DEFAULT_API_KEY_ENV = "OPENAI_API_KEY"
 SUMMARY_PROMPT_VERSION = 2
+SUMMARY_PROMPT = "Respond only with a concise one-sentence summary of the above."
+SUMMARY_TEMPERATURE = 0
 
 
 class MissingGenerationDependenciesError(ExtensionError):
@@ -144,15 +148,12 @@ def summarize_text(
     client = OpenAI(**client_options)
     completion_options = {
         "model": model,
-        "temperature": 0,
+        "temperature": SUMMARY_TEMPERATURE,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": (
-                    text
-                    + "\n\nRespond only with a concise one-sentence summary of the above."
-                ),
+                "content": text + "\n\n" + SUMMARY_PROMPT,
             },
         ],
     }
@@ -162,3 +163,22 @@ def summarize_text(
         completion_options["extra_body"] = {"reasoning_effort": reasoning_effort}
     response = client.chat.completions.create(**completion_options)
     return _extract_summary(response)
+
+
+def setup(app):
+    """Register configuration shared by all summary consumers."""
+    app.add_config_value("llms_txt_summary_enabled", False, "env")
+    app.add_config_value("llms_txt_summary_provider", "openai-compatible", "env")
+    app.add_config_value("llms_txt_summary_model", "", "env")
+    app.add_config_value("llms_txt_summary_base_url", "", "env")
+    app.add_config_value("llms_txt_summary_api_key_env", DEFAULT_API_KEY_ENV, "env")
+    app.add_config_value("llms_txt_summary_allow_insecure_auth", False, "env")
+    app.add_config_value("llms_txt_summary_max_input_chars", 12_000, "env")
+    app.add_config_value("llms_txt_summary_timeout", 60, "env")
+    app.add_config_value("llms_txt_summary_cache_path", "", "env")
+
+    return {
+        "version": __version__,
+        "parallel_read_safe": True,
+        "parallel_write_safe": True,
+    }
