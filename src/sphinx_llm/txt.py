@@ -952,7 +952,14 @@ class MarkdownGenerator:
             )
 
         cache[docname] = {"fingerprint": fingerprint, "summary": summary}
-        self._save_summary_cache()
+        try:
+            self._save_summary_cache()
+        except OSError as error:
+            logger.warning(
+                "Could not persist the llms.txt page summary cache; "
+                "summaries will be regenerated on the next build: %s",
+                error,
+            )
         return summary
 
     @staticmethod

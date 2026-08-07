@@ -234,6 +234,24 @@ def test_failed_cache_write_removes_temporary_file(monkeypatch, tmp_path):
     assert list(temporary_files) == []
 
 
+def test_failed_cache_persistence_does_not_discard_summary(monkeypatch, tmp_path):
+    """A valid provider response remains usable when its cache cannot be saved."""
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    generator, markdown_file = _generator(tmp_path)
+    with (
+        patch("sphinx_llm.summary.summarize_text", return_value="Summary."),
+        patch("sphinx_llm.txt.logger.warning") as warning,
+        patch.object(
+            generator,
+            "_save_summary_cache",
+            side_effect=OSError("read-only filesystem"),
+        ),
+    ):
+        assert generator.get_page_description(markdown_file) == "Summary."
+    warning.assert_called_once()
+    assert "summaries will be regenerated" in warning.call_args.args[0]
+
+
 def test_provider_failure_is_redacted(monkeypatch, tmp_path):
     """Provider failures become clear ExtensionErrors without credential leakage."""
     monkeypatch.setenv("TEST_API_KEY", "top-secret")
