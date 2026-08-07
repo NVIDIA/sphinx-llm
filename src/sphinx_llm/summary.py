@@ -95,6 +95,7 @@ def summarize_text(
     reasoning_effort: Optional[str] = None,
     timeout: Optional[float] = None,
     use_environment_defaults: bool = True,
+    allow_insecure_auth: bool = False,
 ) -> str:
     """Generate a concise summary using an OpenAI-compatible chat endpoint."""
     if use_environment_defaults:
@@ -118,10 +119,11 @@ def summarize_text(
         configured_api_key
         and urlparse(effective_base_url).scheme.lower() == "http"
         and not _is_loopback_url(effective_base_url)
+        and not allow_insecure_auth
     ):
         raise InsecureEndpointError(
             "Refusing to send an API key to a non-loopback endpoint over plain HTTP; "
-            "use HTTPS or a loopback URL"
+            "use HTTPS, a loopback URL, or explicitly set allow_insecure_auth=True"
         )
     # The OpenAI client requires a non-empty value even when the endpoint does
     # not authenticate requests.

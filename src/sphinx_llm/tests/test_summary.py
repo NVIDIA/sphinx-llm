@@ -167,6 +167,26 @@ def test_summarize_text_rejects_key_over_remote_plain_http(monkeypatch):
     assert "top-secret" not in str(error.value)
 
 
+def test_summarize_text_can_allow_key_over_remote_plain_http(monkeypatch):
+    """An explicit override permits authentication on a trusted HTTP network."""
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
+    )
+    with patch("openai.OpenAI") as mock_openai:
+        mock_openai.return_value.chat.completions.create.return_value = response
+        summarize_text(
+            "Page contents.",
+            "test-model",
+            base_url="http://models.internal/v1",
+            api_key_env="TEST_API_KEY",
+            allow_insecure_auth=True,
+        )
+    mock_openai.assert_called_once_with(
+        api_key="secret", base_url="http://models.internal/v1"
+    )
+
+
 @pytest.mark.parametrize(
     "base_url",
     [

@@ -31,6 +31,7 @@ def _generator(tmp_path: Path, **config_values) -> tuple[MarkdownGenerator, Path
         "llms_txt_summary_model": "test-model",
         "llms_txt_summary_base_url": "https://example.com/v1",
         "llms_txt_summary_api_key_env": "TEST_API_KEY",
+        "llms_txt_summary_allow_insecure_auth": False,
         "llms_txt_summary_max_input_chars": 12_000,
         "llms_txt_summary_timeout": 60,
         "llms_txt_summary_cache_path": "",
@@ -61,23 +62,29 @@ def test_summary_configuration_precedence(monkeypatch, tmp_path):
         tmp_path,
         llms_txt_summary_model="conf-model",
         llms_txt_summary_timeout=20,
+        llms_txt_summary_allow_insecure_auth=False,
     )
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_MODEL", "env-model")
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_TIMEOUT", "30")
+    monkeypatch.setenv("SPHINX_LLM_SUMMARY_ALLOW_INSECURE_AUTH", "true")
 
     options = generator._get_summary_options()
     assert options.model == "env-model"
     assert options.timeout == 30
+    assert options.allow_insecure_auth is True
 
     generator.app.config.overrides = {
         "llms_txt_summary_model": "cli-model",
         "llms_txt_summary_timeout": "40",
+        "llms_txt_summary_allow_insecure_auth": "false",
     }
     generator.app.config.llms_txt_summary_model = "cli-model"
     generator.app.config.llms_txt_summary_timeout = 40
+    generator.app.config.llms_txt_summary_allow_insecure_auth = False
     options = generator._get_summary_options()
     assert options.model == "cli-model"
     assert options.timeout == 40
+    assert options.allow_insecure_auth is False
 
 
 def test_sphinx_command_line_override_and_built_in_defaults(monkeypatch):
@@ -100,20 +107,28 @@ def test_sphinx_command_line_override_and_built_in_defaults(monkeypatch):
     assert options.provider == "openai-compatible"
     assert options.model == "cli-model"
     assert options.base_url == ""
-    assert options.api_key_env == "SPHINX_LLM_SUMMARY_API_KEY"
+    assert options.api_key_env == "OPENAI_API_KEY"
+    assert options.allow_insecure_auth is False
     assert options.max_input_chars == 12_000
     assert options.timeout == 60
     assert options.cache_path == ""
 
 
-@pytest.mark.parametrize("value", ["maybe", "-1", "0"])
-def test_invalid_summary_environment_values_raise(monkeypatch, tmp_path, value):
+@pytest.mark.parametrize(
+    ("env_name", "value"),
+    [
+        ("SPHINX_LLM_SUMMARY_ENABLED", "maybe"),
+        ("SPHINX_LLM_SUMMARY_ALLOW_INSECURE_AUTH", "maybe"),
+        ("SPHINX_LLM_SUMMARY_MAX_INPUT_CHARS", "-1"),
+        ("SPHINX_LLM_SUMMARY_MAX_INPUT_CHARS", "0"),
+    ],
+)
+def test_invalid_summary_environment_values_raise(
+    monkeypatch, tmp_path, env_name, value
+):
     """Invalid environment configuration fails clearly when generation is used."""
     generator, _ = _generator(tmp_path)
-    if value == "maybe":
-        monkeypatch.setenv("SPHINX_LLM_SUMMARY_ENABLED", value)
-    else:
-        monkeypatch.setenv("SPHINX_LLM_SUMMARY_MAX_INPUT_CHARS", value)
+    monkeypatch.setenv(env_name, value)
     with pytest.raises(ExtensionError, match="SPHINX_LLM_SUMMARY"):
         generator._get_summary_options()
 
@@ -182,6 +197,7 @@ def test_summary_uses_bounded_markdown_and_complete_fingerprint(
         ("llms_txt_summary_base_url", "https://other.example/v1"),
         ("llms_txt_summary_max_input_chars", 100),
         ("llms_txt_summary_timeout", 15),
+        ("llms_txt_summary_allow_insecure_auth", True),
     ],
 )
 def test_generation_setting_changes_invalidate_cache(
@@ -364,6 +380,7 @@ def test_all_environment_options(monkeypatch, tmp_path):
         "SPHINX_LLM_SUMMARY_MODEL": "env-model",
         "SPHINX_LLM_SUMMARY_BASE_URL": "https://env.example/v1",
         "SPHINX_LLM_SUMMARY_API_KEY_ENV": "ENV_KEY",
+        "SPHINX_LLM_SUMMARY_ALLOW_INSECURE_AUTH": "yes",
         "SPHINX_LLM_SUMMARY_MAX_INPUT_CHARS": "345",
         "SPHINX_LLM_SUMMARY_TIMEOUT": "12",
         "SPHINX_LLM_SUMMARY_CACHE_PATH": "env-cache.json",
@@ -377,6 +394,7 @@ def test_all_environment_options(monkeypatch, tmp_path):
     assert options.model == "env-model"
     assert options.base_url == "https://env.example/v1"
     assert options.api_key_env == "ENV_KEY"
+    assert options.allow_insecure_auth is True
     assert options.max_input_chars == 345
     assert options.timeout == 12
     assert options.cache_path == "env-cache.json"
@@ -445,6 +463,19 @@ def test_page_summary_rejects_key_over_remote_plain_http(monkeypatch, tmp_path):
             generator.get_page_description(markdown_file)
     mock_openai.assert_not_called()
     assert "top-secret" not in str(error.value)
+
+
+def test_page_summary_can_allow_key_over_remote_plain_http(monkeypatch, tmp_path):
+    """An explicit opt-in forwards credentials to a trusted plain-HTTP endpoint."""
+    monkeypatch.setenv("TEST_API_KEY", "top-secret")
+    generator, markdown_file = _generator(
+        tmp_path,
+        llms_txt_summary_base_url="http://models.internal/v1",
+        llms_txt_summary_allow_insecure_auth=True,
+    )
+    with patch("sphinx_llm.summary.summarize_text", return_value="Summary.") as call:
+        assert generator.get_page_description(markdown_file) == "Summary."
+    assert call.call_args.kwargs["allow_insecure_auth"] is True
 
 
 @pytest.mark.parametrize(

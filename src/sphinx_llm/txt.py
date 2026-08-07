@@ -38,7 +38,7 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 LINK_TOKEN_PATTERN = re.compile(rf"{re.escape(LINK_TOKEN_PREFIX)}[0-9a-f]{{32}}")
 SUMMARY_CACHE_VERSION = 1
-DEFAULT_SUMMARY_API_KEY_ENV = "SPHINX_LLM_SUMMARY_API_KEY"
+DEFAULT_SUMMARY_API_KEY_ENV = "OPENAI_API_KEY"
 
 
 @dataclass(frozen=True)
@@ -50,6 +50,7 @@ class SummaryOptions:
     model: str
     base_url: str
     api_key_env: str
+    allow_insecure_auth: bool
     max_input_chars: int
     timeout: int
     cache_path: str
@@ -736,6 +737,15 @@ class MarkdownGenerator:
                 DEFAULT_SUMMARY_API_KEY_ENV,
             )
         ).strip()
+        allow_insecure_auth_env = "SPHINX_LLM_SUMMARY_ALLOW_INSECURE_AUTH"
+        allow_insecure_auth = self._parse_summary_bool(
+            self._configured_summary_value(
+                "llms_txt_summary_allow_insecure_auth",
+                allow_insecure_auth_env,
+                False,
+            ),
+            allow_insecure_auth_env,
+        )
         max_input_env = "SPHINX_LLM_SUMMARY_MAX_INPUT_CHARS"
         max_input_chars = self._parse_summary_positive_int(
             self._configured_summary_value(
@@ -761,6 +771,7 @@ class MarkdownGenerator:
             model=model,
             base_url=base_url,
             api_key_env=api_key_env,
+            allow_insecure_auth=allow_insecure_auth,
             max_input_chars=max_input_chars,
             timeout=timeout,
             cache_path=cache_path,
@@ -845,6 +856,7 @@ class MarkdownGenerator:
         """Hash complete Markdown and all non-secret generation parameters."""
         settings = {
             "api_key_env": options.api_key_env,
+            "allow_insecure_auth": options.allow_insecure_auth,
             "base_url": options.base_url,
             "max_input_chars": options.max_input_chars,
             "model": options.model,
@@ -918,6 +930,7 @@ class MarkdownGenerator:
                     reasoning_effort=DEFAULT_REASONING_EFFORT,
                     timeout=options.timeout,
                     use_environment_defaults=False,
+                    allow_insecure_auth=options.allow_insecure_auth,
                 ).split()
             )
         except MissingGenerationDependenciesError:
@@ -933,8 +946,10 @@ class MarkdownGenerator:
         except InsecureEndpointError:
             raise ExtensionError(
                 "Refusing to send the llms.txt summary API key to a non-loopback "
-                f"endpoint over plain HTTP for document {docname!r}; use HTTPS "
-                "or a loopback URL"
+                f"endpoint over plain HTTP for document {docname!r}; use HTTPS or "
+                "a loopback URL, or explicitly set "
+                "llms_txt_summary_allow_insecure_auth=True or "
+                "SPHINX_LLM_SUMMARY_ALLOW_INSECURE_AUTH=1"
             ) from None
         except ExtensionError:
             raise ExtensionError(
@@ -1027,6 +1042,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value(
         "llms_txt_summary_api_key_env", DEFAULT_SUMMARY_API_KEY_ENV, "env"
     )
+    app.add_config_value("llms_txt_summary_allow_insecure_auth", False, "env")
     app.add_config_value("llms_txt_summary_max_input_chars", 12_000, "env")
     app.add_config_value("llms_txt_summary_timeout", 60, "env")
     app.add_config_value("llms_txt_summary_cache_path", "", "env")
