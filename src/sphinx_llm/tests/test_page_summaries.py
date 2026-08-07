@@ -14,7 +14,6 @@ import docutils.nodes
 import pytest
 from sphinx.errors import ExtensionError
 
-import sphinx_llm
 from sphinx_llm.tests.test_txt import (
     _HTML_META_PAGE,
     _build_sphinx,
@@ -400,13 +399,14 @@ def test_all_environment_options(monkeypatch, tmp_path):
     assert options.cache_path == "env-cache.json"
 
 
-def test_default_disabled_path_does_not_import_summary_module(monkeypatch, tmp_path):
+def test_default_disabled_path_does_not_import_provider_dependency(
+    monkeypatch, tmp_path
+):
     """Normal builds do not import provider code."""
-    monkeypatch.delitem(sys.modules, "sphinx_llm.summary", raising=False)
-    monkeypatch.delattr(sphinx_llm, "summary", raising=False)
+    monkeypatch.delitem(sys.modules, "openai", raising=False)
     generator, markdown_file = _generator(tmp_path, llms_txt_summary_enabled=False)
     assert generator.get_page_description(markdown_file)
-    assert "sphinx_llm.summary" not in sys.modules
+    assert "openai" not in sys.modules
 
 
 def test_page_summary_disables_ambient_openai_defaults(monkeypatch, tmp_path):

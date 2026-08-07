@@ -20,7 +20,7 @@ from sphinx.util import docname_join, logging
 from sphinx.util.docutils import SphinxDirective
 
 from . import summary as summary_client
-from .txt import MarkdownGenerator, SummaryOptions, register_summary_config
+from .txt import MarkdownGenerator, SummaryOptions
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -541,12 +541,12 @@ def write_summary_report(app: Sphinx, exception: Exception | None) -> None:
 
 
 def setup(app: Sphinx) -> dict[str, Any]:
+    app.setup_extension("sphinx_llm.summary")
     app.add_node(DocrefNode)
     app.add_directive("docref", Docref)
 
     # Keep the old dictionary registered for legacy configuration compatibility.
     app.add_config_value("sphinx_llm_options", {}, "env")
-    register_summary_config(app)
 
     app.connect("env-purge-doc", purge_docref_data)
     app.connect("env-merge-info", merge_docref_data)

@@ -235,7 +235,7 @@ The `sphinx_llm.docref` extension adds a directive that summarises and links
 to another page. It uses the same `llms_txt_summary_*` settings, environment
 variables, provider safeguards, and versioned JSON cache described in
 [Generated page summaries](#generated-page-summaries). Generation is disabled
-by default, and documentation builds never rewrite source files.
+by default.
 
 Enable the extension in `conf.py`:
 
@@ -259,8 +259,10 @@ A non-empty body is a permanent, reference-specific manual override:
    A reviewed explanation of why the apples page is relevant here.
 ```
 
-The target page can instead define a page-level `html_meta` description.
-Effective summaries use this precedence:
+A page can also set its own description using page-level `html_meta` when you
+want this content to be static.
+
+Summary generation follows this order of precedence:
 
 1. Non-empty directive body
 2. Target page `html_meta` description
@@ -278,15 +280,6 @@ Each successful build writes `sphinx-llm-summaries.json` to the output
 directory. It lists each effective summary, its origin, target, consuming
 source locations, and generated-summary metadata without endpoints, API-key
 environment-variable names, or credentials.
-
-#### Migrating legacy cached directives
-
-The deprecated `:hash:` option is accepted without modifying the source.
-Matching pre-#115 MD5 hashes and PR #115 setting-aware hashes seed the shared
-cache from the existing body and avoid immediate regeneration.
-
-- To return to automatic generation, remove the body and `:hash:`.
-- To keep the body as permanent authored text, remove only `:hash:`.
 
 ## Building the docs
 

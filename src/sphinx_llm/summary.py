@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 from sphinx.errors import ExtensionError
 
+from .version import __version__
+
 DEFAULT_MODEL = ""
 DEFAULT_MODEL_ENV = "OPENAI_MODEL"
 DEFAULT_REASONING_EFFORT = "none"
@@ -161,3 +163,22 @@ def summarize_text(
         completion_options["extra_body"] = {"reasoning_effort": reasoning_effort}
     response = client.chat.completions.create(**completion_options)
     return _extract_summary(response)
+
+
+def setup(app):
+    """Register configuration shared by all summary consumers."""
+    app.add_config_value("llms_txt_summary_enabled", False, "env")
+    app.add_config_value("llms_txt_summary_provider", "openai-compatible", "env")
+    app.add_config_value("llms_txt_summary_model", "", "env")
+    app.add_config_value("llms_txt_summary_base_url", "", "env")
+    app.add_config_value("llms_txt_summary_api_key_env", DEFAULT_API_KEY_ENV, "env")
+    app.add_config_value("llms_txt_summary_allow_insecure_auth", False, "env")
+    app.add_config_value("llms_txt_summary_max_input_chars", 12_000, "env")
+    app.add_config_value("llms_txt_summary_timeout", 60, "env")
+    app.add_config_value("llms_txt_summary_cache_path", "", "env")
+
+    return {
+        "version": __version__,
+        "parallel_read_safe": True,
+        "parallel_write_safe": True,
+    }
