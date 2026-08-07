@@ -173,7 +173,8 @@ Every setting has an environment-variable equivalent:
 `SPHINX_LLM_SUMMARY_API_KEY_ENV`, `SPHINX_LLM_SUMMARY_MAX_INPUT_CHARS`,
 `SPHINX_LLM_SUMMARY_TIMEOUT`, and `SPHINX_LLM_SUMMARY_CACHE_PATH`. Values resolve
 in this order: a `sphinx-build -D` override, an environment variable, `conf.py`,
-then the built-in default. Finding a local CLI never enables generation.
+then the built-in default. Installing the optional dependencies or detecting a
+local CLI does not enable summaries; set `llms_txt_summary_enabled` explicitly.
 
 The API key itself is read only from the named environment variable; it is not
 a Sphinx configuration value and is excluded from logs, the cache, and cache

@@ -5,6 +5,7 @@
 import json
 import sys
 import traceback
+from importlib import import_module
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -13,6 +14,7 @@ import docutils.nodes
 import pytest
 from sphinx.errors import ExtensionError
 
+import sphinx_llm
 from sphinx_llm.tests.test_txt import (
     _HTML_META_PAGE,
     _build_sphinx,
@@ -166,7 +168,9 @@ def test_summary_uses_bounded_markdown_and_complete_fingerprint(
     assert all(call.args[0] == "# Page\n\nComp" for call in summarize.call_args_list)
     cache_text = generator._summary_cache_path.read_text(encoding="utf-8")
     assert "top-secret" not in cache_text
-    assert "top-secret" not in vars(generator.app.config).values()
+    assert all(
+        "top-secret" not in str(value) for value in vars(generator.app.config).values()
+    )
     assert "top-secret" not in caplog.text
 
 
@@ -215,6 +219,19 @@ def test_corrupt_or_incompatible_cache_regenerates(
     with patch("sphinx_llm.summary.summarize_text", return_value="Summary.") as call:
         assert generator.get_page_description(markdown_file) == "Summary."
     call.assert_called_once()
+
+
+def test_failed_cache_write_removes_temporary_file(monkeypatch, tmp_path):
+    """An interrupted atomic write does not leave its temporary file behind."""
+    generator, _ = _generator(tmp_path)
+    generator._summary_cache_path.parent.mkdir(parents=True)
+    with patch("sphinx_llm.txt.json.dump", side_effect=OSError("disk full")):
+        with pytest.raises(OSError, match="disk full"):
+            generator._save_summary_cache()
+    temporary_files = generator._summary_cache_path.parent.glob(
+        f".{generator._summary_cache_path.name}.*"
+    )
+    assert list(temporary_files) == []
 
 
 def test_provider_failure_is_redacted(monkeypatch, tmp_path):
@@ -350,6 +367,7 @@ def test_all_environment_options(monkeypatch, tmp_path):
 def test_default_disabled_path_does_not_import_summary_module(monkeypatch, tmp_path):
     """Normal builds do not import provider code."""
     monkeypatch.delitem(sys.modules, "sphinx_llm.summary", raising=False)
+    monkeypatch.delattr(sphinx_llm, "summary", raising=False)
     generator, markdown_file = _generator(tmp_path, llms_txt_summary_enabled=False)
     assert generator.get_page_description(markdown_file)
     assert "sphinx_llm.summary" not in sys.modules
@@ -369,29 +387,31 @@ def test_page_summary_disables_ambient_openai_defaults(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("provider_error", "expected"),
+    ("error_type", "provider_message", "expected"),
     [
         (
-            ExtensionError(
-                "LLM summarization requires the optional generation dependencies"
-            ),
+            "MissingGenerationDependenciesError",
+            "missing provider dependency",
             r"pip install sphinx-llm\[gen\]",
         ),
         (
-            ExtensionError(
-                "The OpenAI-compatible endpoint returned a malformed or empty summary"
-            ),
+            "MalformedSummaryResponseError",
+            "bad provider response",
             "malformed or empty summary",
         ),
     ],
 )
 def test_known_safe_provider_errors_remain_actionable(
-    monkeypatch, tmp_path, provider_error, expected
+    monkeypatch, tmp_path, error_type, provider_message, expected
 ):
     """Safe setup/response errors survive redaction with useful guidance."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
     generator, markdown_file = _generator(tmp_path)
-    with patch("sphinx_llm.summary.summarize_text", side_effect=provider_error):
+    error_class = getattr(import_module("sphinx_llm.summary"), error_type)
+    with patch(
+        "sphinx_llm.summary.summarize_text",
+        side_effect=error_class(provider_message),
+    ):
         with pytest.raises(ExtensionError, match=expected):
             generator.get_page_description(markdown_file)
 

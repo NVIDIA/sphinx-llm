@@ -828,8 +828,8 @@ class MarkdownGenerator:
                 prefix=f".{cache_path.name}.",
                 delete=False,
             ) as cache_file:
-                json.dump(payload, cache_file, indent=2, sort_keys=True)
                 temporary_path = Path(cache_file.name)
+                json.dump(payload, cache_file, indent=2, sort_keys=True)
             temporary_path.replace(cache_path)
         finally:
             if temporary_path is not None and temporary_path.exists():
@@ -867,7 +867,13 @@ class MarkdownGenerator:
 
         # These helpers do not import the optional OpenAI dependency. Importing
         # them only after opt-in keeps normal builds isolated from provider code.
-        from .summary import DEFAULT_REASONING_EFFORT, SUMMARY_PROMPT_VERSION
+        from .summary import (
+            DEFAULT_REASONING_EFFORT,
+            SUMMARY_PROMPT_VERSION,
+            InsecureEndpointError,
+            MalformedSummaryResponseError,
+            MissingGenerationDependenciesError,
+        )
 
         markdown = md_file.read_text(encoding="utf-8")
         fingerprint = self._summary_fingerprint(
@@ -914,24 +920,23 @@ class MarkdownGenerator:
                     use_environment_defaults=False,
                 ).split()
             )
-        except ExtensionError as error:
-            message = str(error)
-            if "optional generation dependencies" in message:
-                raise ExtensionError(
-                    "LLM summarization requires the optional generation dependencies. "
-                    "Install them with 'pip install sphinx-llm[gen]'."
-                ) from None
-            if "malformed or empty summary" in message:
-                raise ExtensionError(
-                    "The OpenAI-compatible endpoint returned a malformed or empty "
-                    f"summary for document {docname!r}"
-                ) from None
-            if "non-loopback endpoint over plain HTTP" in message:
-                raise ExtensionError(
-                    "Refusing to send the llms.txt summary API key to a non-loopback "
-                    f"endpoint over plain HTTP for document {docname!r}; use HTTPS "
-                    "or a loopback URL"
-                ) from None
+        except MissingGenerationDependenciesError:
+            raise ExtensionError(
+                "LLM summarization requires the optional generation dependencies. "
+                "Install them with 'pip install sphinx-llm[gen]'."
+            ) from None
+        except MalformedSummaryResponseError:
+            raise ExtensionError(
+                "The OpenAI-compatible endpoint returned a malformed or empty "
+                f"summary for document {docname!r}"
+            ) from None
+        except InsecureEndpointError:
+            raise ExtensionError(
+                "Refusing to send the llms.txt summary API key to a non-loopback "
+                f"endpoint over plain HTTP for document {docname!r}; use HTTPS "
+                "or a loopback URL"
+            ) from None
+        except ExtensionError:
             raise ExtensionError(
                 f"Failed to generate an llms.txt summary for document {docname!r}; "
                 "check the provider configuration and credentials"

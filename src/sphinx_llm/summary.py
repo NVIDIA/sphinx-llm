@@ -19,9 +19,23 @@ DEFAULT_API_KEY_ENV = "OPENAI_API_KEY"
 SUMMARY_PROMPT_VERSION = 2
 
 
-def _missing_generation_dependencies(error: ImportError) -> ExtensionError:
+class MissingGenerationDependenciesError(ExtensionError):
+    """Raised when the optional provider dependency is unavailable."""
+
+
+class MalformedSummaryResponseError(ExtensionError):
+    """Raised when a provider response has no usable summary."""
+
+
+class InsecureEndpointError(ExtensionError):
+    """Raised before credentials could be sent over insecure transport."""
+
+
+def _missing_generation_dependencies(
+    error: ImportError,
+) -> MissingGenerationDependenciesError:
     """Return a helpful error when the optional generation extra is absent."""
-    return ExtensionError(
+    return MissingGenerationDependenciesError(
         "LLM summarization requires the optional generation dependencies. "
         "Install them with 'pip install sphinx-llm[gen]'.",
         error,
@@ -53,7 +67,7 @@ def _extract_summary(response: object) -> str:
     except (AttributeError, IndexError, TypeError):
         summary = None
     if not isinstance(summary, str) or not summary.strip():
-        raise ExtensionError(
+        raise MalformedSummaryResponseError(
             "The OpenAI-compatible endpoint returned a malformed or empty summary"
         )
     return summary.strip()
@@ -105,7 +119,7 @@ def summarize_text(
         and urlparse(effective_base_url).scheme.lower() == "http"
         and not _is_loopback_url(effective_base_url)
     ):
-        raise ExtensionError(
+        raise InsecureEndpointError(
             "Refusing to send an API key to a non-loopback endpoint over plain HTTP; "
             "use HTTPS or a loopback URL"
         )

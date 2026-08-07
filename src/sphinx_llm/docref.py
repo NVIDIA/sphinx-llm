@@ -88,8 +88,9 @@ class Docref(BaseAdmonition, SphinxDirective):
 
         # Resolve every generation setting before checking the persisted cache.
         shared_options = getattr(self.config, "sphinx_llm_options", {})
-        if "model" in self.options and self.options["model"]:
-            model = self.options["model"]
+        model_option = self.options.get("model")
+        if model_option:
+            model = model_option
         else:
             model = (
                 shared_options.get("model")
@@ -130,7 +131,7 @@ class Docref(BaseAdmonition, SphinxDirective):
 
         return doc_hash, doc_summary
 
-    def update_content(self, hash: str, summary: str):
+    def update_content(self, content_hash: str, summary: str):
         summary = _escape_rst_directives(summary)
         self.content.data = summary.splitlines()
 
@@ -158,10 +159,10 @@ class Docref(BaseAdmonition, SphinxDirective):
         # Update the hash (rst specific for now)
         for i, line in enumerate(self.content.parent.data):
             if ":hash:" in line:
-                source[start_line_idx + i] = " " * indent + f":hash: {hash}"
+                source[start_line_idx + i] = " " * indent + f":hash: {content_hash}"
                 break
         else:
-            source.insert(start_line_idx + 1, " " * indent + f":hash: {hash}")
+            source.insert(start_line_idx + 1, " " * indent + f":hash: {content_hash}")
 
         # Only write if we are making changes
         if source != original_source:
