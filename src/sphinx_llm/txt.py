@@ -1024,6 +1024,25 @@ class MarkdownGenerator:
                 return "Page content"
 
 
+def register_summary_config(app: Sphinx) -> None:
+    """Register page-summary settings shared by llms.txt and docref."""
+    values = (
+        ("llms_txt_summary_enabled", False),
+        ("llms_txt_summary_provider", "openai-compatible"),
+        ("llms_txt_summary_model", ""),
+        ("llms_txt_summary_base_url", ""),
+        ("llms_txt_summary_api_key_env", DEFAULT_SUMMARY_API_KEY_ENV),
+        ("llms_txt_summary_allow_insecure_auth", False),
+        ("llms_txt_summary_max_input_chars", 12_000),
+        ("llms_txt_summary_timeout", 60),
+        ("llms_txt_summary_cache_path", ""),
+    )
+    registered = getattr(app.config, "values", {})
+    for name, default in values:
+        if name not in registered:
+            app.add_config_value(name, default, "env")
+
+
 def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
     if app.tags.has("sphinx_llm_markdown"):
@@ -1035,17 +1054,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", True, "env")
     app.add_config_value("llms_txt_override_source", "", "env")
-    app.add_config_value("llms_txt_summary_enabled", False, "env")
-    app.add_config_value("llms_txt_summary_provider", "openai-compatible", "env")
-    app.add_config_value("llms_txt_summary_model", "", "env")
-    app.add_config_value("llms_txt_summary_base_url", "", "env")
-    app.add_config_value(
-        "llms_txt_summary_api_key_env", DEFAULT_SUMMARY_API_KEY_ENV, "env"
-    )
-    app.add_config_value("llms_txt_summary_allow_insecure_auth", False, "env")
-    app.add_config_value("llms_txt_summary_max_input_chars", 12_000, "env")
-    app.add_config_value("llms_txt_summary_timeout", 60, "env")
-    app.add_config_value("llms_txt_summary_cache_path", "", "env")
+    register_summary_config(app)
     generator = MarkdownGenerator(app)
     generator.setup()
 

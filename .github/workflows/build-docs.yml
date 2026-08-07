@@ -34,25 +34,24 @@ jobs:
           version: "latest"
           python-version: ${{ matrix.python-version }}
 
-      - name: Invalidate summary cache
+      - name: Prepare generation smoke test
         run: |
-          echo "\n\nBuild ID: $GITHUB_RUN_ID" >> docs/source/apples.rst
-          cp docs/source/test.rst docs/source/test.rst.bak
+          printf "\n\nBuild ID: %s\n" "$GITHUB_RUN_ID" >> docs/source/apples.rst
+          find docs/source -type f -print0 | sort -z | xargs -0 sha256sum > /tmp/docs-source-before-build.sha256
 
       - name: Build Sphinx documentation
         env:
-          OPENAI_MODEL: qwen3.5:2b
-          OPENAI_BASE_URL: http://localhost:11434/v1
+          SPHINX_LLM_SUMMARY_MODEL: qwen3.5:2b
+          SPHINX_LLM_SUMMARY_BASE_URL: http://localhost:11434/v1
+          SPHINX_LLM_SUMMARY_API_KEY_ENV: ""
         run: |
-          uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -D llms_txt_build_parallel=0 -b html docs/source docs/build/html
+          uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -D llms_txt_build_parallel=0 -D llms_txt_summary_enabled=1 -b html docs/source docs/build/html
 
-      - name: Verify generated summary updated source hash
+      - name: Verify sources and generated summary report
         run: |
-          original_hash="$(sed -n 's/^   :hash: //p' docs/source/test.rst.bak)"
-          generated_hash="$(sed -n 's/^   :hash: //p' docs/source/test.rst)"
-          test -n "$original_hash"
-          test -n "$generated_hash"
-          test "$original_hash" != "$generated_hash"
+          find docs/source -type f -print0 | sort -z | xargs -0 sha256sum > /tmp/docs-source-after-build.sha256
+          cmp /tmp/docs-source-before-build.sha256 /tmp/docs-source-after-build.sha256
+          jq -e '.summaries | any(.target == "apples" and .origin == "generated" and (.summary | length > 0) and (.fingerprint | length == 64))' docs/build/html/sphinx-llm-summaries.json
 
       - name: Show Ollama generation logs
         if: ${{ always() }}
@@ -69,14 +68,10 @@ jobs:
           fi
           echo "::endgroup::"
 
-          echo "::group::Generated summary"
-          if [[ -f docs/source/test.rst.bak && -f docs/source/test.rst ]]; then
-            if cmp -s docs/source/test.rst.bak docs/source/test.rst; then
-              echo "No generated summary change found."
-            else
-              diff --unified=0 docs/source/test.rst.bak docs/source/test.rst || true
-            fi
+          echo "::group::Generated summary report"
+          if [[ -f docs/build/html/sphinx-llm-summaries.json ]]; then
+            jq . docs/build/html/sphinx-llm-summaries.json
           else
-            echo "Generated summary files are unavailable."
+            echo "Generated summary report is unavailable."
           fi
           echo "::endgroup::"

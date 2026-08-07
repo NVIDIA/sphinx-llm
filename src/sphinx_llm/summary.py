@@ -17,6 +17,8 @@ DEFAULT_REASONING_EFFORT_ENV = "OPENAI_REASONING_EFFORT"
 SYSTEM_PROMPT = "Keep responses concise and focused, avoiding unnecessary elaboration or additional context unless explicitly requested. Do not use bullet points, lists, or nested structures unless specifically asked. If a response requires further detail, prioritize the most relevant information and conclude promptly. Avoid apologies or mentions of limitations; simply deliver the most direct and straightforward answer."
 DEFAULT_API_KEY_ENV = "OPENAI_API_KEY"
 SUMMARY_PROMPT_VERSION = 2
+SUMMARY_PROMPT = "Respond only with a concise one-sentence summary of the above."
+SUMMARY_TEMPERATURE = 0
 
 
 class MissingGenerationDependenciesError(ExtensionError):
@@ -144,15 +146,12 @@ def summarize_text(
     client = OpenAI(**client_options)
     completion_options = {
         "model": model,
-        "temperature": 0,
+        "temperature": SUMMARY_TEMPERATURE,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": (
-                    text
-                    + "\n\nRespond only with a concise one-sentence summary of the above."
-                ),
+                "content": text + "\n\n" + SUMMARY_PROMPT,
             },
         ],
     }
