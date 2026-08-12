@@ -7,6 +7,7 @@ Tests for the sphinx_llm.txt module.
 from __future__ import annotations
 
 import re
+import shutil
 import tempfile
 from collections.abc import Generator
 from html.parser import HTMLParser
@@ -156,6 +157,7 @@ def test_markdown_generator_init(sphinx_build):
     app, _, _ = sphinx_build
     generator = MarkdownGenerator(app)
     assert generator.app == app
+    assert generator.md_build_logfile is None
 
 
 def test_markdown_generator_setup(sphinx_build):
@@ -1011,3 +1013,34 @@ def test_excluded_documents_still_have_markdown_files(sphinx_build_with_exclude)
 
     assert_file_exists_with_content(apples_md)
     assert_file_exists_with_content(nested_md)
+def test_confdir_outside_srcdir():
+    """The markdown sub-build must honor a configuration directory that does
+    not live in the source directory (sphinx-build -c option)."""
+    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        srcdir = temp_path / "source"
+        confdir = temp_path / "config"
+        build_dir = temp_path / "build"
+        doctree_dir = temp_path / "doctrees"
+
+        shutil.copytree(docs_source_dir, srcdir)
+        confdir.mkdir()
+        (srcdir / "conf.py").rename(confdir / "conf.py")
+
+        app = Sphinx(
+            srcdir=str(srcdir),
+            confdir=str(confdir),
+            outdir=str(build_dir),
+            doctreedir=str(doctree_dir),
+            buildername="html",
+            warningiserror=False,
+            freshenv=True,
+            confoverrides={"llms_txt_build_parallel": True},
+        )
+        app.build()
+
+        assert_file_exists_with_content(build_dir / "llms.txt")
+        assert_file_exists_with_content(build_dir / "llms-full.txt")
+        assert_file_exists_with_content(build_dir / "index.html.md")
