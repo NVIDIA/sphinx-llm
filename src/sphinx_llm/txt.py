@@ -137,6 +137,19 @@ class MarkdownGenerator:
         """Combine the markdown files into llms-full.txt and llms.txt and merge the build outputs together."""
         if exception:
             logger.warning("Skipping build combination due to build error")
+            # Don't leave a markdown build subprocess behind (parallel mode).
+            if self.md_build_process and self.md_build_process.poll() is None:
+                logger.info("Terminating markdown build subprocess...")
+                self.md_build_process.terminate()
+                try:
+                    self.md_build_process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    logger.warning(
+                        "Markdown build subprocess did not exit after terminate(); "
+                        "killing it"
+                    )
+                    self.md_build_process.kill()
+                    self.md_build_process.wait()
             return
 
         if not self.md_build_process:
@@ -176,7 +189,14 @@ class MarkdownGenerator:
             if self.md_build_dir.exists():
                 shutil.rmtree(self.md_build_dir)
 
-    def build_markdown_files(self, *_):
+    def build_markdown_files(
+        self, app: Sphinx | None = None, exception: Exception | None = None
+    ):
+        """Start the markdown sub-build unless the primary build failed."""
+        if exception is not None:
+            logger.info("Skipping markdown build because the primary build failed")
+            return
+
         # Create temporary markdown build directory
         self.md_build_dir.mkdir(exist_ok=True)
         self.md_build_logfile = tempfile.NamedTemporaryFile(

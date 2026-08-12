@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import re
 import shutil
+import subprocess
 import tempfile
 from collections.abc import Generator
 from html.parser import HTMLParser
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, call, patch
 
 import docutils.nodes
 import pytest
@@ -184,6 +185,48 @@ def test_combine_builds_with_exception(sphinx_build):
     app, _, _ = sphinx_build
     generator = MarkdownGenerator(app)
     generator.combine_builds(app, Exception("fail"))
+
+
+def test_combine_builds_terminates_orphan_subprocess_on_exception(sphinx_build):
+    """Test that a failed primary build terminates a running markdown sub-build."""
+    app, _, _ = sphinx_build
+    generator = MarkdownGenerator(app)
+    process = MagicMock()
+    process.poll.return_value = None
+    generator.md_build_process = process
+
+    generator.combine_builds(app, Exception("primary build failed"))
+
+    process.terminate.assert_called_once_with()
+    process.wait.assert_called_once_with(timeout=10)
+    process.kill.assert_not_called()
+
+
+def test_combine_builds_kills_unresponsive_subprocess_on_exception(sphinx_build):
+    """Test that an unresponsive markdown sub-build is killed and reaped."""
+    app, _, _ = sphinx_build
+    generator = MarkdownGenerator(app)
+    process = MagicMock()
+    process.poll.return_value = None
+    process.wait.side_effect = [subprocess.TimeoutExpired("sphinx", 10), None]
+    generator.md_build_process = process
+
+    generator.combine_builds(app, Exception("primary build failed"))
+
+    process.terminate.assert_called_once_with()
+    process.kill.assert_called_once_with()
+    assert process.wait.call_args_list == [call(timeout=10), call()]
+
+
+def test_build_markdown_files_skips_failed_primary_build(sphinx_build):
+    """Test that a failed primary build does not start a sequential sub-build."""
+    app, _, _ = sphinx_build
+    generator = MarkdownGenerator(app)
+
+    with patch("sphinx_llm.txt.subprocess.Popen") as popen:
+        generator.build_markdown_files(app, Exception("primary build failed"))
+
+    popen.assert_not_called()
 
 
 def test_rst_files_have_corresponding_output_files(sphinx_build):
