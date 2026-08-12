@@ -22,7 +22,10 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = ["sphinx-markdown-builder>=0.6.8", "sphinx>=5"]
+dependencies = [
+    "sphinx-markdown-builder @ git+https://github.com/liran-funaro/sphinx-markdown-builder.git@9fa1a55013d251bde3bafe5dbeb190bdcef41291",
+    "sphinx>=5",
+]
 
 [project.optional-dependencies]
 gen = ["openai>=1.0.0"]
@@ -40,6 +43,9 @@ source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/sphinx_llm/_version.py"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.envs.types]
 extra-dependencies = ["mypy>=1.0.0"]
