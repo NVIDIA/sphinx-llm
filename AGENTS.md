@@ -41,6 +41,9 @@ uv run --with "sphinx>=7,<8" pytest src/sphinx_llm/tests/
 ### Linting and Formatting
 
 ```bash
+# Ensure pre-commit hooks are installed
+uv run pre-commit install
+
 # Run ruff linter with auto-fix
 uv run pre-commit run ruff --all-files
 
@@ -110,8 +113,9 @@ and `dirhtml` builders with parallel and sequential markdown building.
 ## Commit Requirements
 
 All commits by contributors who are not employed by NVIDIA must be signed off
-using `git commit -s` (Developer Certificate of Origin). Pre-commit hooks
-enforce:
+using `git commit -s` (Developer Certificate of Origin).
+
+Pre-commit hooks must be installed. They enforce:
 
 - Ruff formatting and linting
 - License header in all `.py` files (using `LICENSE_HEADER` file)
