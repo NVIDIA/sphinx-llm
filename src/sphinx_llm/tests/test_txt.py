@@ -625,11 +625,11 @@ def test_invalid_suffix_mode_raises_error():
         list(_build_sphinx("dirhtml", {"llms_txt_suffix_mode": "invalid-mode"}))
 
 
-@pytest.mark.parametrize("exclude", [None, "apples"])
-def test_invalid_exclude_raises_error(exclude):
+@pytest.mark.parametrize("exclude_patterns", [None, "apples", ["**", None], [1]])
+def test_invalid_exclude_raises_error(exclude_patterns):
     """Test that llms_txt_exclude must be an iterable of document patterns."""
     generator = MarkdownGenerator(
-        SimpleNamespace(config=SimpleNamespace(llms_txt_exclude=exclude))
+        SimpleNamespace(config=SimpleNamespace(llms_txt_exclude=exclude_patterns))
     )
     with pytest.raises(ExtensionError, match="llms_txt_exclude must be an iterable"):
         generator._is_excluded("apples")
@@ -959,13 +959,20 @@ def test_html_meta_description_used_in_incremental_build():
             )
 
 
-@pytest.fixture(params=["html", "dirhtml"])
+@pytest.fixture(
+    params=[("html", True), ("html", False), ("dirhtml", True), ("dirhtml", False)]
+)
 def sphinx_build_with_exclude(
     request,
 ) -> Generator[tuple[Sphinx, Path, Path], None, None]:
     """Build Sphinx docs with llms_txt_exclude set."""
+    builder, parallel = request.param
     yield from _build_sphinx(
-        request.param, {"llms_txt_exclude": ["apples", "nested/**"]}
+        builder,
+        {
+            "llms_txt_build_parallel": parallel,
+            "llms_txt_exclude": ["apples", "nested/**"],
+        },
     )
 
 
@@ -984,6 +991,7 @@ def test_excluded_documents_not_in_llms_txt(sphinx_build_with_exclude):
     content = llms_txt.read_text()
 
     assert _APPLES_BODY_TEXT not in content
+    assert _NESTED_BODY_TEXT not in content
     # Non-excluded documents are still listed
     assert "test" in content
 
@@ -1013,6 +1021,23 @@ def test_excluded_documents_still_have_markdown_files(sphinx_build_with_exclude)
 
     assert_file_exists_with_content(apples_md)
     assert_file_exists_with_content(nested_md)
+
+
+def test_excluded_override_source_raises_error():
+    """An override source must not bypass llms_txt_exclude."""
+    with pytest.raises(ExtensionError, match="matches llms_txt_exclude"):
+        list(
+            _build_sphinx(
+                "html",
+                {
+                    "llms_txt_build_parallel": False,
+                    "llms_txt_exclude": ["apples"],
+                    "llms_txt_override_source": "apples",
+                },
+            )
+        )
+
+
 def test_confdir_outside_srcdir():
     """The markdown sub-build must honor a configuration directory that does
     not live in the source directory (sphinx-build -c option)."""

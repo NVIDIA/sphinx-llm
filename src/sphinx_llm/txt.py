@@ -347,6 +347,9 @@ class MarkdownGenerator:
             )
         if not isinstance(exclude_patterns, Iterable):
             raise ExtensionError("llms_txt_exclude must be an iterable of strings")
+        exclude_patterns = list(exclude_patterns)
+        if not all(isinstance(pattern, str) for pattern in exclude_patterns):
+            raise ExtensionError("llms_txt_exclude must be an iterable of strings")
         return any(patmatch(docname, pattern) for pattern in exclude_patterns)
 
     def copy_markdown_files(self):
@@ -513,6 +516,11 @@ class MarkdownGenerator:
             raise ExtensionError(
                 f"llms_txt_override_source {configured_source!r} did not match a rendered "
                 "Sphinx document"
+            )
+        if self._is_excluded(docname):
+            raise ExtensionError(
+                f"llms_txt_override_source {configured_source!r} matches "
+                "llms_txt_exclude"
             )
 
         source_file = self._markdown_file_by_docname[docname]
