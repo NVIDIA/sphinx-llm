@@ -26,9 +26,11 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           git cat-file -e "refs/tags/${RELEASE_TAG}^{tag}"
+          tag_commit="$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
           git fetch origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          git merge-base --is-ancestor "$tag_commit" origin/main
 
   publish-release:
     name: Publish GitHub release
