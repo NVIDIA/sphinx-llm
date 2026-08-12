@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, metadata
@@ -26,6 +27,7 @@ import docutils.nodes
 from sphinx.application import Sphinx
 from sphinx.errors import ExtensionError
 from sphinx.util import logging
+from sphinx.util.matching import patmatch
 
 from .markdown_builder import (
     LINK_TARGETS_FILENAME,
@@ -336,11 +338,26 @@ class MarkdownGenerator:
             # Other builders (html) use simpler path structure
             return self._get_html_targets(rel_path, base_name, new_name)
 
+    def _is_excluded(self, docname: str) -> bool:
+        """Check whether a document is excluded from llms.txt and llms-full.txt."""
+        exclude_patterns = getattr(self.app.config, "llms_txt_exclude", [])
+        if exclude_patterns is None or isinstance(exclude_patterns, str):
+            raise ExtensionError(
+                "llms_txt_exclude must be an iterable of strings, not None or a string"
+            )
+        if not isinstance(exclude_patterns, Iterable):
+            raise ExtensionError("llms_txt_exclude must be an iterable of strings")
+        exclude_patterns = list(exclude_patterns)
+        if not all(isinstance(pattern, str) for pattern in exclude_patterns):
+            raise ExtensionError("llms_txt_exclude must be an iterable of strings")
+        return any(patmatch(docname, pattern) for pattern in exclude_patterns)
+
     def copy_markdown_files(self):
         """Copy markdown files from build directory to output directory."""
         md_files = list(self.md_build_dir.rglob("*.md"))
         self.generated_markdown_files = []
         self._docname_by_output_file = {}
+        num_excluded = 0
         self._markdown_file_by_docname = {}
         link_targets_path = self.md_build_dir / LINK_TARGETS_FILENAME
         self._link_target_by_token = json.loads(
@@ -367,11 +384,22 @@ class MarkdownGenerator:
                     encoding="utf-8",
                 )
 
+            # Documents matching one of the llms_txt_exclude patterns still
+            # get their individual markdown files (copied above) but are left
+            # out of llms.txt and llms-full.txt.
+            if self._is_excluded(docname):
+                num_excluded += 1
+                continue
+
             # Only add the primary target to avoid duplicates in llms-full.txt
             self.generated_markdown_files.append(primary_target)
             self._docname_by_output_file[primary_target] = docname
 
         logger.info(f"Generated {len(self.generated_markdown_files)} context files")
+        if num_excluded:
+            logger.info(
+                f"Excluded {num_excluded} documents from llms.txt and llms-full.txt"
+            )
 
     def _target_paths_for_docname(
         self, docname: str
@@ -488,6 +516,11 @@ class MarkdownGenerator:
             raise ExtensionError(
                 f"llms_txt_override_source {configured_source!r} did not match a rendered "
                 "Sphinx document"
+            )
+        if self._is_excluded(docname):
+            raise ExtensionError(
+                f"llms_txt_override_source {configured_source!r} matches "
+                "llms_txt_exclude"
             )
 
         source_file = self._markdown_file_by_docname[docname]
@@ -1036,6 +1069,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_build_parallel", True, "env")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", True, "env")
+    app.add_config_value("llms_txt_exclude", [], "env")
     app.add_config_value("llms_txt_override_source", "", "env")
     generator = MarkdownGenerator(app)
     generator.setup()
