@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 import docutils.nodes
 import pytest
+from httpx import Request
+from openai import APIConnectionError
 from sphinx.errors import ExtensionError
 
 from sphinx_llm.tests.test_txt import (
@@ -273,7 +275,10 @@ def test_provider_failure_is_redacted(monkeypatch, tmp_path):
     generator, markdown_file = _generator(tmp_path)
     with patch(
         "sphinx_llm.summary.summarize_text",
-        side_effect=RuntimeError("request failed with top-secret"),
+        side_effect=APIConnectionError(
+            message="request failed with top-secret",
+            request=Request("POST", "https://example.com/v1/chat/completions"),
+        ),
     ):
         with pytest.raises(ExtensionError, match="page") as error:
             generator.get_page_description(markdown_file)
@@ -284,6 +289,18 @@ def test_provider_failure_is_redacted(monkeypatch, tmp_path):
         )
     )
     assert "top-secret" not in formatted
+
+
+def test_unexpected_provider_error_propagates(monkeypatch, tmp_path):
+    """Unexpected programming errors are not misreported as provider failures."""
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    generator, markdown_file = _generator(tmp_path)
+    with patch(
+        "sphinx_llm.summary.summarize_text",
+        side_effect=RuntimeError("unexpected failure"),
+    ):
+        with pytest.raises(RuntimeError, match="unexpected failure"):
+            generator.get_page_description(markdown_file)
 
 
 def test_unchanged_second_build_uses_cache_without_credentials(monkeypatch, tmp_path):
@@ -310,6 +327,22 @@ def test_api_key_rotation_does_not_invalidate_cache(monkeypatch, tmp_path):
 
     monkeypatch.setenv("TEST_API_KEY", "secret-two")
     second, second_markdown_file = _generator(tmp_path)
+    with patch("sphinx_llm.summary.summarize_text") as call:
+        assert second.get_page_description(second_markdown_file) == "Summary."
+    call.assert_not_called()
+
+
+def test_api_key_environment_name_does_not_invalidate_cache(monkeypatch, tmp_path):
+    """Credential variable names are excluded from the cache fingerprint."""
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    generator, markdown_file = _generator(tmp_path)
+    with patch("sphinx_llm.summary.summarize_text", return_value="Summary."):
+        assert generator.get_page_description(markdown_file) == "Summary."
+
+    monkeypatch.setenv("CI_API_KEY", "secret")
+    second, second_markdown_file = _generator(
+        tmp_path, llms_txt_summary_api_key_env="CI_API_KEY"
+    )
     with patch("sphinx_llm.summary.summarize_text") as call:
         assert second.get_page_description(second_markdown_file) == "Summary."
     call.assert_not_called()

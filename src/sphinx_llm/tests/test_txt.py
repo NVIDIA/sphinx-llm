@@ -194,12 +194,15 @@ def test_combine_builds_terminates_orphan_subprocess_on_exception(sphinx_build):
     process = MagicMock()
     process.poll.return_value = None
     generator.md_build_process = process
+    generator.md_build_dir = Path(app.outdir) / "_markdown_build_failure"
+    generator.md_build_dir.mkdir()
 
     generator.combine_builds(app, Exception("primary build failed"))
 
     process.terminate.assert_called_once_with()
     process.wait.assert_called_once_with(timeout=10)
     process.kill.assert_not_called()
+    assert not generator.md_build_dir.exists()
 
 
 def test_combine_builds_kills_unresponsive_subprocess_on_exception(sphinx_build):

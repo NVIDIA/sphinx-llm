@@ -137,19 +137,23 @@ class MarkdownGenerator:
         """Combine the markdown files into llms-full.txt and llms.txt and merge the build outputs together."""
         if exception:
             logger.warning("Skipping build combination due to build error")
-            # Don't leave a markdown build subprocess behind (parallel mode).
-            if self.md_build_process and self.md_build_process.poll() is None:
-                logger.info("Terminating markdown build subprocess...")
-                self.md_build_process.terminate()
-                try:
-                    self.md_build_process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    logger.warning(
-                        "Markdown build subprocess did not exit after terminate(); "
-                        "killing it"
-                    )
-                    self.md_build_process.kill()
-                    self.md_build_process.wait()
+            try:
+                # Don't leave a markdown build subprocess behind (parallel mode).
+                if self.md_build_process and self.md_build_process.poll() is None:
+                    logger.info("Terminating markdown build subprocess...")
+                    self.md_build_process.terminate()
+                    try:
+                        self.md_build_process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        logger.warning(
+                            "Markdown build subprocess did not exit after terminate(); "
+                            "killing it"
+                        )
+                        self.md_build_process.kill()
+                        self.md_build_process.wait()
+            finally:
+                if self.md_build_dir and self.md_build_dir.exists():
+                    shutil.rmtree(self.md_build_dir)
             return
 
         if not self.md_build_process:
@@ -909,7 +913,6 @@ class MarkdownGenerator:
     ) -> str:
         """Hash complete Markdown and all non-secret generation parameters."""
         settings = {
-            "api_key_env": options.api_key_env,
             "allow_insecure_auth": options.allow_insecure_auth,
             "base_url": options.base_url,
             "max_input_chars": options.max_input_chars,
@@ -973,6 +976,8 @@ class MarkdownGenerator:
         try:
             # Imported only for an enabled cache miss, keeping normal builds free
             # of the optional provider dependency.
+            from openai import APIError
+
             from .summary import summarize_text
 
             summary = " ".join(
@@ -987,6 +992,11 @@ class MarkdownGenerator:
                     allow_insecure_auth=options.allow_insecure_auth,
                 ).split()
             )
+        except ImportError:
+            raise ExtensionError(
+                "LLM summarization requires the optional generation dependencies. "
+                "Install them with 'pip install sphinx-llm[gen]'."
+            ) from None
         except MissingGenerationDependenciesError:
             raise ExtensionError(
                 "LLM summarization requires the optional generation dependencies. "
@@ -1010,7 +1020,7 @@ class MarkdownGenerator:
                 f"Failed to generate an llms.txt summary for document {docname!r}; "
                 "check the provider configuration and credentials"
             ) from None
-        except Exception:
+        except APIError:
             raise ExtensionError(
                 f"Failed to generate an llms.txt summary for document {docname!r}; "
                 "check the provider configuration and credentials"
