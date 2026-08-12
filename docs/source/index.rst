@@ -6,6 +6,9 @@
 Welcome to sphinx-llm's documentation!
 ======================================
 
+.. Keep this toctree intentionally non-alphabetical so the test suite exercises
+   generated navigation ordering.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:

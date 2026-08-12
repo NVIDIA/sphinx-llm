@@ -7,10 +7,14 @@ Tests for the sphinx_llm.txt module.
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 import tempfile
 from collections.abc import Generator
+from html.parser import HTMLParser
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, call, patch
 
 import docutils.nodes
 import pytest
@@ -18,6 +22,35 @@ from sphinx.application import Sphinx
 from sphinx.errors import ExtensionError
 
 from sphinx_llm.txt import MarkdownGenerator
+
+
+class _ToctreeLinkParser(HTMLParser):
+    """Collect links from toctree wrappers in generated HTML."""
+
+    def __init__(self):
+        super().__init__()
+        self._div_depth = 0
+        self._toctree_depth = None
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        if tag == "div":
+            self._div_depth += 1
+            classes = (attributes.get("class") or "").split()
+            if self._toctree_depth is None and "toctree-wrapper" in classes:
+                self._toctree_depth = self._div_depth
+        elif tag == "a" and self._toctree_depth is not None:
+            href = attributes.get("href")
+            if href:
+                self.links.append(href)
+
+    def handle_endtag(self, tag):
+        if tag != "div":
+            return
+        if self._toctree_depth == self._div_depth:
+            self._toctree_depth = None
+        self._div_depth -= 1
 
 
 def _build_sphinx(
@@ -88,11 +121,44 @@ def sphinx_build_with_suffix_mode_config(
     yield from _build_sphinx(builder, {"llms_txt_suffix_mode": suffix_mode})
 
 
+@pytest.fixture
+def llms_txt_override_build(
+    builder: str,
+    parallel: bool,
+    override_source: str,
+    suffix_mode: str | None,
+) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+    """Build docs with a custom llms.txt source and explicit build settings."""
+    overrides = {
+        "llms_txt_build_parallel": parallel,
+        "llms_txt_override_source": override_source,
+    }
+    if suffix_mode is not None:
+        overrides["llms_txt_suffix_mode"] = suffix_mode
+    yield from _build_sphinx(builder, overrides)
+
+
+@pytest.fixture
+def llms_txt_override_build_without_full() -> Generator[
+    tuple[Sphinx, Path, Path], None, None
+]:
+    """Build overridden llms.txt without generating llms-full.txt."""
+    yield from _build_sphinx(
+        "html",
+        {
+            "llms_txt_build_parallel": False,
+            "llms_txt_override_source": "index.rst",
+            "llms_txt_full_build": False,
+        },
+    )
+
+
 def test_markdown_generator_init(sphinx_build):
     """Test MarkdownGenerator initialization."""
     app, _, _ = sphinx_build
     generator = MarkdownGenerator(app)
     assert generator.app == app
+    assert generator.md_build_logfile is None
 
 
 def test_markdown_generator_setup(sphinx_build):
@@ -119,6 +185,48 @@ def test_combine_builds_with_exception(sphinx_build):
     app, _, _ = sphinx_build
     generator = MarkdownGenerator(app)
     generator.combine_builds(app, Exception("fail"))
+
+
+def test_combine_builds_terminates_orphan_subprocess_on_exception(sphinx_build):
+    """Test that a failed primary build terminates a running markdown sub-build."""
+    app, _, _ = sphinx_build
+    generator = MarkdownGenerator(app)
+    process = MagicMock()
+    process.poll.return_value = None
+    generator.md_build_process = process
+
+    generator.combine_builds(app, Exception("primary build failed"))
+
+    process.terminate.assert_called_once_with()
+    process.wait.assert_called_once_with(timeout=10)
+    process.kill.assert_not_called()
+
+
+def test_combine_builds_kills_unresponsive_subprocess_on_exception(sphinx_build):
+    """Test that an unresponsive markdown sub-build is killed and reaped."""
+    app, _, _ = sphinx_build
+    generator = MarkdownGenerator(app)
+    process = MagicMock()
+    process.poll.return_value = None
+    process.wait.side_effect = [subprocess.TimeoutExpired("sphinx", 10), None]
+    generator.md_build_process = process
+
+    generator.combine_builds(app, Exception("primary build failed"))
+
+    process.terminate.assert_called_once_with()
+    process.kill.assert_called_once_with()
+    assert process.wait.call_args_list == [call(timeout=10), call()]
+
+
+def test_build_markdown_files_skips_failed_primary_build(sphinx_build):
+    """Test that a failed primary build does not start a sequential sub-build."""
+    app, _, _ = sphinx_build
+    generator = MarkdownGenerator(app)
+
+    with patch("sphinx_llm.txt.subprocess.Popen") as popen:
+        generator.build_markdown_files(app, Exception("primary build failed"))
+
+    popen.assert_not_called()
 
 
 def test_rst_files_have_corresponding_output_files(sphinx_build):
@@ -160,6 +268,39 @@ def test_llms_txt_sitemap_links_exist(sphinx_build):
         # Limit the check to relative paths
         if not url.startswith(("http://", "https://")):
             assert_file_exists_with_content(build_dir / url)
+
+
+def test_llms_txt_sitemap_follows_toctree_order(sphinx_build):
+    """Test that pages in llms.txt follow the order in the HTML index."""
+    _, build_dir, _ = sphinx_build
+
+    parser = _ToctreeLinkParser()
+    parser.feed((build_dir / "index.html").read_text(encoding="utf-8"))
+
+    html_page_urls = []
+    for href in parser.links:
+        page_url = href.partition("#")[0]
+        if not page_url or page_url.startswith(("http://", "https://")):
+            continue
+        if page_url not in html_page_urls:
+            html_page_urls.append(page_url)
+
+    assert html_page_urls, "No page links found in the HTML toctree"
+
+    expected_markdown_urls = ["index.html.md"]
+    for page_url in html_page_urls:
+        if page_url.endswith("/"):
+            page_url = f"{page_url}index.html"
+        expected_markdown_urls.append(f"{page_url}.md")
+
+    content = (build_dir / "llms.txt").read_text(encoding="utf-8")
+    llms_page_urls = [
+        match.group(1)
+        for line in content.splitlines()
+        if (match := re.match(r"^- \[[^]]+\]\(([^)]+)\):", line))
+    ]
+
+    assert llms_page_urls[: len(expected_markdown_urls)] == expected_markdown_urls
 
 
 def test_llms_txt_does_not_use_anchor_tag_as_description(sphinx_build):
@@ -259,12 +400,6 @@ def test_dirhtml_suffix_mode_configuration(sphinx_build_with_suffix_mode_config)
         elif effective_mode == "auto":
             assert_file_exists_with_content(file_suffix_md)
             assert_file_exists_with_content(url_suffix_md)
-            # Verify content is the same (they should be copies)
-            assert file_suffix_md.read_text(
-                encoding="utf-8"
-            ) == url_suffix_md.read_text(encoding="utf-8"), (
-                f"Content mismatch between {file_suffix_md} and {url_suffix_md}"
-            )
 
     # Root index should always be generated regardless of suffix mode
     index_file_suffix_md = build_dir / "index.html.md"
@@ -283,6 +418,204 @@ def test_dirhtml_suffix_mode_configuration(sphinx_build_with_suffix_mode_config)
     elif effective_mode == "auto":
         assert_file_exists_with_content(index_file_suffix_md)
         assert_file_exists_with_content(index_url_suffix_md)
+
+
+def test_dirhtml_links_match_published_locations(tmp_path: Path):
+    source_dir = tmp_path / "source"
+    output_dir = tmp_path / "output"
+    guide_dir = source_dir / "guide"
+    guide_dir.mkdir(parents=True)
+
+    (source_dir / "conf.py").write_text(
+        'extensions = ["sphinx_llm.txt"]\n'
+        'project = "Link test"\n'
+        'root_doc = "index"\n'
+        "llms_txt_build_parallel = False\n"
+        'llms_txt_suffix_mode = "auto"\n'
+        "markdown_anchor_sections = True\n",
+        encoding="utf-8",
+    )
+    (source_dir / "index.rst").write_text(
+        "Index\n=====\n\n.. toctree::\n\n   guide/page\n   guide/target\n",
+        encoding="utf-8",
+    )
+    (guide_dir / "page.rst").write_text(
+        "Page\n"
+        "====\n\n"
+        "See :doc:`Target <target>`.\n\n"
+        ".. _page-details:\n\n"
+        "Details\n"
+        "-------\n\n"
+        "See :ref:`Details <page-details>`.\n\n"
+        "The URI ``sphinx-llm:example`` is literal content.\n\n"
+        ".. code-block:: text\n\n"
+        "   sphinx-llm:example\n\n"
+        "`Custom scheme <sphinx-llm:example>`_\n",
+        encoding="utf-8",
+    )
+    (guide_dir / "target.rst").write_text(
+        "Target\n======\n",
+        encoding="utf-8",
+    )
+
+    app = Sphinx(
+        srcdir=str(source_dir),
+        confdir=str(source_dir),
+        outdir=str(output_dir),
+        doctreedir=str(tmp_path / "doctrees"),
+        buildername="dirhtml",
+        warningiserror=False,
+        freshenv=True,
+    )
+    app.build()
+    assert "llms-markdown" not in app.registry.builders
+
+    file_suffix_page = (output_dir / "guide/page/index.html.md").read_text(
+        encoding="utf-8"
+    )
+    url_suffix_page = (output_dir / "guide/page.md").read_text(encoding="utf-8")
+    llms_full = (output_dir / "llms-full.txt").read_text(encoding="utf-8")
+
+    assert "[Target](../target/index.html.md)" in file_suffix_page
+    assert "[Details](#page-details)" in file_suffix_page
+    assert "[Target](target.md)" in url_suffix_page
+    assert "[Details](#page-details)" in url_suffix_page
+    assert "# guide/page/index.html.md" in llms_full
+    assert "[Target](guide/target/index.html.md)" in llms_full
+    assert "[Details](guide/page/index.html.md#page-details)" in llms_full
+    for content in (file_suffix_page, url_suffix_page, llms_full):
+        assert "`sphinx-llm:example`" in content
+        assert "[Custom scheme](sphinx-llm:example)" in content
+        assert "sphinx-llm:example\n```" in content
+        assert re.search(r"sphinx-llm:[0-9a-f]{32}", content) is None
+
+
+@pytest.mark.parametrize(
+    "parallel",
+    [
+        pytest.param(True, id="parallel"),
+        pytest.param(False, id="sequential"),
+    ],
+)
+@pytest.mark.parametrize(
+    (
+        "builder",
+        "override_source",
+        "suffix_mode",
+        "expected_page_paths",
+        "expected_link",
+    ),
+    [
+        pytest.param(
+            "html",
+            "index.rst",
+            None,
+            ("index.html.md", "test.html.md"),
+            "test.html.md",
+            id="html",
+        ),
+        pytest.param(
+            "dirhtml",
+            "index",
+            "auto",
+            ("index.html.md", "index.md", "test/index.html.md", "test.md"),
+            "test/index.html.md",
+            id="dirhtml-auto",
+        ),
+        pytest.param(
+            "dirhtml",
+            "index",
+            "both",
+            ("index.html.md", "index.md", "test/index.html.md", "test.md"),
+            "test/index.html.md",
+            id="dirhtml-both",
+        ),
+        pytest.param(
+            "dirhtml",
+            "index",
+            "file-suffix",
+            ("index.html.md", "test/index.html.md"),
+            "test/index.html.md",
+            id="dirhtml-file-suffix",
+        ),
+        pytest.param(
+            "dirhtml",
+            "index",
+            "url-suffix",
+            ("index.md", "test.md"),
+            "test.md",
+            id="dirhtml-url-suffix",
+        ),
+        pytest.param(
+            "dirhtml",
+            "index",
+            "replace",
+            ("index.md", "test/index.md"),
+            "test/index.md",
+            id="dirhtml-replace",
+        ),
+    ],
+)
+def test_llms_txt_override_source_preserves_other_outputs(
+    llms_txt_override_build,
+    expected_page_paths: tuple[str, ...],
+    expected_link: str,
+):
+    """A rendered custom source replaces only the generated llms.txt sitemap."""
+    _, output_dir, _ = llms_txt_override_build
+
+    llms_txt = (output_dir / "llms.txt").read_text(encoding="utf-8")
+    assert "# Welcome to sphinx-llm" in llms_txt
+    assert f"]({expected_link})" in llms_txt
+    assert "## Pages" not in llms_txt
+
+    for page_path in expected_page_paths:
+        assert_file_exists_with_content(output_dir / page_path)
+
+    llms_full = output_dir / "llms-full.txt"
+    assert_file_exists_with_content(llms_full)
+    assert "# Welcome to sphinx-llm" in llms_full.read_text(encoding="utf-8")
+
+
+def test_llms_txt_override_source_respects_full_build(
+    llms_txt_override_build_without_full,
+):
+    """A custom llms.txt does not force llms-full.txt generation."""
+    _, output_dir, _ = llms_txt_override_build_without_full
+
+    llms_txt = (output_dir / "llms.txt").read_text(encoding="utf-8")
+    assert "# Welcome to sphinx-llm" in llms_txt
+    assert "## Pages" not in llms_txt
+    assert not (output_dir / "llms-full.txt").exists()
+
+
+def test_missing_llms_txt_override_source_raises_error(tmp_path: Path):
+    """A configured source must identify a rendered Sphinx document."""
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "conf.py").write_text(
+        'extensions = ["sphinx_llm.txt"]\n'
+        'project = "Custom llms.txt test"\n'
+        "llms_txt_build_parallel = False\n"
+        'llms_txt_override_source = "missing.rst"\n',
+        encoding="utf-8",
+    )
+    (source_dir / "index.rst").write_text("Index\n=====\n", encoding="utf-8")
+
+    app = Sphinx(
+        srcdir=str(source_dir),
+        confdir=str(source_dir),
+        outdir=str(tmp_path / "output"),
+        doctreedir=str(tmp_path / "doctrees"),
+        buildername="html",
+        warningiserror=False,
+        freshenv=True,
+    )
+
+    with pytest.raises(
+        ExtensionError, match=r"llms_txt_override_source 'missing\.rst'"
+    ):
+        app.build()
 
 
 @pytest.mark.parametrize(
@@ -333,6 +666,16 @@ def test_invalid_suffix_mode_raises_error():
     """Test that invalid llms_txt_suffix_mode values raise an error."""
     with pytest.raises(ExtensionError, match="Invalid llms_txt_suffix_mode"):
         list(_build_sphinx("dirhtml", {"llms_txt_suffix_mode": "invalid-mode"}))
+
+
+@pytest.mark.parametrize("exclude_patterns", [None, "apples", ["**", None], [1]])
+def test_invalid_exclude_raises_error(exclude_patterns):
+    """Test that llms_txt_exclude must be an iterable of document patterns."""
+    generator = MarkdownGenerator(
+        SimpleNamespace(config=SimpleNamespace(llms_txt_exclude=exclude_patterns))
+    )
+    with pytest.raises(ExtensionError, match="llms_txt_exclude must be an iterable"):
+        generator._is_excluded("apples")
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
@@ -659,31 +1002,113 @@ def test_html_meta_description_used_in_incremental_build():
             )
 
 
-def test_markdown_build_skipped_when_primary_build_failed(sphinx_build):
-    """No markdown sub-build should be spawned from build-finished when the
-    primary build failed."""
-    app, _, _ = sphinx_build
-    generator = MarkdownGenerator(app)
-    generator.md_build_dir = Path(app.outdir) / "_markdown_build_test"
-    generator.parallel = False
+@pytest.fixture(
+    params=[("html", True), ("html", False), ("dirhtml", True), ("dirhtml", False)]
+)
+def sphinx_build_with_exclude(
+    request,
+) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+    """Build Sphinx docs with llms_txt_exclude set."""
+    builder, parallel = request.param
+    yield from _build_sphinx(
+        builder,
+        {
+            "llms_txt_build_parallel": parallel,
+            "llms_txt_exclude": ["apples", "nested/**"],
+        },
+    )
 
-    with patch("sphinx_llm.txt.subprocess.Popen") as mock_popen:
-        generator.build_markdown_files(app, Exception("primary build failed"))
 
-    mock_popen.assert_not_called()
-    assert generator.md_build_process is None
+# Body text unique to the excluded pages: unlike their titles (which other
+# pages may reference, e.g. in toctrees), these strings only ever appear in
+# the pages themselves.
+_APPLES_BODY_TEXT = "wonderful experience for both you and the pig"
+_NESTED_BODY_TEXT = "This is an example."
 
 
-def test_combine_builds_terminates_orphan_subprocess_on_exception(sphinx_build):
-    """A still-running markdown sub-build (parallel mode) must be reaped when
-    the primary build failed, not left behind as an orphan."""
-    app, _, _ = sphinx_build
-    generator = MarkdownGenerator(app)
-    mock_process = MagicMock()
-    mock_process.poll.return_value = None
-    generator.md_build_process = mock_process
+def test_excluded_documents_not_in_llms_txt(sphinx_build_with_exclude):
+    """Documents matching llms_txt_exclude must not be listed in llms.txt."""
+    _, build_dir, _ = sphinx_build_with_exclude
+    llms_txt = build_dir / "llms.txt"
+    assert_file_exists_with_content(llms_txt)
+    content = llms_txt.read_text()
 
-    generator.combine_builds(app, Exception("primary build failed"))
+    assert _APPLES_BODY_TEXT not in content
+    assert _NESTED_BODY_TEXT not in content
+    # Non-excluded documents are still listed
+    assert "test" in content
 
-    mock_process.terminate.assert_called_once()
-    mock_process.wait.assert_called_once()
+
+def test_excluded_documents_not_in_llms_full_txt(sphinx_build_with_exclude):
+    """Documents matching llms_txt_exclude must not be part of llms-full.txt."""
+    _, build_dir, _ = sphinx_build_with_exclude
+    llms_full = build_dir / "llms-full.txt"
+    assert_file_exists_with_content(llms_full)
+    content = llms_full.read_text()
+
+    assert _APPLES_BODY_TEXT not in content
+    assert _NESTED_BODY_TEXT not in content
+
+
+def test_excluded_documents_still_have_markdown_files(sphinx_build_with_exclude):
+    """Documents matching llms_txt_exclude still get their individual
+    markdown files."""
+    app, build_dir, _ = sphinx_build_with_exclude
+
+    if app.builder.name == "dirhtml":
+        apples_md = build_dir / "apples" / "index.html.md"
+        nested_md = build_dir / "nested" / "example" / "index.html.md"
+    else:
+        apples_md = build_dir / "apples.html.md"
+        nested_md = build_dir / "nested" / "example.html.md"
+
+    assert_file_exists_with_content(apples_md)
+    assert_file_exists_with_content(nested_md)
+
+
+def test_excluded_override_source_raises_error():
+    """An override source must not bypass llms_txt_exclude."""
+    with pytest.raises(ExtensionError, match="matches llms_txt_exclude"):
+        list(
+            _build_sphinx(
+                "html",
+                {
+                    "llms_txt_build_parallel": False,
+                    "llms_txt_exclude": ["apples"],
+                    "llms_txt_override_source": "apples",
+                },
+            )
+        )
+
+
+def test_confdir_outside_srcdir():
+    """The markdown sub-build must honor a configuration directory that does
+    not live in the source directory (sphinx-build -c option)."""
+    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        srcdir = temp_path / "source"
+        confdir = temp_path / "config"
+        build_dir = temp_path / "build"
+        doctree_dir = temp_path / "doctrees"
+
+        shutil.copytree(docs_source_dir, srcdir)
+        confdir.mkdir()
+        (srcdir / "conf.py").rename(confdir / "conf.py")
+
+        app = Sphinx(
+            srcdir=str(srcdir),
+            confdir=str(confdir),
+            outdir=str(build_dir),
+            doctreedir=str(doctree_dir),
+            buildername="html",
+            warningiserror=False,
+            freshenv=True,
+            confoverrides={"llms_txt_build_parallel": True},
+        )
+        app.build()
+
+        assert_file_exists_with_content(build_dir / "llms.txt")
+        assert_file_exists_with_content(build_dir / "llms-full.txt")
+        assert_file_exists_with_content(build_dir / "index.html.md")

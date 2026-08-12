@@ -1,7 +1,7 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository.
+This file provides guidance to coding agents working with code in this
+repository.
 
 ## Project Overview
 
@@ -15,6 +15,8 @@ serves two purposes:
    content during builds (e.g., the `docref` directive for page summaries)
 
 ## Development Commands
+
+Prefer using Git worktrees for development.
 
 ### Setup
 
@@ -39,6 +41,9 @@ uv run --with "sphinx>=7,<8" pytest src/sphinx_llm/tests/
 ### Linting and Formatting
 
 ```bash
+# Ensure pre-commit hooks are installed
+uv run pre-commit install
+
 # Run ruff linter with auto-fix
 uv run pre-commit run ruff --all-files
 
@@ -84,12 +89,17 @@ uv run --dev sphinx-build docs/source docs/build/html
 
 **`sphinx_llm.docref` (src/sphinx_llm/docref.py)**
 
-- Custom Sphinx directive extending `BaseAdmonition`
-- Generates LLM summaries of referenced documents using Ollama
-- Caches summaries using MD5 hash of document content
-- **Modifies source files in-place** to persist generated summaries (RST only currently)
-- Requires Ollama running at `OLLAMA_BASE_URL` (default: `http://localhost:11434`)
-- Default model: `llama3.2:3b`
+- Parses directives into pending nodes and collects unique requests in the Sphinx
+  environment
+- Applies authored directive and `html_meta` overrides before consulting the
+  generated-summary cache
+- Generates missing summaries at `env-updated` through the shared OpenAI-compatible
+  client and `llms_txt_summary_*` configuration without modifying source files
+- Stores requests and effective state in the Sphinx environment, persists generated
+  records in the shared versioned page-summary cache, and supports purge/merge
+- Writes `sphinx-llm-summaries.json` with effective summaries and provenance
+- Requires the `gen` dependencies and an explicitly configured model for cache
+  misses
 
 ## Test Structure
 
@@ -103,8 +113,9 @@ and `dirhtml` builders with parallel and sequential markdown building.
 ## Commit Requirements
 
 All commits by contributors who are not employed by NVIDIA must be signed off
-using `git commit -s` (Developer Certificate of Origin). Pre-commit hooks
-enforce:
+using `git commit -s` (Developer Certificate of Origin).
+
+Pre-commit hooks must be installed. They enforce:
 
 - Ruff formatting and linting
 - License header in all `.py` files (using `LICENSE_HEADER` file)
