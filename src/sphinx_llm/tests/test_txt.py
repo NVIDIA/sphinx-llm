@@ -11,6 +11,7 @@ import tempfile
 from collections.abc import Generator
 from html.parser import HTMLParser
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import docutils.nodes
@@ -620,6 +621,16 @@ def test_invalid_suffix_mode_raises_error():
     """Test that invalid llms_txt_suffix_mode values raise an error."""
     with pytest.raises(ExtensionError, match="Invalid llms_txt_suffix_mode"):
         list(_build_sphinx("dirhtml", {"llms_txt_suffix_mode": "invalid-mode"}))
+
+
+@pytest.mark.parametrize("exclude", [None, "apples"])
+def test_invalid_exclude_raises_error(exclude):
+    """Test that llms_txt_exclude must be an iterable of document patterns."""
+    generator = MarkdownGenerator(
+        SimpleNamespace(config=SimpleNamespace(llms_txt_exclude=exclude))
+    )
+    with pytest.raises(ExtensionError, match="llms_txt_exclude must be an iterable"):
+        generator._is_excluded("apples")
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])

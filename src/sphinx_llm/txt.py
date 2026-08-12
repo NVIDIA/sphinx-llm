@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterable
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, metadata
 from pathlib import Path
@@ -313,6 +314,12 @@ class MarkdownGenerator:
     def _is_excluded(self, docname: str) -> bool:
         """Check whether a document is excluded from llms.txt and llms-full.txt."""
         exclude_patterns = getattr(self.app.config, "llms_txt_exclude", [])
+        if exclude_patterns is None or isinstance(exclude_patterns, str):
+            raise ExtensionError(
+                "llms_txt_exclude must be an iterable of strings, not None or a string"
+            )
+        if not isinstance(exclude_patterns, Iterable):
+            raise ExtensionError("llms_txt_exclude must be an iterable of strings")
         return any(patmatch(docname, pattern) for pattern in exclude_patterns)
 
     def copy_markdown_files(self):
