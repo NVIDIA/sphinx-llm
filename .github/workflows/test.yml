@@ -21,22 +21,26 @@ jobs:
             sphinx-version: ">=7,<8"
           - python-version: "3.12"
             sphinx-version: ">=8,<9"
-          # Test each Python version against latest Sphinx
+          - python-version: "3.12"
+            sphinx-version: ">=9,<10"
+          # Test each remaining Python version against its latest compatible Sphinx
           - python-version: "3.9"
             sphinx-version: ">=7,<8"
           - python-version: "3.10"
             sphinx-version: ">=7,<8"
           - python-version: "3.11"
-            sphinx-version: ">=7,<8"
-          - python-version: "3.12"
-            sphinx-version: ">=7,<8"
+            sphinx-version: ">=8,<9"
+          - python-version: "3.13"
+            sphinx-version: ">=9,<10"
+          - python-version: "3.14"
+            sphinx-version: ">=9,<10"
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6.3.1
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           version: "latest"
           python-version: ${{ matrix.python-version }}
@@ -45,7 +49,7 @@ jobs:
         run: uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" pytest src/sphinx_llm/tests/ --cov=sphinx_llm --cov-report=xml
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v7.0.0
         with:
           file: ./coverage.xml
           flags: unittests
