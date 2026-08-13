@@ -31,7 +31,7 @@ categories:
   - title: "Continuous integration"
     label: "ci"
 
-change-template: "- $TITLE by @$AUTHOR in #$NUMBER"
+change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
 change-title-escapes: "\\<*_&"
 
 template: |
