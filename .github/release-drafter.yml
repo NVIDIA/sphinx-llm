@@ -1,0 +1,39 @@
+# Used by .github/workflows/release-drafter.yml and the release job in publish.yml.
+# The published release workflow overrides the draft "next" tag with the pushed tag.
+name-template: "Next Release"
+tag-template: "next"
+
+# Keep internal process labels out of public release notes by default.
+exclude-labels:
+  - "duplicate"
+  - "invalid"
+  - "question"
+  - "wontfix"
+  - "needs refinement"
+  - "good first issue"
+  - "good ai issue"
+  - "help wanted"
+
+categories:
+  - title: "🚨 Breaking changes"
+    label: "breaking"
+  - title: "Enhancements"
+    label: "enhancement"
+  - title: "Bug fixes"
+    label: "bug"
+  - title: "Documentation"
+    label: "documentation"
+  - title: "LLMS.txt support"
+    label: "llms.txt"
+  - title: "Docref support"
+    label: "docref"
+  - title: "Continuous integration"
+    label: "ci"
+
+change-template: "- $TITLE by @$AUTHOR in #$NUMBER"
+change-title-escapes: "\\<*_&"
+
+template: |
+  ## Changes
+
+  $CHANGES
