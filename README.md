@@ -320,8 +320,9 @@ Releases are automated via GitHub Actions and any maintainers with write
 access to the repository can create one in just a couple of steps. To create
 a new release:
 
-1. From `main`, create an annotated stable [EffVer](https://effver.org) tag with a `v`
-   prefix (for example, `v0.0.0`; prerelease tags do not publish a release):
+1. From `main`, create an annotated stable [EffVer](https://effver.org) tag
+   with a `v` prefix (for example, `v0.0.0`; prerelease tags do not publish a
+   release):
 
    ```console
    git tag -a v0.0.0 -m 'Version v0.0.0'
