@@ -7,6 +7,8 @@ This extension hooks into the Sphinx build process to create markdown versions
 of all documents using the sphinx_markdown_builder.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import os
@@ -21,7 +23,7 @@ from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, metadata
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import docutils.nodes
 from sphinx.application import Sphinx
@@ -81,8 +83,8 @@ class MarkdownGenerator:
         self.md_build_process = None
         self.md_build_logfile = None
         self.parallel = None
-        self._summary_cache: Optional[dict[str, dict[str, str]]] = None
-        self._loaded_summary_cache_path: Optional[Path] = None
+        self._summary_cache: dict[str, dict[str, str]] | None = None
+        self._loaded_summary_cache_path: Path | None = None
 
     def setup(self):
         """Set up the extension."""
@@ -133,7 +135,7 @@ class MarkdownGenerator:
         # Once the primary build is finished, combine the markdown files
         self.app.connect("build-finished", self.combine_builds, priority=101)
 
-    def combine_builds(self, app: Sphinx, exception: Union[Exception, None]):
+    def combine_builds(self, app: Sphinx, exception: Exception | None):
         """Combine the markdown files into llms-full.txt and llms.txt and merge the build outputs together."""
         if exception:
             logger.warning("Skipping build combination due to build error")
@@ -441,8 +443,8 @@ class MarkdownGenerator:
         self,
         content: str,
         source_docname: str,
-        source_target: Optional[Path],
-        target_layout: Optional[MarkdownLayout],
+        source_target: Path | None,
+        target_layout: MarkdownLayout | None,
     ) -> str:
         """Resolve document link tokens for one published location."""
 
@@ -888,7 +890,7 @@ class MarkdownGenerator:
             "version": SUMMARY_CACHE_VERSION,
             "summaries": self._load_summary_cache(),
         }
-        temporary_path: Optional[Path] = None
+        temporary_path: Path | None = None
         try:
             with tempfile.NamedTemporaryFile(
                 mode="w",
