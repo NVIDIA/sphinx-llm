@@ -7,6 +7,8 @@ This extension hooks into the Sphinx build process to create markdown versions
 of all documents using the sphinx_markdown_builder.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import os
@@ -21,7 +23,7 @@ from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, metadata
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import docutils.nodes
 from sphinx.application import Sphinx
@@ -81,8 +83,8 @@ class MarkdownGenerator:
         self.md_build_process = None
         self.md_build_logfile = None
         self.parallel = None
-        self._summary_cache: Optional[dict[str, dict[str, str]]] = None
-        self._loaded_summary_cache_path: Optional[Path] = None
+        self._summary_cache: dict[str, dict[str, str]] | None = None
+        self._loaded_summary_cache_path: Path | None = None
 
     def setup(self):
         """Set up the extension."""
@@ -133,10 +135,27 @@ class MarkdownGenerator:
         # Once the primary build is finished, combine the markdown files
         self.app.connect("build-finished", self.combine_builds, priority=101)
 
-    def combine_builds(self, app: Sphinx, exception: Union[Exception, None]):
+    def combine_builds(self, app: Sphinx, exception: Exception | None):
         """Combine the markdown files into llms-full.txt and llms.txt and merge the build outputs together."""
         if exception:
             logger.warning("Skipping build combination due to build error")
+            try:
+                # Don't leave a markdown build subprocess behind (parallel mode).
+                if self.md_build_process and self.md_build_process.poll() is None:
+                    logger.info("Terminating markdown build subprocess...")
+                    self.md_build_process.terminate()
+                    try:
+                        self.md_build_process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        logger.warning(
+                            "Markdown build subprocess did not exit after terminate(); "
+                            "killing it"
+                        )
+                        self.md_build_process.kill()
+                        self.md_build_process.wait()
+            finally:
+                if self.md_build_dir and self.md_build_dir.exists():
+                    shutil.rmtree(self.md_build_dir)
             return
 
         if not self.md_build_process:
@@ -176,7 +195,14 @@ class MarkdownGenerator:
             if self.md_build_dir.exists():
                 shutil.rmtree(self.md_build_dir)
 
-    def build_markdown_files(self, *_):
+    def build_markdown_files(
+        self, app: Sphinx | None = None, exception: Exception | None = None
+    ):
+        """Start the markdown sub-build unless the primary build failed."""
+        if exception is not None:
+            logger.info("Skipping markdown build because the primary build failed")
+            return
+
         # Create temporary markdown build directory
         self.md_build_dir.mkdir(exist_ok=True)
         self.md_build_logfile = tempfile.NamedTemporaryFile(
@@ -417,8 +443,8 @@ class MarkdownGenerator:
         self,
         content: str,
         source_docname: str,
-        source_target: Optional[Path],
-        target_layout: Optional[MarkdownLayout],
+        source_target: Path | None,
+        target_layout: MarkdownLayout | None,
     ) -> str:
         """Resolve document link tokens for one published location."""
 
@@ -864,7 +890,7 @@ class MarkdownGenerator:
             "version": SUMMARY_CACHE_VERSION,
             "summaries": self._load_summary_cache(),
         }
-        temporary_path: Optional[Path] = None
+        temporary_path: Path | None = None
         try:
             with tempfile.NamedTemporaryFile(
                 mode="w",
@@ -889,7 +915,6 @@ class MarkdownGenerator:
     ) -> str:
         """Hash complete Markdown and all non-secret generation parameters."""
         settings = {
-            "api_key_env": options.api_key_env,
             "allow_insecure_auth": options.allow_insecure_auth,
             "base_url": options.base_url,
             "max_input_chars": options.max_input_chars,
@@ -953,6 +978,8 @@ class MarkdownGenerator:
         try:
             # Imported only for an enabled cache miss, keeping normal builds free
             # of the optional provider dependency.
+            from openai import APIError
+
             from .summary import summarize_text
 
             summary = " ".join(
@@ -967,6 +994,11 @@ class MarkdownGenerator:
                     allow_insecure_auth=options.allow_insecure_auth,
                 ).split()
             )
+        except ImportError:
+            raise ExtensionError(
+                "LLM summarization requires the optional generation dependencies. "
+                "Install them with 'pip install sphinx-llm[gen]'."
+            ) from None
         except MissingGenerationDependenciesError:
             raise ExtensionError(
                 "LLM summarization requires the optional generation dependencies. "
@@ -990,7 +1022,7 @@ class MarkdownGenerator:
                 f"Failed to generate an llms.txt summary for document {docname!r}; "
                 "check the provider configuration and credentials"
             ) from None
-        except Exception:
+        except APIError:
             raise ExtensionError(
                 f"Failed to generate an llms.txt summary for document {docname!r}; "
                 "check the provider configuration and credentials"
