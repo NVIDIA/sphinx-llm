@@ -7,7 +7,7 @@ import sys
 import traceback
 from importlib import import_module
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
 import docutils.nodes
@@ -491,6 +491,9 @@ def test_page_summary_rejects_key_over_remote_plain_http(monkeypatch, tmp_path):
     generator, markdown_file = _generator(
         tmp_path, llms_txt_summary_base_url="http://models.example.com/v1"
     )
+    openai = ModuleType("openai")
+    openai.OpenAI = object
+    monkeypatch.setitem(sys.modules, "openai", openai)
     with patch("openai.OpenAI") as mock_openai:
         with pytest.raises(ExtensionError, match="use HTTPS") as error:
             generator.get_page_description(markdown_file)
