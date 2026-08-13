@@ -1,6 +1,7 @@
 name: Update release draft
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
