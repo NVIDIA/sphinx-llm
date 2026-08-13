@@ -29,16 +29,18 @@ gh issue view <issue-number> --repo NVIDIA/sphinx-llm
   `https://github.com/NVIDIA/sphinx-llm/issues/<issue-number>`
 - Extract the title, body, and labels
 
-### 2. Check for `ready` Label
+### 2. Check for a Readiness Label
 
 **IMPORTANT:** Before proceeding with implementation, check if the issue has
-the `ready` label.
+either the `ready` or `good ai issue` label. `good ai issue` is the project's
+label for issues that are well-defined enough to pass to a coding agent.
 
-- **If the `ready` label is present:** Proceed with implementation
-- **If the `ready` label is missing:** Stop and inform the user:
-  > "This issue does not have the `ready` label, which indicates it likely
-  > requires more discussion before implementation. Please ensure the issue has
-  > been discussed and approved by maintainers before proceeding."
+- **If either label is present:** Proceed with implementation
+- **If neither label is present:** Stop and inform the user:
+  > "This issue does not have a `ready` or `good ai issue` label, which
+  > indicates it likely requires more discussion before implementation. Please
+  > ensure the issue has been discussed and approved by maintainers before
+  > proceeding."
 
 ### 3. Test-Driven Development Workflow
 
@@ -100,8 +102,8 @@ You should:
 
 1. Run `gh issue view 42 --repo NVIDIA/sphinx-llm` (or use an available web
    browsing or fetching tool)
-2. Check for the `ready` label
-3. If ready, write tests in `src/sphinx_llm/tests/`
+2. Check for a `ready` or `good ai issue` label
+3. If either label is present, write tests in `src/sphinx_llm/tests/`
 4. Implement the feature
 5. Update docs in `docs/source/`
 6. Run tests and linting
