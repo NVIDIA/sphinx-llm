@@ -12,8 +12,6 @@ from unittest.mock import patch
 
 import docutils.nodes
 import pytest
-from httpx import Request
-from openai import APIConnectionError
 from sphinx.errors import ExtensionError
 
 from sphinx_llm.tests.test_txt import (
@@ -22,6 +20,24 @@ from sphinx_llm.tests.test_txt import (
     _get_html_meta_description,
 )
 from sphinx_llm.txt import MarkdownGenerator
+
+
+class _APIError(Exception):
+    """Stand-in for the optional provider SDK's base API error."""
+
+
+class _APIConnectionError(_APIError):
+    """Stand-in for the optional provider SDK's connection error."""
+
+
+@pytest.fixture(autouse=True)
+def mock_openai_module(monkeypatch):
+    """Provide the optional client module only for provider-mocked tests."""
+    openai = ModuleType("openai")
+    openai.APIError = _APIError
+    openai.APIConnectionError = _APIConnectionError
+    openai.OpenAI = object
+    monkeypatch.setitem(sys.modules, "openai", openai)
 
 
 def _generator(tmp_path: Path, **config_values) -> tuple[MarkdownGenerator, Path]:
@@ -275,10 +291,7 @@ def test_provider_failure_is_redacted(monkeypatch, tmp_path):
     generator, markdown_file = _generator(tmp_path)
     with patch(
         "sphinx_llm.summary.summarize_text",
-        side_effect=APIConnectionError(
-            message="request failed with top-secret",
-            request=Request("POST", "https://example.com/v1/chat/completions"),
-        ),
+        side_effect=_APIConnectionError("request failed with top-secret"),
     ):
         with pytest.raises(ExtensionError, match="page") as error:
             generator.get_page_description(markdown_file)
@@ -491,9 +504,6 @@ def test_page_summary_rejects_key_over_remote_plain_http(monkeypatch, tmp_path):
     generator, markdown_file = _generator(
         tmp_path, llms_txt_summary_base_url="http://models.example.com/v1"
     )
-    openai = ModuleType("openai")
-    openai.OpenAI = object
-    monkeypatch.setitem(sys.modules, "openai", openai)
     with patch("openai.OpenAI") as mock_openai:
         with pytest.raises(ExtensionError, match="use HTTPS") as error:
             generator.get_page_description(markdown_file)
