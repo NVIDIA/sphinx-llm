@@ -207,6 +207,56 @@ def test_override_precedence_and_disabled_fallback(
     assert "model" not in summary
 
 
+def test_docref_presentation_configuration_and_directive_precedence(tmp_path):
+    source_dir = _write_project(
+        tmp_path,
+        index=(
+            "Index\n=====\n\n"
+            ".. toctree::\n   :hidden:\n\n   target\n\n"
+            ".. docref:: target\n\n"
+            ".. docref:: target\n"
+            "   :title-prefix: Local <prefix>\n"
+            "   :visit-link-text: Local <link>\n"
+            "   :visit-link-class: local-link another-class\n\n"
+            ".. docref:: target\n"
+            "   :title-prefix:\n"
+            "   :visit-link-text:\n"
+            "   :visit-link-class:\n"
+        ),
+    )
+
+    _, output_dir, _ = _build(
+        source_dir,
+        confoverrides={
+            "llms_txt_docref_title_prefix": "Global prefix",
+            "llms_txt_docref_visit_link_text": "Global link",
+            "llms_txt_docref_visit_link_class": "global-link secondary",
+        },
+    )
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "Global prefix Target" in html
+    assert 'class="global-link secondary"' in html
+    assert ">Global link</a>" in html
+    assert "Local &lt;prefix&gt; Target" in html
+    assert 'class="local-link another-class"' in html
+    assert ">Local &lt;link&gt;</a>" in html
+    assert ">Target</p>" in html
+    assert 'href="target.html"></a>' in html
+    assert 'class="visit-link"' not in html
+
+
+def test_docref_presentation_defaults_remain_unchanged(tmp_path):
+    source_dir = _write_project(tmp_path, index=_automatic_index())
+
+    _, output_dir, _ = _build(source_dir)
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "See also: Target" in html
+    assert 'class="visit-link"' in html
+    assert ">Read more &gt;&gt;</a>" in html
+
+
 def test_incremental_cache_hit_and_target_content_invalidation(tmp_path, monkeypatch):
     source_dir = _write_project(tmp_path, index=_automatic_index())
     first_calls: list = []

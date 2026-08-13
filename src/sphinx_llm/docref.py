@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 REPORT_FILENAME = "sphinx-llm-summaries.json"
 ENV_VERSION = 1
 
+DEFAULT_TITLE_PREFIX = "See also:"
+DEFAULT_VISIT_LINK_TEXT = "Read more >>"
+DEFAULT_VISIT_LINK_CLASS = "visit-link"
+
 REQUESTS_ATTRIBUTE = "sphinx_llm_summary_requests"
 CACHE_ATTRIBUTE = "sphinx_llm_summary_cache"
 EFFECTIVE_ATTRIBUTE = "sphinx_llm_effective_summaries"
@@ -146,6 +150,9 @@ class Docref(SphinxDirective):
     option_spec = {
         "model": directives.unchanged,
         "hash": directives.unchanged,
+        "title-prefix": directives.unchanged,
+        "visit-link-text": directives.unchanged,
+        "visit-link-class": directives.unchanged,
     }
 
     def run(self) -> list[nodes.Node]:
@@ -179,6 +186,9 @@ class Docref(SphinxDirective):
             "body": body,
             "manual_override": bool(body) and not legacy_hash,
             "legacy_hash": legacy_hash,
+            "title_prefix": self.options.get("title-prefix"),
+            "visit_link_text": self.options.get("visit-link-text"),
+            "visit_link_class": self.options.get("visit-link-class"),
         }
         _requests(self.env)[request_id] = request
         pending["request_id"] = request_id
@@ -450,17 +460,32 @@ def _target_title(env, target: str) -> str:
     return target
 
 
-def _link_node(app: Sphinx, from_docname: str, target: str) -> paragraph | None:
+def _link_node(
+    app: Sphinx,
+    from_docname: str,
+    target: str,
+    *,
+    text: str = DEFAULT_VISIT_LINK_TEXT,
+    css_class: str = DEFAULT_VISIT_LINK_CLASS,
+) -> paragraph | None:
     try:
         refuri = app.builder.get_relative_uri(from_docname, target)
     except NoUri:
         return None
-    reference = nodes.reference("", "", Text("Read more >>"), refuri=refuri)
+    reference = nodes.reference("", "", Text(text), refuri=refuri)
     reference["internal"] = True
     wrapper = paragraph()
-    wrapper["classes"] = ["visit-link"]
+    wrapper["classes"] = css_class.split()
     wrapper += reference
     return wrapper
+
+
+def _presentation_value(app: Sphinx, request: dict[str, Any], name: str) -> str:
+    """Use an explicit directive option, falling back to the global setting."""
+    value = request[name]
+    if value is not None:
+        return value
+    return getattr(app.config, f"llms_txt_docref_{name}")
 
 
 def resolve_docrefs(app: Sphinx, doctree: nodes.document, docname: str) -> None:
@@ -472,7 +497,9 @@ def resolve_docrefs(app: Sphinx, doctree: nodes.document, docname: str) -> None:
         request = requests[request_id]
         selected = effective[request_id]
         target = request["target"]
-        title_text = f"See also: {_target_title(app.env, target)}"
+        title_prefix = _presentation_value(app, request, "title_prefix")
+        target_title = _target_title(app.env, target)
+        title_text = f"{title_prefix} {target_title}" if title_prefix else target_title
 
         rendered = admonition()
         rendered.source = pending.source
@@ -484,7 +511,13 @@ def resolve_docrefs(app: Sphinx, doctree: nodes.document, docname: str) -> None:
                 rendered += child.deepcopy()
         else:
             rendered += paragraph("", Text(selected["summary"]))
-        link = _link_node(app, docname, target)
+        link = _link_node(
+            app,
+            docname,
+            target,
+            text=_presentation_value(app, request, "visit_link_text"),
+            css_class=_presentation_value(app, request, "visit_link_class"),
+        )
         if link is not None:
             rendered += link
         pending.replace_self(rendered)
@@ -547,6 +580,13 @@ def setup(app: Sphinx) -> dict[str, Any]:
 
     # Keep the old dictionary registered for legacy configuration compatibility.
     app.add_config_value("sphinx_llm_options", {}, "env")
+    app.add_config_value("llms_txt_docref_title_prefix", DEFAULT_TITLE_PREFIX, "env")
+    app.add_config_value(
+        "llms_txt_docref_visit_link_text", DEFAULT_VISIT_LINK_TEXT, "env"
+    )
+    app.add_config_value(
+        "llms_txt_docref_visit_link_class", DEFAULT_VISIT_LINK_CLASS, "env"
+    )
 
     app.connect("env-purge-doc", purge_docref_data)
     app.connect("env-merge-info", merge_docref_data)
