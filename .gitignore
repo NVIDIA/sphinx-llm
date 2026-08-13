@@ -166,5 +166,6 @@ cython_debug/
 _version.py
 
 # Local agent settings
+.worktrees/
 .agents/settings.local.json
 AGENTS.local.md

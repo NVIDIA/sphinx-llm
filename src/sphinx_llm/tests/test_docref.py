@@ -7,6 +7,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
+import tempfile
 import time
 from io import StringIO
 from pathlib import Path
@@ -84,6 +86,62 @@ def _build(
     app.build()
     assert app.statuscode == 0, warning.getvalue()
     return app, output_dir, warning
+
+
+@pytest.fixture(
+    params=[("html", True), ("html", False), ("dirhtml", True), ("dirhtml", False)]
+)
+def docs_source_styling_build(request):
+    """Build the documentation fixture across builders and markdown modes."""
+    builder, parallel = request.param
+    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
+    warning = StringIO()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        source_dir = root / "source"
+        shutil.copytree(docs_source_dir, source_dir)
+        test_page = source_dir / "test.rst"
+        test_page.write_text(
+            test_page.read_text(encoding="utf-8")
+            + "\n"
+            + ".. docref:: apples\n"
+            + "   :style-title-prefix: Local <style>\n"
+            + "   :style-visit-link-text: Local <link>\n"
+            + "   :style-visit-link-class: local-style compact\n"
+            + "   :title-prefix: Ignored legacy title\n"
+            + "   :visit-link-text: Ignored legacy link\n"
+            + "   :visit-link-class: ignored-legacy\n\n"
+            + ".. docref:: apples\n"
+            + "   :title-prefix: Legacy style\n"
+            + "   :visit-link-text: Legacy link\n"
+            + "   :visit-link-class: legacy-style\n\n"
+            + ".. docref:: apples\n"
+            + "   :style-title-prefix:\n"
+            + "   :style-visit-link-text:\n"
+            + "   :style-visit-link-class:\n",
+            encoding="utf-8",
+        )
+        output_dir = root / "build"
+        app = Sphinx(
+            srcdir=str(source_dir),
+            confdir=str(source_dir),
+            outdir=str(output_dir),
+            doctreedir=str(root / "doctrees"),
+            buildername=builder,
+            confoverrides={
+                "llms_txt_build_parallel": parallel,
+                "llms_txt_docref_style_title_prefix": "Global style",
+                "llms_txt_docref_style_visit_link_text": "Global link",
+                "llms_txt_docref_style_visit_link_class": "global-style shared",
+            },
+            status=StringIO(),
+            warning=warning,
+            warningiserror=False,
+            freshenv=True,
+        )
+        app.build()
+        assert app.statuscode == 0, warning.getvalue()
+        yield app, output_dir, warning
 
 
 def _automatic_index(*, references: int = 1) -> str:
@@ -205,6 +263,170 @@ def test_override_precedence_and_disabled_fallback(
     assert summary["origin"] == origin
     assert "provider" not in summary
     assert "model" not in summary
+
+
+def test_docref_styling_configuration_and_directive_precedence(tmp_path):
+    source_dir = _write_project(
+        tmp_path,
+        index=(
+            "Index\n=====\n\n"
+            ".. toctree::\n   :hidden:\n\n   target\n\n"
+            ".. docref:: target\n\n"
+            ".. docref:: target\n"
+            "   :style-title-prefix: Local <prefix>\n"
+            "   :style-visit-link-text: Local <link>\n"
+            "   :style-visit-link-class: local-link another-class\n"
+            "   :title-prefix: Ignored legacy prefix\n"
+            "   :visit-link-text: Ignored legacy link\n"
+            "   :visit-link-class: ignored-legacy-class\n\n"
+            ".. docref:: target\n"
+            "   :style-title-prefix:\n"
+            "   :style-visit-link-text:\n"
+            "   :style-visit-link-class:\n"
+        ),
+    )
+
+    _, output_dir, warning = _build(
+        source_dir,
+        confoverrides={
+            "llms_txt_docref_style_title_prefix": "Global prefix",
+            "llms_txt_docref_style_visit_link_text": "Global link",
+            "llms_txt_docref_style_visit_link_class": "global-link secondary",
+        },
+    )
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "Global prefix Target" in html
+    assert 'class="global-link secondary"' in html
+    assert ">Global link</a>" in html
+    assert "Local &lt;prefix&gt; Target" in html
+    assert 'class="local-link another-class"' in html
+    assert ">Local &lt;link&gt;</a>" in html
+    assert "Ignored legacy" not in html
+    assert ">Target</p>" in html
+    assert 'href="target.html"></a>' in html
+    assert html.count('class="global-link secondary"') == 1
+    assert '<p><a class="reference internal" href="target.html"></a></p>' in html
+    assert "deprecated and ignored" in warning.getvalue()
+
+
+def test_docref_styling_defaults_remain_unchanged(tmp_path):
+    source_dir = _write_project(tmp_path, index=_automatic_index())
+
+    _, output_dir, _ = _build(source_dir)
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "See also: Target" in html
+    assert 'class="visit-link"' in html
+    assert ">Read more &gt;&gt;</a>" in html
+
+
+def test_docs_source_docref_styling_matrix(docs_source_styling_build):
+    """Exercise styling against the shipped documentation fixture."""
+    app, output_dir, warning = docs_source_styling_build
+    test_page = "test.html" if app.builder.name == "html" else "test/index.html"
+    html = (output_dir / test_page).read_text(encoding="utf-8")
+
+    assert "Global style Feeding Apples to a Friendly Pig" in html
+    assert 'class="global-style shared"' in html
+    assert ">Global link</a>" in html
+    assert "Local &lt;style&gt; Feeding Apples to a Friendly Pig" in html
+    assert 'class="local-style compact"' in html
+    assert ">Local &lt;link&gt;</a>" in html
+    assert "Ignored legacy" not in html
+    assert "Legacy style Feeding Apples to a Friendly Pig" in html
+    assert 'class="legacy-style"' in html
+    assert ">Legacy link</a>" in html
+    assert ">Feeding Apples to a Friendly Pig</p>" in html
+    apples_uri = app.builder.get_relative_uri("test", "apples")
+    assert f'<p><a class="reference internal" href="{apples_uri}"></a></p>' in html
+    assert "is deprecated" in warning.getvalue()
+    assert "deprecated and ignored" in warning.getvalue()
+    assert (output_dir / "llms.txt").is_file()
+    assert (output_dir / "llms-full.txt").is_file()
+    if app.builder.name == "html":
+        assert (output_dir / "test.html.md").is_file()
+        assert (output_dir / "apples.html.md").is_file()
+    else:
+        assert (output_dir / "test" / "index.html.md").is_file()
+        assert (output_dir / "test.md").is_file()
+        assert (output_dir / "apples" / "index.html.md").is_file()
+        assert (output_dir / "apples.md").is_file()
+
+
+def test_legacy_docref_styling_configuration_and_options_are_supported(tmp_path):
+    source_dir = _write_project(
+        tmp_path,
+        index=(
+            "Index\n=====\n\n"
+            ".. toctree::\n   :hidden:\n\n   target\n\n"
+            ".. docref:: target\n\n"
+            ".. docref:: target\n"
+            "   :title-prefix: Legacy local\n"
+            "   :visit-link-text: Legacy link\n"
+            "   :visit-link-class: legacy-link\n"
+        ),
+    )
+
+    _, output_dir, warning = _build(
+        source_dir,
+        confoverrides={
+            "llms_txt_docref_title_prefix": "Legacy global",
+            "llms_txt_docref_visit_link_text": "Legacy global link",
+            "llms_txt_docref_visit_link_class": "legacy-global-link",
+        },
+    )
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "Legacy global Target" in html
+    assert 'class="legacy-global-link"' in html
+    assert ">Legacy global link</a>" in html
+    assert "Legacy local Target" in html
+    assert 'class="legacy-link"' in html
+    assert ">Legacy link</a>" in html
+    assert "is deprecated" in warning.getvalue()
+
+
+def test_canonical_docref_styling_configuration_wins_over_legacy(tmp_path):
+    source_dir = _write_project(tmp_path, index=_automatic_index())
+
+    _, output_dir, warning = _build(
+        source_dir,
+        confoverrides={
+            "llms_txt_docref_style_title_prefix": "Canonical",
+            "llms_txt_docref_style_visit_link_text": "Canonical link",
+            "llms_txt_docref_style_visit_link_class": "canonical-link",
+            "llms_txt_docref_title_prefix": "Legacy",
+            "llms_txt_docref_visit_link_text": "Legacy link",
+            "llms_txt_docref_visit_link_class": "legacy-link",
+        },
+    )
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "Canonical Target" in html
+    assert 'class="canonical-link"' in html
+    assert ">Canonical link</a>" in html
+    assert "is deprecated" in warning.getvalue()
+
+
+def test_empty_global_docref_styling_values_are_not_replaced_by_defaults(tmp_path):
+    source_dir = _write_project(tmp_path, index=_automatic_index())
+
+    _, output_dir, _ = _build(
+        source_dir,
+        confoverrides={
+            "llms_txt_docref_style_title_prefix": "",
+            "llms_txt_docref_style_visit_link_text": "",
+            "llms_txt_docref_style_visit_link_class": "",
+        },
+    )
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "See also:" not in html
+    assert "Read more" not in html
+    assert 'class="visit-link"' not in html
+    assert ">Target</p>" in html
+    assert '<p><a class="reference internal" href="target.html"></a></p>' in html
 
 
 def test_incremental_cache_hit_and_target_content_invalidation(tmp_path, monkeypatch):
