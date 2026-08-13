@@ -13,6 +13,7 @@ exclude-labels:
   - "good first issue"
   - "good ai issue"
   - "help wanted"
+  - "hygiene"
 
 categories:
   - title: "🚨 Breaking changes"
