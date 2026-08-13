@@ -194,7 +194,7 @@ def test_override_precedence_and_disabled_fallback(
     calls: list = []
     monkeypatch.setattr(docref, "generate_summary", _fake_generator(calls))
 
-    _, output_dir, _ = _build(
+    _, output_dir, warning = _build(
         source_dir, confoverrides={"llms_txt_summary_enabled": enabled}
     )
 
@@ -207,7 +207,7 @@ def test_override_precedence_and_disabled_fallback(
     assert "model" not in summary
 
 
-def test_docref_presentation_configuration_and_directive_precedence(tmp_path):
+def test_docref_styling_configuration_and_directive_precedence(tmp_path):
     source_dir = _write_project(
         tmp_path,
         index=(
@@ -215,22 +215,25 @@ def test_docref_presentation_configuration_and_directive_precedence(tmp_path):
             ".. toctree::\n   :hidden:\n\n   target\n\n"
             ".. docref:: target\n\n"
             ".. docref:: target\n"
-            "   :title-prefix: Local <prefix>\n"
-            "   :visit-link-text: Local <link>\n"
-            "   :visit-link-class: local-link another-class\n\n"
+            "   :style-title-prefix: Local <prefix>\n"
+            "   :style-visit-link-text: Local <link>\n"
+            "   :style-visit-link-class: local-link another-class\n"
+            "   :title-prefix: Ignored legacy prefix\n"
+            "   :visit-link-text: Ignored legacy link\n"
+            "   :visit-link-class: ignored-legacy-class\n\n"
             ".. docref:: target\n"
-            "   :title-prefix:\n"
-            "   :visit-link-text:\n"
-            "   :visit-link-class:\n"
+            "   :style-title-prefix:\n"
+            "   :style-visit-link-text:\n"
+            "   :style-visit-link-class:\n"
         ),
     )
 
-    _, output_dir, _ = _build(
+    _, output_dir, warning = _build(
         source_dir,
         confoverrides={
-            "llms_txt_docref_title_prefix": "Global prefix",
-            "llms_txt_docref_visit_link_text": "Global link",
-            "llms_txt_docref_visit_link_class": "global-link secondary",
+            "llms_txt_docref_style_title_prefix": "Global prefix",
+            "llms_txt_docref_style_visit_link_text": "Global link",
+            "llms_txt_docref_style_visit_link_class": "global-link secondary",
         },
     )
 
@@ -241,12 +244,15 @@ def test_docref_presentation_configuration_and_directive_precedence(tmp_path):
     assert "Local &lt;prefix&gt; Target" in html
     assert 'class="local-link another-class"' in html
     assert ">Local &lt;link&gt;</a>" in html
+    assert "Ignored legacy" not in html
     assert ">Target</p>" in html
     assert 'href="target.html"></a>' in html
-    assert 'class="visit-link"' not in html
+    assert html.count('class="global-link secondary"') == 1
+    assert '<p><a class="reference internal" href="target.html"></a></p>' in html
+    assert "deprecated and ignored" in warning.getvalue()
 
 
-def test_docref_presentation_defaults_remain_unchanged(tmp_path):
+def test_docref_styling_defaults_remain_unchanged(tmp_path):
     source_dir = _write_project(tmp_path, index=_automatic_index())
 
     _, output_dir, _ = _build(source_dir)
@@ -255,6 +261,81 @@ def test_docref_presentation_defaults_remain_unchanged(tmp_path):
     assert "See also: Target" in html
     assert 'class="visit-link"' in html
     assert ">Read more &gt;&gt;</a>" in html
+
+
+def test_legacy_docref_styling_configuration_and_options_are_supported(tmp_path):
+    source_dir = _write_project(
+        tmp_path,
+        index=(
+            "Index\n=====\n\n"
+            ".. toctree::\n   :hidden:\n\n   target\n\n"
+            ".. docref:: target\n\n"
+            ".. docref:: target\n"
+            "   :title-prefix: Legacy local\n"
+            "   :visit-link-text: Legacy link\n"
+            "   :visit-link-class: legacy-link\n"
+        ),
+    )
+
+    _, output_dir, warning = _build(
+        source_dir,
+        confoverrides={
+            "llms_txt_docref_title_prefix": "Legacy global",
+            "llms_txt_docref_visit_link_text": "Legacy global link",
+            "llms_txt_docref_visit_link_class": "legacy-global-link",
+        },
+    )
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "Legacy global Target" in html
+    assert 'class="legacy-global-link"' in html
+    assert ">Legacy global link</a>" in html
+    assert "Legacy local Target" in html
+    assert 'class="legacy-link"' in html
+    assert ">Legacy link</a>" in html
+    assert "is deprecated" in warning.getvalue()
+
+
+def test_canonical_docref_styling_configuration_wins_over_legacy(tmp_path):
+    source_dir = _write_project(tmp_path, index=_automatic_index())
+
+    _, output_dir, warning = _build(
+        source_dir,
+        confoverrides={
+            "llms_txt_docref_style_title_prefix": "Canonical",
+            "llms_txt_docref_style_visit_link_text": "Canonical link",
+            "llms_txt_docref_style_visit_link_class": "canonical-link",
+            "llms_txt_docref_title_prefix": "Legacy",
+            "llms_txt_docref_visit_link_text": "Legacy link",
+            "llms_txt_docref_visit_link_class": "legacy-link",
+        },
+    )
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "Canonical Target" in html
+    assert 'class="canonical-link"' in html
+    assert ">Canonical link</a>" in html
+    assert "is deprecated" in warning.getvalue()
+
+
+def test_empty_global_docref_styling_values_are_not_replaced_by_defaults(tmp_path):
+    source_dir = _write_project(tmp_path, index=_automatic_index())
+
+    _, output_dir, _ = _build(
+        source_dir,
+        confoverrides={
+            "llms_txt_docref_style_title_prefix": "",
+            "llms_txt_docref_style_visit_link_text": "",
+            "llms_txt_docref_style_visit_link_class": "",
+        },
+    )
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "See also:" not in html
+    assert "Read more" not in html
+    assert 'class="visit-link"' not in html
+    assert ">Target</p>" in html
+    assert '<p><a class="reference internal" href="target.html"></a></p>' in html
 
 
 def test_incremental_cache_hit_and_target_content_invalidation(tmp_path, monkeypatch):

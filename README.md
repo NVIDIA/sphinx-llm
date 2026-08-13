@@ -282,6 +282,39 @@ directory. It lists each effective summary, its origin, target, consuming
 source locations, and generated-summary metadata without endpoints, API-key
 environment-variable names, or credentials.
 
+#### Docref styling
+
+By default, a `docref` title is prefixed with `See also:`, and its link uses
+the text `Read more >>` and the CSS class `visit-link`. Configure these global
+defaults in `conf.py`:
+
+```python
+llms_txt_docref_style_title_prefix = "Related:"
+llms_txt_docref_style_visit_link_text = "Visit page"
+llms_txt_docref_style_visit_link_class = "docref-link prominent"
+```
+
+Override any setting for one directive with `:style-title-prefix:`,
+`:style-visit-link-text:`, and `:style-visit-link-class:`. Directive options
+take precedence over the matching `conf.py` setting:
+
+```rst
+.. docref:: apples
+   :style-title-prefix: More about
+   :style-visit-link-text: Read the guide
+   :style-visit-link-class: docref-link compact
+```
+
+Set an option or configuration value to an empty string to render no title
+prefix, link text, or CSS class. Separate multiple CSS classes with whitespace.
+
+The original `:title-prefix:`, `:visit-link-text:`, and `:visit-link-class:`
+directive options, and the corresponding `llms_txt_docref_title_prefix`,
+`llms_txt_docref_visit_link_text`, and `llms_txt_docref_visit_link_class`
+configuration values, remain available as deprecated aliases. When a canonical
+and legacy form are both set for the same value, the canonical styling form
+wins.
+
 ## Building the docs
 
 Try it out yourself by building the example documentation.

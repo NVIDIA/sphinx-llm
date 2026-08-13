@@ -26,7 +26,7 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 
 REPORT_FILENAME = "sphinx-llm-summaries.json"
-ENV_VERSION = 1
+ENV_VERSION = 2
 
 DEFAULT_TITLE_PREFIX = "See also:"
 DEFAULT_VISIT_LINK_TEXT = "Read more >>"
@@ -35,6 +35,12 @@ DEFAULT_VISIT_LINK_CLASS = "visit-link"
 REQUESTS_ATTRIBUTE = "sphinx_llm_summary_requests"
 CACHE_ATTRIBUTE = "sphinx_llm_summary_cache"
 EFFECTIVE_ATTRIBUTE = "sphinx_llm_effective_summaries"
+
+LEGACY_STYLING_NAMES = {
+    "style_title_prefix": "title_prefix",
+    "style_visit_link_text": "visit_link_text",
+    "style_visit_link_class": "visit_link_class",
+}
 
 
 class DocrefNode(nodes.General, nodes.Element):
@@ -150,6 +156,9 @@ class Docref(SphinxDirective):
     option_spec = {
         "model": directives.unchanged,
         "hash": directives.unchanged,
+        "style-title-prefix": directives.unchanged,
+        "style-visit-link-text": directives.unchanged,
+        "style-visit-link-class": directives.unchanged,
         "title-prefix": directives.unchanged,
         "visit-link-text": directives.unchanged,
         "visit-link-class": directives.unchanged,
@@ -174,6 +183,21 @@ class Docref(SphinxDirective):
                 subtype="legacy_hash",
             )
 
+        for styling_name, legacy_name in LEGACY_STYLING_NAMES.items():
+            legacy_option = legacy_name.replace("_", "-")
+            canonical_option = styling_name.replace("style_", "style-").replace(
+                "_", "-"
+            )
+            if legacy_option in self.options and canonical_option in self.options:
+                logger.warning(
+                    ":%s: is deprecated and ignored because :%s: is set",
+                    legacy_option,
+                    canonical_option,
+                    location=(pending.source, pending.line),
+                    type="sphinx_llm",
+                    subtype="deprecated_docref_styling",
+                )
+
         request_id = f"{self.env.docname}:{self.env.new_serialno('docref')}"
         body = pending.astext().strip()
         request = {
@@ -186,6 +210,9 @@ class Docref(SphinxDirective):
             "body": body,
             "manual_override": bool(body) and not legacy_hash,
             "legacy_hash": legacy_hash,
+            "style_title_prefix": self.options.get("style-title-prefix"),
+            "style_visit_link_text": self.options.get("style-visit-link-text"),
+            "style_visit_link_class": self.options.get("style-visit-link-class"),
             "title_prefix": self.options.get("title-prefix"),
             "visit_link_text": self.options.get("visit-link-text"),
             "visit_link_class": self.options.get("visit-link-class"),
@@ -480,12 +507,40 @@ def _link_node(
     return wrapper
 
 
-def _presentation_value(app: Sphinx, request: dict[str, Any], name: str) -> str:
-    """Use an explicit directive option, falling back to the global setting."""
-    value = request[name]
+def _styling_value(app: Sphinx, request: dict[str, Any], name: str) -> str:
+    """Resolve canonical styling values, preserving deprecated aliases."""
+    value = request.get(name)
+    legacy_name = LEGACY_STYLING_NAMES[name]
+    legacy_value = request.get(legacy_name)
     if value is not None:
         return value
-    return getattr(app.config, f"llms_txt_docref_{name}")
+    if legacy_value is not None:
+        logger.warning(
+            ":%s: is deprecated; use :%s: instead",
+            legacy_name.replace("_", "-"),
+            name.replace("style_", "style-").replace("_", "-"),
+            type="sphinx_llm",
+            subtype="deprecated_docref_styling",
+        )
+        return legacy_value
+
+    config_name = f"llms_txt_docref_{name}"
+    legacy_config_name = f"llms_txt_docref_{legacy_name}"
+    raw_config = getattr(app.config, "_raw_config", {})
+    overrides = getattr(app.config, "overrides", {})
+    canonical_is_set = config_name in raw_config or config_name in overrides
+    legacy_is_set = legacy_config_name in raw_config or legacy_config_name in overrides
+    if legacy_is_set:
+        logger.warning(
+            "%s is deprecated; use %s instead",
+            legacy_config_name,
+            config_name,
+            type="sphinx_llm",
+            subtype="deprecated_docref_styling",
+        )
+        if not canonical_is_set:
+            return getattr(app.config, legacy_config_name)
+    return getattr(app.config, config_name)
 
 
 def resolve_docrefs(app: Sphinx, doctree: nodes.document, docname: str) -> None:
@@ -497,7 +552,7 @@ def resolve_docrefs(app: Sphinx, doctree: nodes.document, docname: str) -> None:
         request = requests[request_id]
         selected = effective[request_id]
         target = request["target"]
-        title_prefix = _presentation_value(app, request, "title_prefix")
+        title_prefix = _styling_value(app, request, "style_title_prefix")
         target_title = _target_title(app.env, target)
         title_text = f"{title_prefix} {target_title}" if title_prefix else target_title
 
@@ -515,8 +570,8 @@ def resolve_docrefs(app: Sphinx, doctree: nodes.document, docname: str) -> None:
             app,
             docname,
             target,
-            text=_presentation_value(app, request, "visit_link_text"),
-            css_class=_presentation_value(app, request, "visit_link_class"),
+            text=_styling_value(app, request, "style_visit_link_text"),
+            css_class=_styling_value(app, request, "style_visit_link_class"),
         )
         if link is not None:
             rendered += link
@@ -580,13 +635,18 @@ def setup(app: Sphinx) -> dict[str, Any]:
 
     # Keep the old dictionary registered for legacy configuration compatibility.
     app.add_config_value("sphinx_llm_options", {}, "env")
-    app.add_config_value("llms_txt_docref_title_prefix", DEFAULT_TITLE_PREFIX, "env")
     app.add_config_value(
-        "llms_txt_docref_visit_link_text", DEFAULT_VISIT_LINK_TEXT, "env"
+        "llms_txt_docref_style_title_prefix", DEFAULT_TITLE_PREFIX, "env"
     )
     app.add_config_value(
-        "llms_txt_docref_visit_link_class", DEFAULT_VISIT_LINK_CLASS, "env"
+        "llms_txt_docref_style_visit_link_text", DEFAULT_VISIT_LINK_TEXT, "env"
     )
+    app.add_config_value(
+        "llms_txt_docref_style_visit_link_class", DEFAULT_VISIT_LINK_CLASS, "env"
+    )
+    app.add_config_value("llms_txt_docref_title_prefix", None, "env")
+    app.add_config_value("llms_txt_docref_visit_link_text", None, "env")
+    app.add_config_value("llms_txt_docref_visit_link_class", None, "env")
 
     app.connect("env-purge-doc", purge_docref_data)
     app.connect("env-merge-info", merge_docref_data)
