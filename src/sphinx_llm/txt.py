@@ -35,6 +35,7 @@ from .markdown_builder import (
     LINK_TARGETS_FILENAME,
     LINK_TOKEN_PREFIX,
     LinkTarget,
+    MarkdownFriendlyNodesTransform,
     SphinxLlmMarkdownBuilder,
 )
 from .summary import DEFAULT_API_KEY_ENV
@@ -1096,6 +1097,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     if app.tags.has("sphinx_llm_markdown"):
         app.setup_extension("sphinx_markdown_builder")
         app.add_builder(SphinxLlmMarkdownBuilder)
+    app.add_post_transform(MarkdownFriendlyNodesTransform)
     app.add_config_value("llms_txt_enabled", True, "")
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
