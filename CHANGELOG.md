@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Convert node types `sphinx-markdown-builder` does not support (tip and
+  caution admonitions, generic admonitions, sidebars, figure captions and
+  legends, abbreviations) into markdown-friendly equivalents before writing,
+  so their content is no longer dropped from the markdown output.
+
 ### Changed
 
 - Reworked the `docref` directive around Sphinx's environment lifecycle,
