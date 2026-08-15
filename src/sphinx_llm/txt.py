@@ -226,6 +226,15 @@ class MarkdownGenerator:
                 str(self.md_build_dir),
             ]
 
+            # Propagate the tags of the primary build so that conditional
+            # content (e.g. ".. only::" directives) renders the same in the
+            # markdown output. This intentionally includes the dynamic tags
+            # derived from the primary builder (e.g. "html", "format_html"):
+            # the markdown output this way stays faithful to the HTML pages it
+            # complements.
+            for tag in self.app.tags:
+                sphinx_build_cmd += ["-t", tag]
+
             # When building sequentially we can reuse the doctree directory from the primary build
             # but in parallel builds these may clobber each other so we need to use a separate one
             if not self.parallel:
