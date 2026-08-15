@@ -2,13 +2,36 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the shared OpenAI-compatible summary client."""
 
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from sphinx.errors import ExtensionError
 
-from sphinx_llm.summary import SYSTEM_PROMPT, summarize_text
+from sphinx_llm.summary import (
+    SYSTEM_PROMPT,
+    MissingGenerationDependenciesError,
+    summarize_text,
+)
+
+
+@pytest.fixture(autouse=True)
+def mock_openai_module(monkeypatch):
+    """Provide the optional client module only for mocked-client unit tests."""
+    openai = ModuleType("openai")
+    openai.OpenAI = object
+    monkeypatch.setitem(sys.modules, "openai", openai)
+
+
+def test_summarize_text_reports_missing_generation_dependencies(monkeypatch):
+    """Missing optional provider dependencies produce actionable guidance."""
+    monkeypatch.setitem(sys.modules, "openai", None)
+
+    with pytest.raises(
+        MissingGenerationDependenciesError, match=r"pip install sphinx-llm\[gen\]"
+    ):
+        summarize_text("Page contents.", "test-model")
 
 
 def test_summarize_text_uses_openai_compatible_endpoint(monkeypatch):
