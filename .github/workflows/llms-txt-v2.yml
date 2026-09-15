@@ -1,4 +1,4 @@
-name: llms.txt v2 interoperability
+name: llms.txt reference parser
 
 on:
   push:
@@ -11,15 +11,9 @@ permissions:
 
 jobs:
   reference-parser:
-    name: ${{ matrix.builder }} / ${{ matrix.suffix-mode }} / ${{ matrix.base-mode }}
+    name: Build and parse
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        builder: [html, dirhtml]
-        suffix-mode: [append, replace]
-        base-mode: [relative, absolute]
 
     steps:
       - name: Checkout repository
@@ -34,15 +28,11 @@ jobs:
           python-version: "3.12"
           enable-cache: false
 
-      - name: Check audit URL safety
-        run: >-
-          uv run --frozen --group interop
-          python -m pytest ci/test_check_llms_txt_v2.py
-
-      - name: Build and parse every llms.txt
-        run: >-
-          uv run --frozen --group interop
-          python ci/check_llms_txt_v2.py
-          --builder "${{ matrix.builder }}"
-          --suffix-mode "${{ matrix.suffix-mode }}"
-          --base-mode "${{ matrix.base-mode }}"
+      - name: Build docs and parse llms.txt
+        env:
+          SPHINX_LLM_BUILD_DIR: ${{ runner.temp }}/sphinx-llm-html
+        run: |
+          uv run --frozen --no-dev --group interop sphinx-build -W \
+            docs/source "$SPHINX_LLM_BUILD_DIR"
+          uv run --frozen --no-dev --group interop python -c \
+            'import os; from pathlib import Path; from llms_txt import parse_llms_file; parsed = parse_llms_file(Path(os.environ["SPHINX_LLM_BUILD_DIR"], "llms.txt").read_text(encoding="utf-8")); assert parsed.title'

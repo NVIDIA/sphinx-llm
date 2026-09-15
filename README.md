@@ -27,22 +27,17 @@ pip install sphinx-llm[gen]
 
 ### llms.txt Support
 
-The `sphinx_llm.txt` extension supports the
-[llms.txt v2 proposal](https://llmstxt.org/). It generates small Markdown
-indexes that agents can search before fetching only the relevant LLM-friendly
-pages on demand.
+The `sphinx_llm.txt` extension automatically generates markdown files for
+consumption by LLMs following the [llms.txt](https://llmstxt.org/) standard
+alongside HTML files during the Sphinx build process.
 
-The supported v2 surface includes the defined `llms.txt` document structure,
-per-page Markdown in append or replace URL form, scoped indexes at nested
-paths, and HTML `alternate` and `describedby` discovery links. When nested
-indexes overlap, each page discovers the most-specific index covering its URL
-path.
-
-`llms-full.txt` is not part of the v2 proposal. sphinx-llm can generate it as
-an opt-in, non-standard convenience for consumers that still want one
-concatenated file. Likewise, the `auto` and legacy suffix modes are
-sphinx-llm compatibility features; v2 defines the append and replace URL forms
-but does not require sites to publish both.
+The [llms.txt](https://llmstxt.org/) v2 standard describes a small Markdown
+index that agents can search before fetching the relevant LLM-friendly pages.
+This extension generates that `llms.txt` index and a Markdown version of each
+page. It can also generate `llms-full.txt` as an opt-in sphinx-llm convenience,
+but that concatenated file is optional in the llms.txt v2 standard. Each page
+can publish Markdown by appending `.md` to its HTML URL or by replacing the
+final `.html` extension with `.md`.
 
 To use the extension add it to your `conf.py`:
 
@@ -53,15 +48,6 @@ To use the extension add it to your `conf.py`:
 extensions = [
     "sphinx_llm.txt",
 ]
-
-# Publish one of the two URL forms defined by the v2 proposal.
-llms_txt_suffix_mode = "append"  # Or "replace"
-
-# Nested indexes are part of v2 path scoping and are enabled by default.
-llms_txt_nested_enabled = True
-
-# Non-standard convenience output; disabled by default.
-llms_txt_full_build = False
 ```
 
 When you build your documentation with `sphinx-build` (or `make html`), the
@@ -73,8 +59,8 @@ extension will:
 3. Merge the build outputs together
    - Markdown paths follow the configured append or replace layout
 4. Generate an index file for all the markdown files named `llms.txt`
-5. Optionally concatenate all generated markdown into the non-standard,
-   opt-in `llms-full.txt` convenience file when `llms_txt_full_build = True`
+5. Optionally concatenate all generated markdown into a single `llms-full.txt`
+   file when `llms_txt_full_build = True`
 
 For example, in the default `auto` mode, if your `html` builder generates:
 
@@ -89,8 +75,8 @@ The extension will also create:
 - `_build/html/apples.html.md`
 - `_build/html/apples.md`
 
-llms.txt v2 names the two supported URL forms after how they transform the
-HTML URL:
+llms.txt v2 names the two standard layouts after how they transform the HTML
+URL:
 
 - **append** adds `.md`. For the `html` builder, `page.html` becomes
   `page.html.md`. A `dirhtml` page is available both with and without a trailing
@@ -98,8 +84,8 @@ HTML URL:
 - **replace** replaces `.html` with `.md`: `page.html` becomes `page.md`, while
   a `dirhtml` URL such as `page/` becomes `page/index.md`.
 
-The default `auto` compatibility mode publishes both append and replace
-outputs. For a `dirhtml` build it creates:
+The default `auto` mode publishes both append and replace outputs. For a
+`dirhtml` build it creates:
 
 - `_build/dirhtml/llms.txt`
 - `_build/dirhtml/index.html.md`
@@ -116,8 +102,7 @@ configuration option:
 - `"replace"`: Publishes `page.md` for `html` or `page/index.md` for `dirhtml`.
 - `"auto"` (default): Publishes the union of append and replace outputs.
 
-The following values are sphinx-llm compatibility behavior, not v2
-requirements:
+Existing values remain supported for compatibility:
 
 - `"both"` is an exact alias for `"auto"`.
 - `"file-suffix"` keeps its previous single output: `page.html.md` for `html`
@@ -133,11 +118,10 @@ replace publishes `guide/index.md`.
 
 Each document has one canonical representation. Append and auto select the
 `.html.md` output. Replace selects the `.md` output that replaces `.html`.
-Each legacy compatibility mode selects its only output. `llms.txt`, the
-non-standard `llms-full.txt` convenience when enabled, generated Markdown
-links, and HTML discovery metadata all use this same target, so extra physical
-outputs never create duplicate entries. Links inside each physical output use
-that output's layout.
+The compatibility modes select their only output. `llms.txt`, `llms-full.txt`,
+generated Markdown links, and HTML discovery metadata all use this same target,
+so extra physical outputs never create duplicate entries. Links inside each
+physical output use that output's layout.
 
 Generated paths selected by the configured mode are reserved for sphinx-llm and
 are overwritten during a build. Other existing files are left unchanged; the
@@ -171,18 +155,6 @@ make every page link to the root `llms.txt`. Auxiliary HTML pages
 without a Markdown representation, such as the search and general-index pages,
 do not receive discovery links.
 
-The v2 proposal also permits equivalent HTTP `Link` response headers. A static
-Sphinx build cannot emit HTTP headers, so sphinx-llm emits the HTML elements
-above. Deployments may instead configure their web server or CDN, for example:
-
-```http
-Link: </docs/page.html.md>; rel="alternate"; type="text/markdown"
-Link: </docs/llms.txt>; rel="describedby"
-```
-
-Configure those headers at the serving layer; they are not generated as build
-artifacts.
-
 #### Configuration
 
 Supported `conf.py` configuration options for `sphinx_llm.txt`.
@@ -191,12 +163,11 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | **Name** | **Description** | **Type** | **Default** |
 | --- | --- | --- | --- |
 | `llms_txt_enabled` | Enable or disable all llms.txt artefact generation. Set to `False` to skip the entire extension without removing it from `conf.py`. Use `sphinx-build -D llms_txt_enabled=0` to skip on a per-build basis. | `bool` | `True` |
-| `llms_txt_nested_enabled` | Generate v2 scoped nested `llms.txt` files and discover the most-specific index covering each page URL. Set to `False` for root-only generation and discovery. | `bool` | `True` |
+| `llms_txt_nested_enabled` | Generate scoped nested `llms.txt` files and discover the most-specific index. Set to `False` for root-only generation and discovery. | `bool` | `True` |
 | `llms_txt_description` | Override the project description set in `llms.txt` | `str` | Uses the project description from `pyproject.toml` by default |
 | `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
-| `llms_txt_suffix_mode` | Markdown output mode. The v2 `"append"` form publishes `.html.md` and, for non-root `dirhtml` pages, the no-trailing-slash `.md` form. The v2 `"replace"` form replaces `.html` with `.md`. The default `"auto"` is a sphinx-llm compatibility convenience that publishes both and makes append canonical. Legacy compatibility values remain supported: `"both"` equals `"auto"`; `"file-suffix"` publishes only `.html.md`; `"url-suffix"` publishes only the previous `dirhtml` no-trailing-slash form and behaves like `"file-suffix"` for `html`. | `str` | `"auto"` |
-| `markdown_http_base` | Optional absolute HTTP(S) base for generated sitemap and page-Markdown URLs, such as `"https://docs.example.com/project/"`. An empty value uses links relative to each `llms.txt`. HTML discovery links remain relative to the published HTML URL. | `str` | `""` |
-| `llms_txt_full_build` | Generate the opt-in, non-standard sphinx-llm `llms-full.txt` convenience file and list it in generated `llms.txt` output. This file is not part of the v2 proposal. | `bool` | `False` |
+| `llms_txt_suffix_mode` | Markdown output mode. `"append"` publishes `.html.md` and, for non-root `dirhtml` pages, the no-trailing-slash `.md` form. `"replace"` replaces `.html` with `.md`. `"auto"` publishes both and makes append canonical. Compatibility values remain supported: `"both"` equals `"auto"`; `"file-suffix"` publishes only `.html.md`; `"url-suffix"` publishes only the previous `dirhtml` no-trailing-slash form and behaves like `"file-suffix"` for `html`. | `str` | `"auto"` |
+| `llms_txt_full_build` | Generate the optional, non-standard `llms-full.txt` convenience file and list it in generated `llms.txt` output. Set to `True` to opt in. | `bool` | `False` |
 | `llms_txt_exclude` | A list of Sphinx wildcard patterns matched against document names (not regular expressions or source paths) to exclude from `llms.txt` and `llms-full.txt`. `*` does not cross `/`, while `**` does; for example, `"reference/generated/**"`. The individual markdown files for excluded documents are still generated. | `list[str]` | `[]` |
 | `llms_txt_override_source` | Advanced option that overrides the automatically generated `llms.txt` sitemap with the rendered contents of a custom Sphinx source document. Specify a docname or source path relative to the source directory, such as `"llms-txt"` or `"llms-txt.rst"`. | `str` | `""` |
 | `llms_txt_summary_enabled` | Generate one-sentence page descriptions with an OpenAI-compatible provider. | `bool` | `False` |
@@ -309,14 +280,10 @@ llms_txt_override_source = "llms-txt.rst"
 
 The document is rendered with the other Markdown pages, then its rendered
 contents replace the automatically generated `llms.txt` sitemap. All per-page
-Markdown files are still generated normally, while the non-standard,
-opt-in `llms-full.txt` convenience remains controlled independently by
-`llms_txt_full_build` and is disabled by default. The custom source document
+Markdown files are still generated normally, while the optional `llms-full.txt`
+remains controlled independently by `llms_txt_full_build` and is disabled by
+default. The custom source document
 may be included in a toctree or marked with `:orphan:`.
-
-Generated nested indexes place their link to the root index in an `Optional`
-section. In v2, `Optional` is only a convention for secondary links; it has no
-required mechanical omit or context-expansion behavior.
 
 ### Docref
 
@@ -427,7 +394,7 @@ you need to make the right choice for your needs.
 <!-- markdownlint-disable MD013 -->
 | **Dimension**                           | [sphinx-llm](https://github.com/NVIDIA/sphinx-llm)                                                                                                                                          | [sphinx-llms-txt](https://github.com/jdillard/sphinx-llms-txt/)                                |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| ---------------------------------------------------------------------------------------------- |
-| **Purpose**                             | llms.txt v2 index and individual Markdown pages, with an opt-in, non-standard `llms-full.txt` convenience and LLM summarization capabilities.                                               | Simple `llms.txt` and `llms-full.txt` files creation.                                          |
+| **Purpose**                             | llms.txt v2 index and individual Markdown pages, with an optional non-standard `llms-full.txt` convenience and LLM summarization capabilities.                                              | Simple `llms.txt` and `llms-full.txt` files creation.                                          |
 | **Individual pages**                    | Outputs a Markdown-rendered version for each page.                                                                                                                                          | Source of each page is available at a Sphinx-specific `_sources` URL.                          |
 | **Supported docs input formats**        | Works with any Sphinx source format including RST, MyST, etc.                                                                                                                               | Works with any Sphinx source format including RST, MyST, etc.                                  |
 | **Supported `llms.txt` output formats** | Markdown; the opt-in `llms-full.txt` convenience is also Markdown.                                                                                                                          | `llm.txt` is markdown; `llms-full.txt` and pages pass through source format.                   |

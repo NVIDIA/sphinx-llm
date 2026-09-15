@@ -28,14 +28,6 @@ This includes:
 - A directive for summarising and referencing other pages in your documentation.
 """
 
-# llms.txt v2 supports "append" and "replace" Markdown URL forms. The default
-# "auto" is a sphinx-llm compatibility convenience that publishes both.
-llms_txt_suffix_mode = "auto"
-llms_txt_nested_enabled = True
-
-# llms-full.txt is a non-standard sphinx-llm convenience, not part of v2.
-llms_txt_full_build = False
-
 templates_path = ["_templates"]
 exclude_patterns = []
 
