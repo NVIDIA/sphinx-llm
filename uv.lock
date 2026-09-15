@@ -530,6 +530,15 @@ wheels = [
 ]
 
 [[package]]
+name = "fastcore"
+version = "2.2.23"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/05/64/4ffeb29f1a166e441eb6a0fda88a0a8d37387aba6c172656b3da3014dc09/fastcore-2.2.23.tar.gz", hash = "sha256:d8816e40e65795ada21c80468a9e4d8bc3ebf12303fb71514fce730cff6674ee", size = 145886, upload-time = "2026-09-09T02:45:55.393Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/17/705603af596691ed193537508c574dee31231d9aa0c99719dbaf54abdfa8/fastcore-2.2.23-py3-none-any.whl", hash = "sha256:7f65dbe5060c048bc973af041104eab9cb43b41e33a83c9e3d1918604a518290", size = 152517, upload-time = "2026-09-09T02:45:53.577Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -765,6 +774,20 @@ wheels = [
 ]
 
 [[package]]
+name = "llms-txt"
+version = "0.0.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastcore" },
+    { name = "httpx" },
+    { name = "mistletoe" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4d/16/24407cbd47d718c957f2c5f4bcca83c1a35919eaa20e8b9fb2fa223e4674/llms_txt-0.0.6.tar.gz", hash = "sha256:375c17408a8468639efba6fac22355b0ad3cbb4da20af2ffa2ee94a06669a157", size = 18258, upload-time = "2026-01-29T02:43:51.574Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/a1/c57dc309220cea5ace98624aa8d40dcd4dab5d0fdaae96ad1852f6a628a2/llms_txt-0.0.6-py3-none-any.whl", hash = "sha256:259f3bd10fb5d9756fe32571647c97f7bc9632c0185fd8388e986fdf5bdf4479", size = 14208, upload-time = "2026-01-29T02:43:50.581Z" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -858,6 +881,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cd/1b/a7782984844bd519ad4ffdbebbba2671ec5d0ebbeac34736c15fb86399e8/markupsafe-3.0.3-cp39-cp39-win32.whl", hash = "sha256:df2449253ef108a379b8b5d6b43f4b1a8e81a061d6537becd5582fba5f9196d7", size = 14566, upload-time = "2025-09-27T18:37:37.09Z" },
     { url = "https://files.pythonhosted.org/packages/18/1f/8d9c20e1c9440e215a44be5ab64359e207fcb4f675543f1cf9a2a7f648d0/markupsafe-3.0.3-cp39-cp39-win_amd64.whl", hash = "sha256:7c3fb7d25180895632e5d3148dbdc29ea38ccb7fd210aa27acbd1201a1902c6e", size = 15053, upload-time = "2025-09-27T18:37:38.054Z" },
     { url = "https://files.pythonhosted.org/packages/4e/d3/fe08482b5cd995033556d45041a4f4e76e7f0521112a9c9991d40d39825f/markupsafe-3.0.3-cp39-cp39-win_arm64.whl", hash = "sha256:38664109c14ffc9e7437e86b4dceb442b0096dfe3541d7864d9cbe1da4cf36c8", size = 13928, upload-time = "2025-09-27T18:37:39.037Z" },
+]
+
+[[package]]
+name = "mistletoe"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/17/ea/ee6e364d62197e427f1d260500eac659a8855df207a77f74451658d749f3/mistletoe-1.6.0.tar.gz", hash = "sha256:92f066c4720a25fa24bf260e6413702bbff3a5b8a93af314cb6cd8589726a8e1", size = 113730, upload-time = "2026-07-11T14:14:18.593Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/5c/3681c676d79726e3b8b72bc78e83ac472b0c96e3c99b28d72b9470f12170/mistletoe-1.6.0-py3-none-any.whl", hash = "sha256:53f9dfb859e9b2d309915d0f06c3876253d1e24d568d0b728a32679eb4f0a187", size = 55931, upload-time = "2026-07-11T14:14:17.056Z" },
 ]
 
 [[package]]
@@ -1402,6 +1434,9 @@ dev = [
     { name = "sphinx-autobuild", version = "2024.10.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "sphinx-autobuild", version = "2025.8.25", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
+interop = [
+    { name = "llms-txt", marker = "python_full_version >= '3.10'" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1417,6 +1452,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=4.1.0" },
     { name = "sphinx-autobuild", specifier = ">=2024.10.3" },
 ]
+interop = [{ name = "llms-txt", marker = "python_full_version >= '3.10'", specifier = "==0.0.6" }]
 
 [[package]]
 name = "sphinx-markdown-builder"
