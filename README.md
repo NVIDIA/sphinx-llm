@@ -170,6 +170,7 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_full_build` | Generate the optional, non-standard `llms-full.txt` convenience file and list it in generated `llms.txt` output. Set to `True` to opt in. | `bool` | `False` |
 | `llms_txt_exclude` | A list of Sphinx wildcard patterns matched against document names (not regular expressions or source paths) to exclude from `llms.txt` and `llms-full.txt`. `*` does not cross `/`, while `**` does; for example, `"reference/generated/**"`. The individual markdown files for excluded documents are still generated. | `list[str]` | `[]` |
 | `llms_txt_override_source` | Advanced option that overrides the automatically generated `llms.txt` sitemap with the rendered contents of a custom Sphinx source document. Specify a docname or source path relative to the source directory, such as `"llms-txt"` or `"llms-txt.rst"`. | `str` | `""` |
+| `llms_txt_suppress_unknown_node_warnings` | Suppress Markdown-builder warnings for all unknown node types (`True`) or for an exact, case-sensitive sequence of node class names such as `["caption", "desc_inline"]`. This is a diagnostics-only escape hatch: matching node subtrees are still omitted from Markdown. | `bool \| Sequence[str]` | `False` |
 | `llms_txt_summary_enabled` | Generate one-sentence page descriptions with an OpenAI-compatible provider. | `bool` | `False` |
 | `llms_txt_summary_provider` | Summary provider. The initial implementation supports `"openai-compatible"`. | `str` | `"openai-compatible"` |
 | `llms_txt_summary_model` | Model used for generated page descriptions. Required when generation is enabled. | `str` | `""` |
@@ -180,6 +181,13 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_summary_timeout` | Provider request timeout in seconds. | `int` | `60` |
 | `llms_txt_summary_cache_path` | JSON cache path. Relative paths use the Sphinx configuration directory; an empty value stores the cache under `app.doctreedir`. | `str` | `""` |
 <!-- markdownlint-enable MD013 -->
+
+`llms_txt_suppress_unknown_node_warnings` does not add support for unknown
+nodes. Suppressed nodes and all of their child content remain absent from the
+generated Markdown. Prefer adding a real visitor or upstream translator support
+when that content matters. Names are unqualified Python class names with exact,
+case-sensitive spelling and no surrounding whitespace. An empty sequence is
+equivalent to `False`.
 
 Each page's entry in `llms.txt` includes a short description. If a page defines
 an `html_meta` description, that non-empty author-provided value always wins and

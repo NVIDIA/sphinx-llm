@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Added `llms_txt_suppress_unknown_node_warnings` for opt-in suppression of all
+  or selected unknown-node diagnostics from generated Markdown while
+  continuing to omit unsupported node subtrees.
 - Added llms.txt v2 discovery links to source-backed HTML pages, advertising
   each page's canonical Markdown representation and its covering `llms.txt`.
 - Added the llms.txt v2 `append` and `replace` suffix modes. For `dirhtml`,
@@ -14,6 +17,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Surfaced unknown-node warnings from the spawned Markdown build in the primary
+  documentation build, including under warnings-as-errors.
 - Forwarded the primary build's tags (`sphinx-build -t` option, including the
   dynamic builder-derived tags such as `html`) to the markdown sub-build so
   that conditional content (e.g. `.. only::` directives) renders the same in
