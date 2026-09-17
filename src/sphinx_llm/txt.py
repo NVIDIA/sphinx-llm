@@ -101,6 +101,11 @@ def _closing_delimiter(value: str, start: int, opening: str, closing: str) -> in
         if _is_markdown_escape(value, index):
             index += 2
             continue
+        if character == "`":
+            end = _code_span_end(value, index)
+            if end != -1:
+                index = end
+                continue
         if character == opening:
             depth += 1
         elif character == closing:
@@ -154,10 +159,23 @@ def _candidate_is_markdown_link(
     )
 
 
+def _candidate_with_container_context(value: str, start: int, end: int) -> str:
+    """Remove repeated blockquote markers from candidate continuation lines."""
+    candidate = value[start:end]
+    line_start = value.rfind("\n", 0, start) + 1
+    container = re.match(r"(?: {0,3}>[ \t]?)+", value[line_start:start])
+    if container is None:
+        return candidate
+    prefix = container.group()
+    return candidate.replace(f"\n{prefix}", "\n")
+
+
 def _markdown_context(
     value: str,
 ) -> tuple[
-    dict[str, dict[str, Any]], dict[str, tuple[int, int]], list[tuple[int, int]]
+    dict[str, dict[str, Any]],
+    dict[str, list[tuple[int, int]]],
+    list[tuple[int, int]],
 ]:
     """Return references, definition ranges, and literal block ranges."""
     environment: dict[str, Any] = {}
@@ -168,10 +186,16 @@ def _markdown_context(
         offsets.append(offsets[-1] + len(line))
 
     definitions = {
-        label: (offsets[record["map"][0]], offsets[record["map"][1]])
+        label: [(offsets[record["map"][0]], offsets[record["map"][1]])]
         for label, record in references.items()
     }
-    protected_ranges = list(definitions.values())
+    for duplicate in environment.get("duplicate_refs", []):
+        definitions.setdefault(duplicate["label"], []).append(
+            (offsets[duplicate["map"][0]], offsets[duplicate["map"][1]])
+        )
+    protected_ranges = [
+        definition for ranges in definitions.values() for definition in ranges
+    ]
     protected_ranges.extend(
         (offsets[token.map[0]], offsets[token.map[1]])
         for token in tokens
@@ -214,7 +238,7 @@ def _strip_summary_links_inline(
             end = index + 1
             matched = False
             while (end := value.find(">", end)) != -1:
-                candidate = value[index : end + 1]
+                candidate = _candidate_with_container_context(value, index, end + 1)
                 if _candidate_is_markdown_link(candidate, references):
                     output.append(value[index + 1 : end])
                     index = end + 1
@@ -235,7 +259,9 @@ def _strip_summary_links_inline(
                 if suffix_start < len(value) and value[suffix_start] == "(":
                     end = suffix_start + 1
                     while (end := value.find(")", end)) != -1:
-                        candidate = value[index : end + 1]
+                        candidate = _candidate_with_container_context(
+                            value, index, end + 1
+                        )
                         if _candidate_is_markdown_link(
                             candidate, references, image=image
                         ):
@@ -290,9 +316,13 @@ def _strip_summary_links(value: str) -> str:
     def without_definitions(labels: set[str]) -> str:
         pieces = []
         start = 0
-        for label, definition in sorted(definitions.items(), key=lambda item: item[1]):
-            if label not in labels:
-                continue
+        selected = [
+            definition
+            for label, ranges in definitions.items()
+            if label in labels
+            for definition in ranges
+        ]
+        for definition in sorted(selected):
             pieces.append(value[start : definition[0]])
             start = definition[1]
         pieces.append(value[start:])

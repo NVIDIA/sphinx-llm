@@ -156,6 +156,18 @@ def test_generated_entries_round_trip_markdown_edges(
             "> [api]: python_api.html.md#callback-api\n> Read [Callback API][api].",
             "> Read Callback API.",
         ),
+        (
+            "Read [the `]` API](python_api.html.md#callback-api).",
+            "Read the `]` API.",
+        ),
+        (
+            '> [Callback API](python_api.html.md#callback-api "First\n> second")',
+            "> Callback API",
+        ),
+        (
+            "[Callback API][api]\n\n[api]: first.md\n[api]: second.md",
+            "Callback API",
+        ),
         ("A useful summary without links.", "A useful summary without links."),
     ],
 )
