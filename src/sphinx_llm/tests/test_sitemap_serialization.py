@@ -140,6 +140,14 @@ def test_generated_entries_round_trip_markdown_edges(
             "[events](events\\(old\\).md).",
             "Use callbacks and events.",
         ),
+        (
+            'Use [callbacks]( <callbacks.md> ) and [events](events.md "Event\nAPI").',
+            "Use callbacks and events.",
+        ),
+        (
+            "Read [Callback API][api].\n\n[api]:\n  python_api.html.md#callback-api",
+            "Read Callback API.",
+        ),
         ("A useful summary without links.", "A useful summary without links."),
     ],
 )
@@ -172,6 +180,10 @@ def test_generated_summary_strips_links_but_keeps_readable_text(
         "A [bracketed] note with an unresolved [reference][missing].",
         r"Escaped \[label](destination.md) and `[code](destination.md)`.",
         "Not links: [label](two words) or [label](<two<words>).",
+        "Plain text: [literal](not-a-link\\ space).",
+        "```\n[api]: callbacks.md\n```\nUnresolved [Callback API][api].",
+        "Unsafe URI <javascript:alert(1)> and invalid <a@b_c.example>.",
+        "Unused definition.\n\n[api]: callbacks.md",
     ],
 )
 def test_strip_summary_links_leaves_non_links_unchanged(summary: str) -> None:
@@ -186,6 +198,12 @@ def test_strip_summary_links_handles_nested_labels_and_multiple_links() -> None:
         '[examples](examples.md "Examples ) here").'
     )
     assert _strip_summary_links(summary) == ("See the **API** and diagram or examples.")
+
+
+def test_strip_summary_links_keeps_reference_context_in_nested_image() -> None:
+    """A linked reference image becomes its useful alt text."""
+    summary = "See [![diagram][img]](callbacks.md).\n\n[img]: callback.png"
+    assert _strip_summary_links(summary) == "See diagram."
 
 
 @pytest.mark.parametrize(
