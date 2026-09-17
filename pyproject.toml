@@ -22,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = ["sphinx-markdown-builder>=0.6.8", "sphinx>=5"]
+dependencies = ["markdown-it-py>=3", "sphinx-markdown-builder>=0.6.8", "sphinx>=5"]
 
 [project.optional-dependencies]
 gen = ["openai>=1.0.0"]

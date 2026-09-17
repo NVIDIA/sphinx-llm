@@ -148,6 +148,14 @@ def test_generated_entries_round_trip_markdown_edges(
             "Read [Callback API][api].\n\n[api]:\n  python_api.html.md#callback-api",
             "Read Callback API.",
         ),
+        (
+            "Use [Callback API]( <python_(v2.html.md> ).",
+            "Use Callback API.",
+        ),
+        (
+            "> [api]: python_api.html.md#callback-api\n> Read [Callback API][api].",
+            "> Read Callback API.",
+        ),
         ("A useful summary without links.", "A useful summary without links."),
     ],
 )
@@ -184,6 +192,8 @@ def test_generated_summary_strips_links_but_keeps_readable_text(
         "```\n[api]: callbacks.md\n```\nUnresolved [Callback API][api].",
         "Unsafe URI <javascript:alert(1)> and invalid <a@b_c.example>.",
         "Unused definition.\n\n[api]: callbacks.md",
+        '[literal](not-a-link.md\n\n "title")',
+        "    [literal](not-a-link.md)",
     ],
 )
 def test_strip_summary_links_leaves_non_links_unchanged(summary: str) -> None:
