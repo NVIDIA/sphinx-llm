@@ -28,19 +28,6 @@ from typing import Any
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import docutils.nodes
-from markdown_it import MarkdownIt
-from markdown_it.common.utils import normalizeReference
-from markdown_it.rules_inline import (
-    autolink as markdown_autolink_rule,
-)
-from markdown_it.rules_inline import (
-    image as markdown_image_rule,
-)
-from markdown_it.rules_inline import (
-    link as markdown_link_rule,
-)
-from markdown_it.rules_inline.state_inline import StateInline
-from markdown_it.token import Token
 from sphinx.application import Sphinx
 from sphinx.errors import ExtensionError
 from sphinx.util import logging
@@ -54,6 +41,7 @@ from .markdown_builder import (
     SphinxLlmMarkdownBuilder,
 )
 from .summary import DEFAULT_API_KEY_ENV
+from .summary_markdown import strip_summary_markup
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -72,9 +60,6 @@ SITEMAP_TEXT_TRANSLATION = str.maketrans(
         "_": "&#95;",
     }
 )
-SUMMARY_SOURCE_KEY = "sphinx_llm_summary_source"
-SUMMARY_RANGES_KEY = "sphinx_llm_summary_ranges"
-SUMMARY_REFERENCES_KEY = "sphinx_llm_summary_references"
 
 
 def _serialize_sitemap_text(value: str) -> str:
@@ -93,192 +78,6 @@ def _serialize_sitemap_text(value: str) -> str:
         else:
             escaped.append(character.translate(SITEMAP_TEXT_TRANSLATION))
     return "".join(escaped)
-
-
-def _record_reference_label(
-    state: StateInline, label_start: int, label_end: int, end: int
-) -> None:
-    """Record a reference label when the parser consumed reference syntax."""
-    suffix_start = label_end + 1
-    label = None
-    if end == suffix_start:
-        label = state.src[label_start:label_end]
-    elif suffix_start < len(state.src) and state.src[suffix_start] == "[":
-        reference_end = state.md.helpers.parseLinkLabel(state, suffix_start)
-        if reference_end >= 0 and end == reference_end + 1:
-            label = state.src[suffix_start + 1 : reference_end]
-            if not label:
-                label = state.src[label_start:label_end]
-    if label is not None:
-        state.env[SUMMARY_REFERENCES_KEY].add(normalizeReference(label))
-
-
-def _record_link(
-    state: StateInline, start: int, label_start: int, label_end: int
-) -> None:
-    """Record source ranges removed from one parser-recognized link or image."""
-    if state.src is not state.env.get(SUMMARY_SOURCE_KEY):
-        return
-    state.env[SUMMARY_RANGES_KEY].extend(((start, label_start), (label_end, state.pos)))
-    _record_reference_label(state, label_start, label_end, state.pos)
-
-
-def _tracked_markdown_link(state: StateInline, silent: bool) -> bool:
-    """Run MarkdownIt's link rule while capturing its exact source range."""
-    start = state.pos
-    label_end = state.md.helpers.parseLinkLabel(state, start, True)
-    result = markdown_link_rule(state, silent)
-    if result and not silent and label_end >= 0:
-        _record_link(state, start, start + 1, label_end)
-    return result
-
-
-def _tracked_markdown_image(state: StateInline, silent: bool) -> bool:
-    """Run MarkdownIt's image rule while capturing its exact source range."""
-    start = state.pos
-    label_end = state.md.helpers.parseLinkLabel(state, start + 1, False)
-    result = markdown_image_rule(state, silent)
-    if result and not silent and label_end >= 0:
-        _record_link(state, start, start + 2, label_end)
-    return result
-
-
-def _tracked_markdown_autolink(state: StateInline, silent: bool) -> bool:
-    """Run MarkdownIt's autolink rule while capturing its angle brackets."""
-    start = state.pos
-    result = markdown_autolink_rule(state, silent)
-    if result and not silent and state.src is state.env.get(SUMMARY_SOURCE_KEY):
-        state.env[SUMMARY_RANGES_KEY].extend(
-            ((start, start + 1), (state.pos - 1, state.pos))
-        )
-    return result
-
-
-MARKDOWN_PARSER = MarkdownIt("commonmark")
-MARKDOWN_PARSER.inline.ruler.at("link", _tracked_markdown_link)
-MARKDOWN_PARSER.inline.ruler.at("image", _tracked_markdown_image)
-MARKDOWN_PARSER.inline.ruler.at("autolink", _tracked_markdown_autolink)
-
-
-def _markdown_context(
-    value: str,
-) -> tuple[
-    dict[str, dict[str, Any]],
-    dict[str, list[tuple[int, int]]],
-    list[Token],
-    list[int],
-]:
-    """Return parser references, definitions, tokens, and line offsets."""
-    environment: dict[str, Any] = {}
-    tokens = MARKDOWN_PARSER.parse(value, environment)
-    references = environment.get("references", {})
-    offsets = [0]
-    for line in value.splitlines(keepends=True):
-        offsets.append(offsets[-1] + len(line))
-
-    definitions = {
-        label: [(offsets[record["map"][0]], offsets[record["map"][1]])]
-        for label, record in references.items()
-    }
-    for duplicate in environment.get("duplicate_refs", []):
-        definitions.setdefault(duplicate["label"], []).append(
-            (offsets[duplicate["map"][0]], offsets[duplicate["map"][1]])
-        )
-    return references, definitions, tokens, offsets
-
-
-def _inline_link_ranges(
-    value: str, references: dict[str, dict[str, Any]]
-) -> tuple[list[tuple[int, int]], set[str]]:
-    """Return link markup ranges reported by MarkdownIt's inline rules."""
-    ranges: list[tuple[int, int]] = []
-    used_references: set[str] = set()
-    environment = {
-        "references": references,
-        SUMMARY_SOURCE_KEY: value,
-        SUMMARY_RANGES_KEY: ranges,
-        SUMMARY_REFERENCES_KEY: used_references,
-    }
-    MARKDOWN_PARSER.inline.parse(value, MARKDOWN_PARSER, environment, [])
-    return ranges, used_references
-
-
-def _inline_source_positions(
-    value: str, token: Token, offsets: list[int]
-) -> list[int] | None:
-    """Map normalized inline content characters back to original source offsets."""
-    if token.map is None:
-        return None
-    source_lines = value.splitlines(keepends=True)
-    source_line = token.map[0]
-    positions = []
-    for content_line in token.content.splitlines(keepends=True):
-        has_newline = content_line.endswith("\n")
-        content = content_line[:-1] if has_newline else content_line
-        matched = False
-        while source_line < token.map[1]:
-            source = source_lines[source_line]
-            source_content = source.rstrip("\r\n")
-            column = source_content.rfind(content)
-            if column >= 0:
-                positions.extend(
-                    offsets[source_line] + column + i for i in range(len(content))
-                )
-                if has_newline:
-                    positions.append(offsets[source_line] + len(source) - 1)
-                source_line += 1
-                matched = True
-                break
-            source_line += 1
-        if not matched:
-            return None
-    return positions
-
-
-def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    """Merge overlapping source deletion ranges."""
-    merged: list[tuple[int, int]] = []
-    for start, end in sorted(ranges):
-        if merged and start <= merged[-1][1]:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-        else:
-            merged.append((start, end))
-    return merged
-
-
-def _strip_summary_links(value: str) -> str:
-    """Remove Markdown link destinations while retaining their readable labels."""
-    references, definitions, tokens, offsets = _markdown_context(value)
-    deletions: list[tuple[int, int]] = []
-    used_reference_labels: set[str] = set()
-    for token in tokens:
-        if token.type != "inline":
-            continue
-        inline_ranges, inline_references = _inline_link_ranges(
-            token.content, references
-        )
-        positions = _inline_source_positions(value, token, offsets)
-        if positions is None:
-            continue
-        for start, end in inline_ranges:
-            deletions.append((positions[start], positions[end - 1] + 1))
-        used_reference_labels.update(inline_references)
-
-    for label in used_reference_labels:
-        deletions.extend(definitions.get(label, []))
-    if not deletions:
-        return value
-
-    pieces = []
-    start = 0
-    for deletion_start, deletion_end in _merge_ranges(deletions):
-        pieces.append(value[start:deletion_start])
-        start = deletion_end
-    pieces.append(value[start:])
-    result = "".join(pieces)
-    if used_reference_labels:
-        result = result.rstrip("\r\n")
-    return result
 
 
 def _serialize_sitemap_destination(value: str) -> str:
@@ -314,7 +113,7 @@ def _serialize_sitemap_entry(
         f"({_serialize_sitemap_destination(destination)})"
     )
     if description is not None:
-        entry += f": {_serialize_sitemap_text(_strip_summary_links(description))}"
+        entry += f": {_serialize_sitemap_text(strip_summary_markup(description))}"
     return entry
 
 

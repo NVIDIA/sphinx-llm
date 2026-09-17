@@ -15,7 +15,6 @@ import pytest
 from sphinx_llm.txt import (
     MarkdownGenerator,
     _serialize_sitemap_entry,
-    _strip_summary_links,
 )
 
 
@@ -184,6 +183,11 @@ def test_generated_entries_round_trip_markdown_edges(
             "[Callback API][api]\n\n[api]: first.md\n[api]: second.md",
             "Callback API",
         ),
+        (
+            "#### NOTE\n\n"
+            "Read [Callback API](python_api.html.md#callback-api) for details.",
+            "Read Callback API for details.",
+        ),
         ("A useful summary without links.", "A useful summary without links."),
     ],
 )
@@ -207,44 +211,6 @@ def test_generated_summary_strips_links_but_keeps_readable_text(
     assert html.unescape(entry.desc) == expected
     assert "python_api.html.md#callback-api" not in entry.desc
     assert "images/callback.png" not in entry.desc
-
-
-@pytest.mark.parametrize(
-    "summary",
-    [
-        "A useful summary without links.",
-        "A [bracketed] note with an unresolved [reference][missing].",
-        r"Escaped \[label](destination.md) and `[code](destination.md)`.",
-        "Not links: [label](two words) or [label](<two<words>).",
-        "Plain text: [literal](not-a-link\\ space).",
-        "```\n[api]: callbacks.md\n```\nUnresolved [Callback API][api].",
-        "Unsafe URI <javascript:alert(1)> and invalid <a@b_c.example>.",
-        "Unused definition.\n\n[api]: callbacks.md",
-        '[literal](not-a-link.md\n\n "title")',
-        "    [literal](not-a-link.md)",
-        '> [literal](not-a-link.md "first\n- > second")',
-        '> [literal](not-a-link.md "first\n1. > second")',
-        '> [literal](not-a-link.md "first\n+ > second")',
-    ],
-)
-def test_strip_summary_links_leaves_non_links_unchanged(summary: str) -> None:
-    """Ordinary brackets, escapes, code, and plain prose are not corrupted."""
-    assert _strip_summary_links(summary) == summary
-
-
-def test_strip_summary_links_handles_nested_labels_and_multiple_links() -> None:
-    """Nested formatting and image alt text remain useful without destinations."""
-    summary = (
-        "See [the **API** and ![diagram](diagram.png)](guide_(v2).md) or "
-        '[examples](examples.md "Examples ) here").'
-    )
-    assert _strip_summary_links(summary) == ("See the **API** and diagram or examples.")
-
-
-def test_strip_summary_links_keeps_reference_context_in_nested_image() -> None:
-    """A linked reference image becomes its useful alt text."""
-    summary = "See [![diagram][img]](callbacks.md).\n\n[img]: callback.png"
-    assert _strip_summary_links(summary) == "See diagram."
 
 
 @pytest.mark.parametrize(
