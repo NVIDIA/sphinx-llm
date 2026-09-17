@@ -186,7 +186,7 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 nodes. Suppressed nodes and all of their child content remain absent from the
 generated Markdown. If you would like support for new node types, please make
 your request upstream to
-[sphinx-markdown-builder](https://github.com/clayrisser/sphinx-markdown-builder).
+[sphinx-markdown-builder](https://github.com/liran-funaro/sphinx-markdown-builder).
 Names are unqualified Python class names with exact, case-sensitive spelling and
 no surrounding whitespace. An empty sequence is equivalent to `False`.
 
