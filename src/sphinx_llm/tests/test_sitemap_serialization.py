@@ -12,7 +12,11 @@ from urllib.parse import quote, unquote, urlsplit
 
 import pytest
 
-from sphinx_llm.txt import MarkdownGenerator, _serialize_sitemap_entry
+from sphinx_llm.txt import (
+    MarkdownGenerator,
+    _serialize_sitemap_entry,
+    _strip_summary_links,
+)
 
 
 def _generator(tmp_path: Path, http_base: str = "") -> MarkdownGenerator:
@@ -60,7 +64,7 @@ def test_generated_entries_round_trip_markdown_edges(
         "then `code` &copy; <tag> *stars* _under_."
     )
     normalized_description = (
-        "Read [the guide](other.md): café\\ then `code` &copy; <tag> *stars* _under_."
+        "Read the guide: café\\ then `code` &copy; <tag> *stars* _under_."
     )
     generator._docname_by_output_file[artifact] = "edge"
     generator.extract_title_from_markdown = lambda _: title
@@ -82,6 +86,7 @@ def test_generated_entries_round_trip_markdown_edges(
 
     assert html.unescape(entry.title) == normalized_title
     assert html.unescape(entry.desc) == normalized_description
+    assert "other.md" not in entry.desc
     assert "\n" not in entry.title
     assert "\n" not in entry.desc
 
@@ -105,6 +110,82 @@ def test_generated_entries_round_trip_markdown_edges(
     assert "%2520base" not in entry.url
     assert resolved == artifact.resolve()
     assert resolved.is_file()
+
+
+@pytest.mark.parametrize(
+    ("description", "expected"),
+    [
+        (
+            "Read [Callback API](python_api.html.md#callback-api) for details.",
+            "Read Callback API for details.",
+        ),
+        (
+            "Read [the **Callback API**](python_api.html.md#callback-api) "
+            "and ![callback flow](images/callback.png).",
+            "Read the **Callback API** and callback flow.",
+        ),
+        (
+            "Compare [callbacks][callback-ref], [events][], and [the guide].\n\n"
+            "[callback-ref]: callbacks.md\n"
+            "[events]: events.md\n"
+            "[the guide]: guide.md",
+            "Compare callbacks, events, and the guide.",
+        ),
+        (
+            "Visit <https://example.test/docs> or <docs@example.test>.",
+            "Visit https://example.test/docs or docs@example.test.",
+        ),
+        (
+            'Use [callbacks](<python_(v2).html.md> "API") and '
+            "[events](events\\(old\\).md).",
+            "Use callbacks and events.",
+        ),
+        ("A useful summary without links.", "A useful summary without links."),
+    ],
+)
+def test_generated_summary_strips_links_but_keeps_readable_text(
+    tmp_path: Path, description: str, expected: str
+) -> None:
+    """Relocated summaries keep their prose without Markdown destinations."""
+    generator = _generator(tmp_path)
+    artifact = tmp_path / "python" / "callbacks.html.md"
+    artifact.parent.mkdir()
+    artifact.write_text("# Callbacks\n", encoding="utf-8")
+    generator._docname_by_output_file[artifact] = "python/callbacks"
+    generator.extract_title_from_markdown = lambda _: "Callbacks"
+    generator.get_page_description = lambda _: description
+
+    index = tmp_path / "llms.txt"
+    generator._write_sitemap(index, [artifact])
+
+    parse_llms_file = pytest.importorskip("llms_txt").parse_llms_file
+    entry = parse_llms_file(index.read_text(encoding="utf-8")).sections["Pages"][0]
+    assert html.unescape(entry.desc) == expected
+    assert "python_api.html.md#callback-api" not in entry.desc
+    assert "images/callback.png" not in entry.desc
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "A useful summary without links.",
+        "A [bracketed] note with an unresolved [reference][missing].",
+        r"Escaped \[label](destination.md) and `[code](destination.md)`.",
+        "Not links: [label](two words) or [label](<two<words>).",
+    ],
+)
+def test_strip_summary_links_leaves_non_links_unchanged(summary: str) -> None:
+    """Ordinary brackets, escapes, code, and plain prose are not corrupted."""
+    assert _strip_summary_links(summary) == summary
+
+
+def test_strip_summary_links_handles_nested_labels_and_multiple_links() -> None:
+    """Nested formatting and image alt text remain useful without destinations."""
+    summary = (
+        "See [the **API** and ![diagram](diagram.png)](guide_(v2).md) or "
+        '[examples](examples.md "Examples ) here").'
+    )
+    assert _strip_summary_links(summary) == ("See the **API** and diagram or examples.")
 
 
 @pytest.mark.parametrize(

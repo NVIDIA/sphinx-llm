@@ -59,6 +59,16 @@ SITEMAP_TEXT_TRANSLATION = str.maketrans(
         "_": "&#95;",
     }
 )
+REFERENCE_DEFINITION_PATTERN = re.compile(
+    r"^[ \t]{0,3}\[([^\]\n]+)\]:[ \t]*"
+    r"(?:<[^>\n]*>|(?:\\.|[^\s])+)"
+    r"(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^\n)]*\)))?"
+    r"[ \t]*(?:\r?\n|$)",
+    re.MULTILINE,
+)
+AUTOLINK_PATTERN = re.compile(
+    r"(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[^<>\s@]+)"
+)
 
 
 def _serialize_sitemap_text(value: str) -> str:
@@ -77,6 +87,207 @@ def _serialize_sitemap_text(value: str) -> str:
         else:
             escaped.append(character.translate(SITEMAP_TEXT_TRANSLATION))
     return "".join(escaped)
+
+
+def _normalize_reference_label(label: str) -> str:
+    """Normalize a Markdown reference label for matching."""
+    label = re.sub(r"\\([!\"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~])", r"\1", label)
+    return " ".join(label.split()).casefold()
+
+
+def _closing_delimiter(value: str, start: int, opening: str, closing: str) -> int:
+    """Find a balanced closing delimiter, ignoring backslash escapes."""
+    depth = 0
+    index = start
+    while index < len(value):
+        character = value[index]
+        if character == "\\" and index + 1 < len(value):
+            index += 2
+            continue
+        if character == opening:
+            depth += 1
+        elif character == closing:
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+    return -1
+
+
+def _code_span_end(value: str, start: int) -> int:
+    """Return the end of a matching Markdown code span, or ``-1``."""
+    marker_length = 1
+    while start + marker_length < len(value) and value[start + marker_length] == "`":
+        marker_length += 1
+
+    index = start + marker_length
+    while index < len(value):
+        if value[index] != "`":
+            index += 1
+            continue
+        run_length = 1
+        while index + run_length < len(value) and value[index + run_length] == "`":
+            run_length += 1
+        if run_length == marker_length:
+            return index + run_length
+        index += run_length
+    return -1
+
+
+def _inline_link_content_is_valid(content: str) -> bool:
+    """Return whether parenthesized content is a Markdown destination/title."""
+    index = 0
+    if content.startswith("<"):
+        index = 1
+        while index < len(content):
+            if content[index] == "\\" and index + 1 < len(content):
+                index += 2
+                continue
+            if content[index] == ">":
+                index += 1
+                break
+            if content[index] in "<>\r\n":
+                return False
+            index += 1
+        else:
+            return False
+    else:
+        depth = 0
+        while index < len(content) and not content[index].isspace():
+            if content[index] == "\\" and index + 1 < len(content):
+                index += 2
+                continue
+            if content[index] in "<>":
+                return False
+            if content[index] == "(":
+                depth += 1
+            elif content[index] == ")":
+                if depth == 0:
+                    return False
+                depth -= 1
+            index += 1
+        if depth:
+            return False
+
+    remainder = content[index:]
+    if not remainder:
+        return True
+    if not remainder[0].isspace():
+        return False
+    title = remainder.strip()
+    if not title:
+        return True
+    closing = {'"': '"', "'": "'", "(": ")"}.get(title[0])
+    if closing is None or title[-1] != closing:
+        return False
+    index = 1
+    while index < len(title) - 1:
+        if title[index] == "\\" and index + 1 < len(title) - 1:
+            index += 2
+            continue
+        if title[index] == closing or title[index] in "\r\n":
+            return False
+        index += 1
+    return True
+
+
+def _inline_link_end(value: str, start: int) -> int:
+    """Return the closing parenthesis of a valid inline Markdown link."""
+    depth = 1
+    quote = ""
+    angle_destination = False
+    index = start + 1
+    while index < len(value):
+        character = value[index]
+        if character == "\\" and index + 1 < len(value):
+            index += 2
+            continue
+        if quote:
+            if character == quote:
+                quote = ""
+            index += 1
+            continue
+        if angle_destination:
+            if character == ">":
+                angle_destination = False
+            index += 1
+            continue
+        if character == "<" and index == start + 1:
+            angle_destination = True
+        elif character in "\"'" and value[index - 1].isspace() and depth == 1:
+            quote = character
+        elif character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth == 0:
+                content = value[start + 1 : index]
+                return index if _inline_link_content_is_valid(content) else -1
+        index += 1
+    return -1
+
+
+def _strip_summary_links(value: str) -> str:
+    """Remove Markdown link destinations while retaining their readable labels."""
+    reference_labels = {
+        _normalize_reference_label(match.group(1))
+        for match in REFERENCE_DEFINITION_PATTERN.finditer(value)
+    }
+    if reference_labels:
+        value = REFERENCE_DEFINITION_PATTERN.sub("", value).rstrip("\r\n")
+
+    output = []
+    index = 0
+    while index < len(value):
+        if value[index] == "\\" and index + 1 < len(value):
+            output.append(value[index : index + 2])
+            index += 2
+            continue
+
+        if value[index] == "`":
+            end = _code_span_end(value, index)
+            if end != -1:
+                output.append(value[index:end])
+                index = end
+                continue
+
+        if value[index] == "<":
+            end = value.find(">", index + 1)
+            if end != -1:
+                label = value[index + 1 : end]
+                if AUTOLINK_PATTERN.fullmatch(label):
+                    output.append(label)
+                    index = end + 1
+                    continue
+
+        image = value.startswith("![", index)
+        if value[index] == "[" or image:
+            label_start = index + 2 if image else index + 1
+            label_end = _closing_delimiter(value, label_start - 1, "[", "]")
+            if label_end != -1:
+                label = value[label_start:label_end]
+                suffix_start = label_end + 1
+                suffix_end = -1
+                if suffix_start < len(value) and value[suffix_start] == "(":
+                    suffix_end = _inline_link_end(value, suffix_start)
+                elif suffix_start < len(value) and value[suffix_start] == "[":
+                    reference_end = _closing_delimiter(value, suffix_start, "[", "]")
+                    if reference_end != -1:
+                        reference = value[suffix_start + 1 : reference_end] or label
+                        if _normalize_reference_label(reference) in reference_labels:
+                            suffix_end = reference_end
+                elif _normalize_reference_label(label) in reference_labels:
+                    suffix_end = label_end
+
+                if suffix_end != -1:
+                    output.append(_strip_summary_links(label))
+                    index = suffix_end + 1
+                    continue
+
+        output.append(value[index])
+        index += 1
+
+    return "".join(output)
 
 
 def _serialize_sitemap_destination(value: str) -> str:
@@ -112,7 +323,7 @@ def _serialize_sitemap_entry(
         f"({_serialize_sitemap_destination(destination)})"
     )
     if description is not None:
-        entry += f": {_serialize_sitemap_text(description)}"
+        entry += f": {_serialize_sitemap_text(_strip_summary_links(description))}"
     return entry
 
 
