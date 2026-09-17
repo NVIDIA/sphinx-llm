@@ -388,15 +388,15 @@ class MarkdownGenerator:
             # child diagnostics are emitted and combination can clean up, then
             # records the warnings-as-errors result explicitly.
             self.app.statuscode = 1
-        if self.md_build_process.returncode != 0:
-            logger.error(
-                f"Markdown build subprocess failed with return code {self.md_build_process.returncode},"
-            )
-            if remaining_log.strip():
-                logger.error(remaining_log)
-            return
-
         try:
+            if self.md_build_process.returncode != 0:
+                logger.error(
+                    f"Markdown build subprocess failed with return code {self.md_build_process.returncode},"
+                )
+                if remaining_log.strip():
+                    logger.error(remaining_log)
+                return
+
             # Copy markdown files to the main output directory
             self.copy_markdown_files()
 

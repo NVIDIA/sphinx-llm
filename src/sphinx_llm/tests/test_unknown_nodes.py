@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from collections import UserList
@@ -17,6 +18,9 @@ from sphinx.errors import ConfigError
 from sphinx_llm.markdown_builder import validate_suppress_unknown_node_warnings
 
 CONFIG_NAME = "llms_txt_suppress_unknown_node_warnings"
+CUSTOM_NODE_EXTENSION_PATH = (
+    Path(__file__).parent / "fixtures" / "unknown_nodes" / "custom_unknown.py"
+)
 SOURCE = """Unknown nodes
 =============
 
@@ -29,40 +33,6 @@ Second :abbr:`CPU (central processing unit)`.
 Custom :custom-unknown:`Extension child text`.
 
 Retained paragraph.
-"""
-
-CUSTOM_NODE_EXTENSION = """
-import sys
-
-from docutils import nodes
-from docutils.parsers.rst import roles
-
-class custom_unknown(nodes.Inline, nodes.TextElement):
-    pass
-
-def custom_unknown_role(name, rawtext, text, lineno, inliner, options=None, content=None):
-    return [custom_unknown(rawtext, text)], []
-
-def passthrough(translator, node):
-    pass
-
-def setup(app):
-    app.add_node(custom_unknown, html=(passthrough, passthrough))
-    app.add_config_value("custom_fail_markdown", False, "env")
-    app.add_config_value("custom_invalid_log_bytes", False, "env")
-    roles.register_local_role("custom-unknown", custom_unknown_role)
-    app.connect(
-        "builder-inited",
-        lambda app: (sys.stdout.buffer.write(b"\\xff\\n"), sys.stdout.flush())
-        if app.builder.name == "llms-markdown" and app.config.custom_invalid_log_bytes
-        else None,
-    )
-    app.connect(
-        "build-finished",
-        lambda app, exception: (_ for _ in ()).throw(RuntimeError("child failed"))
-        if app.builder.name == "llms-markdown" and app.config.custom_fail_markdown
-        else None,
-    )
 """
 
 
@@ -95,9 +65,7 @@ def _build(
     if value is not Ellipsis:
         config.append(f"{CONFIG_NAME} = {value!r}")
     (source_dir / "conf.py").write_text("\n".join(config), encoding="utf-8")
-    (source_dir / "custom_unknown.py").write_text(
-        CUSTOM_NODE_EXTENSION, encoding="utf-8"
-    )
+    shutil.copyfile(CUSTOM_NODE_EXTENSION_PATH, source_dir / "custom_unknown.py")
     (source_dir / "index.rst").write_text(source, encoding="utf-8")
     for name, content in (extra_sources or {}).items():
         (source_dir / name).write_text(content, encoding="utf-8")
@@ -379,8 +347,9 @@ def test_direct_suppression_does_not_hide_unrelated_warnings(tmp_path):
     assert "unknown document: 'document'" in output
 
 
-def test_failed_child_unknown_warnings_are_relayed_only_once(tmp_path):
-    result, _ = _build(tmp_path, fail_child=True)
+@pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
+def test_failed_child_unknown_warnings_are_relayed_only_once(tmp_path, parallel):
+    result, _ = _build(tmp_path, fail_child=True, parallel=parallel)
 
     output = _output(result)
     assert output.count("unknown node type: <abbreviation:") == 1
@@ -388,6 +357,7 @@ def test_failed_child_unknown_warnings_are_relayed_only_once(tmp_path):
     assert output.count("unknown node type: <custom_unknown:") == 1
     assert "Markdown build subprocess failed with return code" in output
     assert "child failed" in output
+    assert not (tmp_path / "output" / "_markdown_build").exists()
 
 
 def test_invalid_child_log_bytes_do_not_prevent_relay_or_cleanup(tmp_path):
@@ -415,9 +385,7 @@ def test_native_markdown_builder_is_not_affected(tmp_path):
         ),
         encoding="utf-8",
     )
-    (source_dir / "custom_unknown.py").write_text(
-        CUSTOM_NODE_EXTENSION, encoding="utf-8"
-    )
+    shutil.copyfile(CUSTOM_NODE_EXTENSION_PATH, source_dir / "custom_unknown.py")
     (source_dir / "index.rst").write_text(SOURCE, encoding="utf-8")
     result = subprocess.run(
         [

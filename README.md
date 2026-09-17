@@ -184,10 +184,11 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 
 `llms_txt_suppress_unknown_node_warnings` does not add support for unknown
 nodes. Suppressed nodes and all of their child content remain absent from the
-generated Markdown. Prefer adding a real visitor or upstream translator support
-when that content matters. Names are unqualified Python class names with exact,
-case-sensitive spelling and no surrounding whitespace. An empty sequence is
-equivalent to `False`.
+generated Markdown. If you would like support for new node types, please make
+your request upstream to
+[sphinx-markdown-builder](https://github.com/clayrisser/sphinx-markdown-builder).
+Names are unqualified Python class names with exact, case-sensitive spelling and
+no surrounding whitespace. An empty sequence is equivalent to `False`.
 
 Each page's entry in `llms.txt` includes a short description. If a page defines
 an `html_meta` description, that non-empty author-provided value always wins and
