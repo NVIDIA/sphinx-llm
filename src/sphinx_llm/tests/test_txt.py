@@ -2259,6 +2259,38 @@ def test_content_fallback_used_when_no_html_meta(sphinx_build):
         )
 
 
+@pytest.mark.parametrize(
+    "linked_source",
+    [
+        "[Readable label](python_api.html.md#callback-api) trailing prose",
+        "[Readable label][api] trailing prose\n\n"
+        "[api]: python_api.html.md#callback-api",
+    ],
+)
+def test_content_fallback_sanitizes_before_truncating(
+    tmp_path: Path, linked_source: str
+) -> None:
+    """Fallback excerpts never truncate a link into unsafe literal syntax."""
+    markdown = tmp_path / "page.html.md"
+    markdown.write_text("A" * 75 + " " + linked_source, encoding="utf-8")
+    expected = ("A" * 75 + " Readable label trailing prose")[:100] + "..."
+
+    description = MarkdownGenerator.extract_description_from_markdown(markdown)
+
+    assert description == expected
+    assert "python_api.html.md" not in description
+    assert "[Readable label]" not in description
+
+
+def test_content_fallback_plain_truncation_is_unchanged(tmp_path: Path) -> None:
+    """Sanitization does not alter the existing plain-text truncation contract."""
+    markdown = tmp_path / "page.html.md"
+    markdown.write_text("A" * 101, encoding="utf-8")
+    assert MarkdownGenerator.extract_description_from_markdown(markdown) == (
+        "A" * 100 + "..."
+    )
+
+
 def test_get_docname_from_md_file(sphinx_build):
     """Test that _get_docname_from_md_file returns correct Sphinx docnames."""
     app, _, _ = sphinx_build

@@ -1301,7 +1301,7 @@ class MarkdownGenerator:
         """
         try:
             with open(md_file, encoding="utf-8") as f:
-                content = f.read()
+                content = strip_summary_markup(f.read())
                 lines = content.split("\n")
                 anchor = re.compile(r"^<a\b[^>]*>\s*</a>$", re.IGNORECASE)
 

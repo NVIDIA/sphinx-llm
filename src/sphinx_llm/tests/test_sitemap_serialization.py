@@ -213,6 +213,30 @@ def test_generated_summary_strips_links_but_keeps_readable_text(
     assert "images/callback.png" not in entry.desc
 
 
+def test_fallback_link_is_sanitized_before_sitemap_truncation(tmp_path: Path) -> None:
+    """A link crossing character 100 cannot leak malformed syntax or its target."""
+    generator = _generator(tmp_path)
+    artifact = tmp_path / "page.html.md"
+    artifact.write_text(
+        "A" * 75 + " [Readable label](python_api.html.md#callback-api) trailing prose",
+        encoding="utf-8",
+    )
+    generator._docname_by_output_file[artifact] = "page"
+    generator.extract_title_from_markdown = lambda _: "Page"
+
+    index = tmp_path / "llms.txt"
+    generator._write_sitemap(index, [artifact])
+
+    parse_llms_file = pytest.importorskip("llms_txt").parse_llms_file
+    entry = parse_llms_file(index.read_text(encoding="utf-8")).sections["Pages"][0]
+    assert (
+        html.unescape(entry.desc)
+        == ("A" * 75 + " Readable label trailing prose")[:100] + "..."
+    )
+    assert "python_api.html.md" not in entry.desc
+    assert "[Readable label]" not in html.unescape(entry.desc)
+
+
 @pytest.mark.parametrize(
     ("destination", "expected"),
     [
