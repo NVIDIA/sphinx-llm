@@ -159,15 +159,55 @@ def _candidate_is_markdown_link(
     )
 
 
-def _candidate_with_container_context(value: str, start: int, end: int) -> str:
-    """Remove repeated blockquote markers from candidate continuation lines."""
-    candidate = value[start:end]
+def _blockquote_prefix_end(value: str, required_depth: int) -> int | None:
+    """Return the content offset after ``required_depth`` container markers."""
+    index = 0
+    depth = 0
+    while index < len(value):
+        whitespace = re.match(r"[ \t]*", value[index:])
+        assert whitespace is not None
+        index += whitespace.end()
+        if index < len(value) and value[index] == ">":
+            depth += 1
+            index += 1
+            if index < len(value) and value[index] in " \t":
+                index += 1
+            if depth == required_depth:
+                return index
+            continue
+
+        list_marker = re.match(r"(?:[-+*]|\d{1,9}[.)])[ \t]+", value[index:])
+        if list_marker is None:
+            break
+        index += list_marker.end()
+    return None
+
+
+def _blockquote_depth_before(value: str, start: int) -> int:
+    """Return the blockquote nesting depth before an inline candidate."""
     line_start = value.rfind("\n", 0, start) + 1
-    container = re.match(r"(?: {0,3}>[ \t]?)+", value[line_start:start])
-    if container is None:
+    prefix = value[line_start:start]
+    depth = 1
+    while _blockquote_prefix_end(prefix, depth) is not None:
+        depth += 1
+    return depth - 1
+
+
+def _candidate_with_container_context(value: str, start: int, end: int) -> str:
+    """Remove equivalent blockquote markers from candidate continuation lines."""
+    candidate = value[start:end]
+    depth = _blockquote_depth_before(value, start)
+    if depth == 0:
         return candidate
-    prefix = container.group()
-    return candidate.replace(f"\n{prefix}", "\n")
+
+    normalized = []
+    for line_number, line in enumerate(candidate.splitlines(keepends=True)):
+        if line_number:
+            prefix_end = _blockquote_prefix_end(line, depth)
+            if prefix_end is not None:
+                line = line[prefix_end:]
+        normalized.append(line)
+    return "".join(normalized)
 
 
 def _markdown_context(
@@ -295,9 +335,12 @@ def _strip_summary_links_inline(
                         used_reference_labels.add(normalized_reference)
 
                 if suffix_end != -1:
+                    nested_label = _candidate_with_container_context(
+                        value, label_start, label_end
+                    )
                     output.append(
                         _strip_summary_links_inline(
-                            label, references, [], used_reference_labels
+                            nested_label, references, [], used_reference_labels
                         )
                     )
                     index = suffix_end + 1

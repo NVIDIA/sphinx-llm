@@ -165,6 +165,18 @@ def test_generated_entries_round_trip_markdown_edges(
             "> Callback API",
         ),
         (
+            '> [Callback API](python_api.html.md "First\n  > second")',
+            "> Callback API",
+        ),
+        (
+            '- > [Callback API](python_api.html.md "First\n  > second")',
+            "- > Callback API",
+        ),
+        (
+            '> [outer ![diagram](image.png "First\n  > second")](callbacks.md)',
+            "> outer diagram",
+        ),
+        (
             "[Callback API][api]\n\n[api]: first.md\n[api]: second.md",
             "Callback API",
         ),
