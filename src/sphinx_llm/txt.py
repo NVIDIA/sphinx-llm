@@ -1317,6 +1317,7 @@ class MarkdownGenerator:
                         and not anchor.match(line)
                         and len(line) > 10
                     ):  # Ensure it's substantial content
+                        line = re.sub(r"(?<!!)\[([^\]]+)\]\([^)]*\)", r"\1", line)
                         return line[:100] + "..." if len(line) > 100 else line
 
                 # Fallback descriptions based on filename

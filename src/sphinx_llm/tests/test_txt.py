@@ -425,6 +425,49 @@ def test_llms_txt_does_not_use_anchor_tag_as_description(sphinx_build):
     )
 
 
+@pytest.mark.parametrize(
+    ("candidate", "expected"),
+    [
+        (
+            "Read the [callback API](python_api.html.md#callback-api) documentation.",
+            "Read the callback API documentation.",
+        ),
+        (
+            "Use [Python](python.html.md) with [Sphinx](sphinx.html.md) extensions.",
+            "Use Python with Sphinx extensions.",
+        ),
+        (
+            "Link-free content remains exactly as written.",
+            "Link-free content remains exactly as written.",
+        ),
+        ("x" * 101, "x" * 100 + "..."),
+    ],
+)
+def test_markdown_links_are_removed_from_page_descriptions(
+    tmp_path, candidate, expected
+):
+    """Page descriptions retain link labels and existing truncation behavior."""
+    markdown_file = tmp_path / "page.html.md"
+    markdown_file.write_text(f"# Page\n\n{candidate}\n", encoding="utf-8")
+
+    assert (
+        MarkdownGenerator.extract_description_from_markdown(markdown_file) == expected
+    )
+
+
+def test_page_description_removes_links_before_truncation(tmp_path):
+    """Link destinations do not consume the page-description character budget."""
+    destination = "python_api.html.md#callback-api-" + "x" * 100
+    markdown_file = tmp_path / "page.html.md"
+    markdown_file.write_text(
+        f"# Page\n\nStart [useful label]({destination}) finish.\n", encoding="utf-8"
+    )
+
+    assert MarkdownGenerator.extract_description_from_markdown(markdown_file) == (
+        "Start useful label finish."
+    )
+
+
 @pytest.fixture(
     params=[
         ("html", "https://example.com/docs/", "append"),
