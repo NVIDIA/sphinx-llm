@@ -177,6 +177,10 @@ def test_generated_entries_round_trip_markdown_edges(
             "> outer diagram",
         ),
         (
+            '> > [Callback API](python_api.html.md "First\n> second")',
+            "> > Callback API",
+        ),
+        (
             "[Callback API][api]\n\n[api]: first.md\n[api]: second.md",
             "Callback API",
         ),
@@ -218,6 +222,9 @@ def test_generated_summary_strips_links_but_keeps_readable_text(
         "Unused definition.\n\n[api]: callbacks.md",
         '[literal](not-a-link.md\n\n "title")',
         "    [literal](not-a-link.md)",
+        '> [literal](not-a-link.md "first\n- > second")',
+        '> [literal](not-a-link.md "first\n1. > second")',
+        '> [literal](not-a-link.md "first\n+ > second")',
     ],
 )
 def test_strip_summary_links_leaves_non_links_unchanged(summary: str) -> None:
