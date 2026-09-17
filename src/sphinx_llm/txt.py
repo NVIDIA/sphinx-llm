@@ -25,6 +25,7 @@ from enum import Enum
 from importlib.metadata import PackageNotFoundError, metadata
 from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import quote, urlsplit, urlunsplit
 
 import docutils.nodes
 from sphinx.application import Sphinx
@@ -45,6 +46,74 @@ from .version import __version__
 logger = logging.getLogger(__name__)
 LINK_TOKEN_PATTERN = re.compile(rf"{re.escape(LINK_TOKEN_PREFIX)}[0-9a-f]{{32}}")
 SUMMARY_CACHE_VERSION = 1
+SITEMAP_TEXT_TRANSLATION = str.maketrans(
+    {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\\": "&#92;",
+        "[": "&#91;",
+        "]": "&#93;",
+        "`": "&#96;",
+        "*": "&#42;",
+        "_": "&#95;",
+    }
+)
+
+
+def _serialize_sitemap_text(value: str) -> str:
+    """Return one-line text that is safe inside a generated file-list entry."""
+    value = re.sub(r"[^\S\r\n]*(?:\r\n?|\n)+[^\S\r\n]*", " ", value).strip()
+    escaped = []
+    for index, character in enumerate(value):
+        if (
+            character == "_"
+            and index > 0
+            and index + 1 < len(value)
+            and value[index - 1].isalnum()
+            and value[index + 1].isalnum()
+        ):
+            escaped.append(character)
+        else:
+            escaped.append(character.translate(SITEMAP_TEXT_TRANSLATION))
+    return "".join(escaped)
+
+
+def _serialize_sitemap_destination(value: str) -> str:
+    """Quote a generated URI without changing its existing URI structure."""
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", value) or value.startswith("//"):
+        parsed = urlsplit(value)
+        return urlunsplit(
+            (
+                parsed.scheme,
+                quote(parsed.netloc, safe="!$&'*+,-.:;=@[]%"),
+                quote(parsed.path, safe="/%"),
+                quote(parsed.query, safe="!$&'*+,-./:;=?@_~%"),
+                quote(parsed.fragment, safe="!$&'*+,-./:;=?@_~%"),
+            )
+        )
+
+    path_and_query, fragment_separator, fragment = value.partition("#")
+    path, query_separator, query = path_and_query.partition("?")
+    destination = quote(path, safe="/%")
+    if query_separator:
+        destination += "?" + quote(query, safe="!$&'*+,-./:;=?@_~%")
+    if fragment_separator:
+        destination += "#" + quote(fragment, safe="!$&'*+,-./:;=?@_~%")
+    return destination
+
+
+def _serialize_sitemap_entry(
+    label: str, destination: str, description: str | None = None
+) -> str:
+    """Serialize one generated llms.txt file-list entry."""
+    entry = (
+        f"- [{_serialize_sitemap_text(label)}]"
+        f"({_serialize_sitemap_destination(destination)})"
+    )
+    if description is not None:
+        entry += f": {_serialize_sitemap_text(description)}"
+    return entry
 
 
 def _published_html_path(app: Sphinx, docname: str) -> PurePosixPath:
@@ -736,9 +805,10 @@ class MarkdownGenerator:
         relative_target = md_file.relative_to(self.outdir).as_posix()
         http_base = self._markdown_http_base()
         if http_base:
-            return f"{http_base}/{relative_target}"
+            return f"{http_base}/{quote(relative_target, safe='/')}"
         index_directory = llms_txt_path.parent.relative_to(self.outdir).as_posix()
-        return posixpath.relpath(relative_target, start=index_directory or ".")
+        relative_url = posixpath.relpath(relative_target, start=index_directory or ".")
+        return quote(relative_url, safe="/")
 
     def _top_level_sitemap_url(self, llms_txt_path: Path) -> str:
         """Return the top-level index URL from a nested sitemap location."""
@@ -774,14 +844,21 @@ class MarkdownGenerator:
                 title = self.extract_title_from_markdown(md_file)
                 url = self._sitemap_url(md_file, llms_txt_path)
                 sitemap.write(
-                    f"- [{title}]({url}): {self.get_page_description(md_file)}\n"
+                    _serialize_sitemap_entry(
+                        title, url, self.get_page_description(md_file)
+                    )
+                    + "\n"
                 )
             if subsection:
                 top_level_url = self._top_level_sitemap_url(llms_txt_path)
                 sitemap.write(
                     "\n## Optional\n\n"
-                    f"- [Top-level llms.txt]({top_level_url}): "
-                    "Complete documentation index.\n"
+                    + _serialize_sitemap_entry(
+                        "Top-level llms.txt",
+                        top_level_url,
+                        "Complete documentation index.",
+                    )
+                    + "\n"
                 )
 
     def create_sitemap(self, files: Iterable[Path] | None = None) -> None:
@@ -801,7 +878,12 @@ class MarkdownGenerator:
             with open(llms_txt_path, "a", encoding="utf-8") as sitemap:
                 sitemap.write(
                     "\n## Optional\n\n"
-                    f"- [llms-full.txt]({full_url}): Complete documentation in a single file.\n"
+                    + _serialize_sitemap_entry(
+                        "llms-full.txt",
+                        full_url,
+                        "Complete documentation in a single file.",
+                    )
+                    + "\n"
                 )
         logger.info(f"Created llms.txt sitemap: {llms_txt_path}")
 

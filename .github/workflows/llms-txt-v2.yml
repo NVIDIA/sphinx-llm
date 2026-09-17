@@ -32,7 +32,7 @@ jobs:
         env:
           SPHINX_LLM_BUILD_DIR: ${{ runner.temp }}/sphinx-llm-html
         run: |
-          uv run --frozen --no-dev --group interop sphinx-build -W \
+          uv run --frozen --dev sphinx-build -W \
             docs/source "$SPHINX_LLM_BUILD_DIR"
-          uv run --frozen --no-dev --group interop python -c \
+          uv run --frozen --dev python -c \
             'import os; from pathlib import Path; from llms_txt import parse_llms_file; parsed = parse_llms_file(Path(os.environ["SPHINX_LLM_BUILD_DIR"], "llms.txt").read_text(encoding="utf-8")); assert parsed.title'
