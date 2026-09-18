@@ -46,7 +46,10 @@ def summary_server():
                             "index": 0,
                             "message": {
                                 "role": "assistant",
-                                "content": "Generated page summary.",
+                                "content": (
+                                    "Generated summary with "
+                                    "[Callback API](python_api.html.md#callback-api)."
+                                ),
                             },
                             "finish_reason": "stop",
                         }
@@ -592,7 +595,8 @@ def test_page_summaries_in_full_build_matrix(
         apples_line = next(
             line for line in content.splitlines() if "apples" in line.lower()
         )
-        assert apples_line.endswith(": Generated page summary.")
+        assert apples_line.endswith(": Generated summary with Callback API.")
+        assert "python_api.html.md#callback-api" not in apples_line
 
         authored = _get_html_meta_description(app, _HTML_META_PAGE)
         meta_line = next(

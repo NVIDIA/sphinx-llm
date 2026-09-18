@@ -34,6 +34,7 @@ from sphinx.util import logging
 from sphinx.util.matching import patmatch
 from sphinx.util.osutil import relative_uri
 
+from .extract_prose import extract_prose
 from .markdown_builder import (
     LINK_TARGETS_FILENAME,
     LINK_TOKEN_PREFIX,
@@ -112,7 +113,7 @@ def _serialize_sitemap_entry(
         f"({_serialize_sitemap_destination(destination)})"
     )
     if description is not None:
-        entry += f": {_serialize_sitemap_text(description)}"
+        entry += f": {_serialize_sitemap_text(extract_prose(description))}"
     return entry
 
 
@@ -1300,7 +1301,7 @@ class MarkdownGenerator:
         """
         try:
             with open(md_file, encoding="utf-8") as f:
-                content = f.read()
+                content = extract_prose(f.read())
                 lines = content.split("\n")
                 anchor = re.compile(r"^<a\b[^>]*>\s*</a>$", re.IGNORECASE)
 
