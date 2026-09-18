@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for Markdown sanitization in generated summaries."""
+"""Tests for extracting prose from Markdown."""
 
 import pytest
 
-from sphinx_llm.summary_markdown import strip_summary_markup
+from sphinx_llm.extract_prose import extract_prose
 
 
 @pytest.mark.parametrize(
@@ -74,11 +74,11 @@ from sphinx_llm.summary_markdown import strip_summary_markup
         ),
     ],
 )
-def test_strip_summary_markup_preserves_readable_link_text(
+def test_extract_prose_preserves_readable_link_text(
     markdown: str, expected: str
 ) -> None:
     """Parser-recognized links and images retain only readable source text."""
-    assert strip_summary_markup(markdown) == expected
+    assert extract_prose(markdown) == expected
 
 
 @pytest.mark.parametrize(
@@ -101,9 +101,9 @@ def test_strip_summary_markup_preserves_readable_link_text(
         "### NOTE\n\nAn ordinary level-three heading.",
     ],
 )
-def test_strip_summary_markup_preserves_unrecognized_source(markdown: str) -> None:
+def test_extract_prose_preserves_unrecognized_source(markdown: str) -> None:
     """Link-free and admonition-lookalike source remains byte-for-byte intact."""
-    assert strip_summary_markup(markdown) == markdown
+    assert extract_prose(markdown) == markdown
 
 
 @pytest.mark.parametrize(
@@ -120,26 +120,26 @@ def test_strip_summary_markup_preserves_unrecognized_source(markdown: str) -> No
         ),
     ],
 )
-def test_strip_summary_markup_removes_generated_admonition_markers(
+def test_extract_prose_removes_generated_admonition_markers(
     markdown: str, expected: str
 ) -> None:
     """Sphinx Markdown builder admonition headings do not enter summaries."""
-    result = strip_summary_markup(markdown)
+    result = extract_prose(markdown)
     assert result == expected
-    assert strip_summary_markup(result) == result
+    assert extract_prose(result) == result
 
 
 @pytest.mark.parametrize(
     "title", ["ATTENTION", "HINT", "IMPORTANT", "NOTE", "SEE ALSO", "WARNING"]
 )
-def test_strip_summary_markup_supports_builder_admonition_titles(title: str) -> None:
+def test_extract_prose_supports_builder_admonition_titles(title: str) -> None:
     """Every admonition heading emitted by the builder has an explicit contract."""
-    assert strip_summary_markup(f"#### {title}\n\nUseful prose.") == "Useful prose."
+    assert extract_prose(f"#### {title}\n\nUseful prose.") == "Useful prose."
 
 
-def test_strip_summary_markup_is_idempotent_for_nested_markup() -> None:
+def test_extract_prose_is_idempotent_for_nested_markup() -> None:
     """Repeated sanitization produces the same readable summary."""
     markdown = "#### IMPORTANT\n\nSee [![diagram](image.png)](guide.md)."
-    result = strip_summary_markup(markdown)
+    result = extract_prose(markdown)
     assert result == "See diagram."
-    assert strip_summary_markup(result) == result
+    assert extract_prose(result) == result

@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Sanitize Markdown for use in short generated summaries."""
+"""Extract readable prose from Markdown."""
 
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ from markdown_it.rules_inline import (
 from markdown_it.rules_inline.state_inline import StateInline
 from markdown_it.token import Token
 
-_SUMMARY_SOURCE_KEY = "sphinx_llm_summary_source"
-_SUMMARY_RANGES_KEY = "sphinx_llm_summary_ranges"
-_SUMMARY_REFERENCES_KEY = "sphinx_llm_summary_references"
+_PROSE_SOURCE_KEY = "sphinx_llm_prose_source"
+_PROSE_RANGES_KEY = "sphinx_llm_prose_ranges"
+_PROSE_REFERENCES_KEY = "sphinx_llm_prose_references"
 _ADMONITION_TITLES = frozenset(
     {
         "ATTENTION",
@@ -50,18 +50,16 @@ def _record_reference_label(
             if not label:
                 label = state.src[label_start:label_end]
     if label is not None:
-        state.env[_SUMMARY_REFERENCES_KEY].add(normalizeReference(label))
+        state.env[_PROSE_REFERENCES_KEY].add(normalizeReference(label))
 
 
 def _record_link(
     state: StateInline, start: int, label_start: int, label_end: int
 ) -> None:
     """Record source ranges removed from one parser-recognized link or image."""
-    if state.src is not state.env.get(_SUMMARY_SOURCE_KEY):
+    if state.src is not state.env.get(_PROSE_SOURCE_KEY):
         return
-    state.env[_SUMMARY_RANGES_KEY].extend(
-        ((start, label_start), (label_end, state.pos))
-    )
+    state.env[_PROSE_RANGES_KEY].extend(((start, label_start), (label_end, state.pos)))
     _record_reference_label(state, label_start, label_end, state.pos)
 
 
@@ -89,8 +87,8 @@ def _tracked_markdown_autolink(state: StateInline, silent: bool) -> bool:
     """Run MarkdownIt's autolink rule while capturing its angle brackets."""
     start = state.pos
     result = markdown_autolink_rule(state, silent)
-    if result and not silent and state.src is state.env.get(_SUMMARY_SOURCE_KEY):
-        state.env[_SUMMARY_RANGES_KEY].extend(
+    if result and not silent and state.src is state.env.get(_PROSE_SOURCE_KEY):
+        state.env[_PROSE_RANGES_KEY].extend(
             ((start, start + 1), (state.pos - 1, state.pos))
         )
     return result
@@ -137,9 +135,9 @@ def _inline_link_ranges(
     used_references: set[str] = set()
     environment = {
         "references": references,
-        _SUMMARY_SOURCE_KEY: value,
-        _SUMMARY_RANGES_KEY: ranges,
-        _SUMMARY_REFERENCES_KEY: used_references,
+        _PROSE_SOURCE_KEY: value,
+        _PROSE_RANGES_KEY: ranges,
+        _PROSE_REFERENCES_KEY: used_references,
     }
     _MARKDOWN_PARSER.inline.parse(value, _MARKDOWN_PARSER, environment, [])
     return ranges, used_references
@@ -209,8 +207,8 @@ def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
     return merged
 
 
-def strip_summary_markup(markdown: str) -> str:
-    """Remove summary-inappropriate Markdown while preserving readable prose.
+def extract_prose(markdown: str) -> str:
+    """Extract readable prose by removing presentation-only Markdown.
 
     Link and image destinations are removed using CommonMark parser ranges,
     while link labels and image alt text remain. Admonition headings emitted by
