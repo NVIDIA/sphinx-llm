@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Iterable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, metadata
@@ -38,14 +39,20 @@ from .extract_prose import extract_prose
 from .markdown_builder import (
     LINK_TARGETS_FILENAME,
     LINK_TOKEN_PREFIX,
+    SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG,
     LinkTarget,
     SphinxLlmMarkdownBuilder,
+    validate_suppress_unknown_node_warnings,
 )
 from .summary import DEFAULT_API_KEY_ENV
 from .version import __version__
 
 logger = logging.getLogger(__name__)
 LINK_TOKEN_PATTERN = re.compile(rf"{re.escape(LINK_TOKEN_PREFIX)}[0-9a-f]{{32}}")
+UNKNOWN_NODE_WARNING_PATTERN = re.compile(
+    r"^(?:(?P<source>.+?):(?:(?P<line>[0-9]+):|:)\s+)?WARNING:\s+"
+    r"(?P<message>unknown node type: .+)$"
+)
 SUMMARY_CACHE_VERSION = 1
 SITEMAP_TEXT_TRANSLATION = str.maketrans(
     {
@@ -440,15 +447,26 @@ class MarkdownGenerator:
             self.md_build_process.wait()
             logger.info("Markdown build subprocess finished")
 
-        if self.md_build_process.returncode != 0:
-            logger.error(
-                f"Markdown build subprocess failed with return code {self.md_build_process.returncode},"
-            )
-            with open(self.md_build_logfile.name, encoding="utf-8") as logfile:
-                logger.error(logfile.read())
-            return
-
+        remaining_log, relayed_warning_count = self._relay_unknown_node_warnings()
+        if (
+            relayed_warning_count
+            and self.app.warningiserror
+            and hasattr(logging, "skip_warningiserror")
+        ):
+            # Sphinx 5-7 normally raise on the first warning, even during
+            # build-finished.  The relay defers that fail-fast behavior so all
+            # child diagnostics are emitted and combination can clean up, then
+            # records the warnings-as-errors result explicitly.
+            self.app.statuscode = 1
         try:
+            if self.md_build_process.returncode != 0:
+                logger.error(
+                    f"Markdown build subprocess failed with return code {self.md_build_process.returncode},"
+                )
+                if remaining_log.strip():
+                    logger.error(remaining_log)
+                return
+
             # Copy markdown files to the main output directory
             self.copy_markdown_files()
 
@@ -473,6 +491,40 @@ class MarkdownGenerator:
             # Clean up temporary build directory
             if self.md_build_dir.exists():
                 shutil.rmtree(self.md_build_dir)
+
+    def _relay_unknown_node_warnings(self) -> tuple[str, int]:
+        """Relay child unknown-node warnings and return all other log output."""
+        with open(
+            self.md_build_logfile.name, encoding="utf-8", errors="replace"
+        ) as logfile:
+            lines = logfile.read().splitlines()
+
+        remaining_lines = []
+        relayed_warning_count = 0
+        skip_warningiserror = getattr(logging, "skip_warningiserror", None)
+        warning_context = (
+            skip_warningiserror()
+            if skip_warningiserror and self.app.warningiserror
+            else nullcontext()
+        )
+        with warning_context:
+            for line in lines:
+                match = UNKNOWN_NODE_WARNING_PATTERN.match(line)
+                if match is None:
+                    remaining_lines.append(line)
+                    continue
+
+                source = match.group("source")
+                line_number = match.group("line")
+                # A tuple is interpreted as ``(docname, line)`` by Sphinx, but
+                # the subprocess reports a source path.  Keep the already-
+                # resolved location as a string so Sphinx does not append the
+                # source suffix.
+                location = f"{source}:{line_number or ''}" if source else None
+                logger.warning(match.group("message"), location=location)
+                relayed_warning_count += 1
+
+        return "\n".join(remaining_lines), relayed_warning_count
 
     def build_markdown_files(
         self, app: Sphinx | None = None, exception: Exception | None = None
@@ -1353,6 +1405,13 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_nested_enabled", True, "env")
     app.add_config_value("llms_txt_exclude", [], "env")
     app.add_config_value("llms_txt_override_source", "", "env")
+    app.add_config_value(
+        SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG,
+        False,
+        "env",
+        types=(bool, list, tuple),
+    )
+    app.connect("config-inited", validate_suppress_unknown_node_warnings)
     if "markdown_http_base" not in app.config.values:
         app.add_config_value("markdown_http_base", "", "env")
     generator = MarkdownGenerator(app)

@@ -3,16 +3,20 @@
 """Markdown builder that preserves Sphinx document targets."""
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional, TypedDict
 from uuid import uuid4
 
 from docutils import nodes
+from sphinx.config import Config
+from sphinx.errors import ConfigError
 from sphinx_markdown_builder.builder import MarkdownBuilder
 from sphinx_markdown_builder.translator import MarkdownTranslator
 
 LINK_TOKEN_PREFIX = "sphinx-llm:"
 LINK_TARGETS_FILENAME = ".sphinx-llm-link-targets.json"
+SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG = "llms_txt_suppress_unknown_node_warnings"
 
 
 class LinkTarget(TypedDict):
@@ -20,6 +24,38 @@ class LinkTarget(TypedDict):
 
     docname: str
     fragment: Optional[str]
+
+
+def validate_suppress_unknown_node_warnings(_app, config: Config) -> None:
+    """Validate and stabilize the unknown-node warning suppression setting."""
+    value = getattr(config, SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG)
+    if isinstance(value, bool):
+        return
+    if isinstance(value, (str, bytes, bytearray)) or not isinstance(value, Sequence):
+        raise ConfigError(
+            f"{SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG} must be a bool or a "
+            f"non-string sequence of node class names; got {value!r} "
+            f"({type(value).__name__})"
+        )
+
+    for node_name in value:
+        if not isinstance(node_name, str):
+            raise ConfigError(
+                f"{SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG} entries must be "
+                f"strings; got {node_name!r} ({type(node_name).__name__})"
+            )
+        if (
+            not node_name
+            or node_name != node_name.strip()
+            or not node_name.isidentifier()
+        ):
+            raise ConfigError(
+                f"{SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG} entries must be "
+                f"valid node class names without surrounding whitespace; "
+                f"got {node_name!r}"
+            )
+
+    setattr(config, SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG, tuple(value))
 
 
 class SphinxLlmMarkdownTranslator(MarkdownTranslator):
@@ -38,6 +74,14 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
             if not node.get("refuri", ""):
                 return self.builder.link_token(self.builder.current_doc_name)
         return super()._fetch_ref_uri(node)
+
+    def unknown_visit(self, node: nodes.Node) -> None:
+        """Optionally suppress the warning while still dropping the subtree."""
+        suppressed = getattr(self.config, SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG)
+        node_name = node.__class__.__name__
+        if suppressed is True or (suppressed is not False and node_name in suppressed):
+            raise nodes.SkipNode
+        super().unknown_visit(node)
 
 
 class SphinxLlmMarkdownBuilder(MarkdownBuilder):
