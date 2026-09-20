@@ -2196,7 +2196,7 @@ def _get_html_meta_description(app: Sphinx, docname: str) -> str:
     valid when the source document is edited.
     """
     doctree = app.env.get_doctree(docname)
-    for node in doctree.traverse(docutils.nodes.meta):
+    for node in doctree.traverse(lambda node: node.tagname == "meta"):
         if node.get("name") == "description" and node.get("content"):
             return node["content"]
     raise AssertionError(
@@ -2221,6 +2221,20 @@ def test_html_meta_description_used_in_llms_txt(sphinx_build):
             f"Entry:    {line!r}\n"
             f"Expected: {expected!r}"
         )
+
+
+def test_html_meta_description_without_nodes_meta(sphinx_build, monkeypatch, tmp_path):
+    app, _, _ = sphinx_build
+    expected = _get_html_meta_description(app, _HTML_META_PAGE)
+    doctree = app.env.get_doctree(_HTML_META_PAGE)
+    monkeypatch.setattr(app.env, "get_doctree", lambda docname: doctree)
+    monkeypatch.delattr(docutils.nodes, "meta", raising=False)
+    md_file = tmp_path / "page.md"
+    md_file.write_text("Content fallback.", encoding="utf-8")
+    generator = MarkdownGenerator(app)
+    generator._docname_by_output_file[md_file] = _HTML_META_PAGE
+
+    assert generator.get_page_description(md_file) == expected
 
 
 def test_content_fallback_used_when_no_html_meta(sphinx_build):
