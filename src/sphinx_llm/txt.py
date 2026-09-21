@@ -1002,7 +1002,10 @@ class MarkdownGenerator:
         if docname:
             try:
                 doctree = self.app.env.get_doctree(docname)
-                for node in doctree.traverse(docutils.nodes.meta):
+                meta_type = getattr(
+                    docutils.nodes, "meta", lambda node: node.tagname == "meta"
+                )
+                for node in doctree.traverse(meta_type):
                     content = node.get("content")
                     if (
                         node.get("name") == "description"
