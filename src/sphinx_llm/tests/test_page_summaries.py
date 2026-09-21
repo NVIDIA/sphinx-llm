@@ -199,7 +199,7 @@ def test_disabled_summary_path_does_not_call_provider(tmp_path):
 def test_html_meta_precedence_and_whitespace_fallback(tmp_path):
     """Non-empty authored metadata wins, while whitespace-only metadata does not."""
     generator, markdown_file = _generator(tmp_path)
-    meta = docutils.nodes.meta()
+    meta = docutils.nodes.Element()
     meta["name"] = "description"
     meta["content"] = "  Authored description.  "
     generator.app.env.get_doctree = lambda _: SimpleNamespace(traverse=lambda _: [meta])
