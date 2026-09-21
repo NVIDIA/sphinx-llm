@@ -7,6 +7,22 @@ on:
   pull_request:
 
 jobs:
+  test-lowest-versions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: "latest"
+          python-version: "3.9"
+
+      - name: Run tests with lowest supported dependency versions
+        run: uv run --resolution lowest --dev --extra gen pytest src/sphinx_llm/tests/
+
   test:
     runs-on: ubuntu-latest
     strategy:
