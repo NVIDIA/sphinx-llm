@@ -20,8 +20,8 @@ jobs:
           version: "latest"
           python-version: "3.9"
 
-      - name: Run tests with lowest supported dependency versions
-        run: uv run --resolution lowest --dev --extra gen pytest src/sphinx_llm/tests/
+      - name: Run tests with lowest supported direct dependency versions
+        run: uv run --resolution lowest-direct --dev --extra gen pytest src/sphinx_llm/tests/
 
   test:
     runs-on: ubuntu-latest

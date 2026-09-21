@@ -1454,6 +1454,8 @@ wheels = [
 name = "sphinx-llm"
 source = { editable = "." }
 dependencies = [
+    { name = "docutils", version = "0.21.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "docutils", version = "0.22.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "markdown-it-py", version = "3.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "markdown-it-py", version = "4.2.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "sphinx", version = "7.4.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -1481,8 +1483,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "docutils", specifier = ">=0.14" },
     { name = "markdown-it-py", specifier = ">=3" },
-    { name = "openai", marker = "extra == 'gen'", specifier = ">=1.0.0" },
+    { name = "openai", marker = "extra == 'gen'", specifier = ">=1.55.3" },
     { name = "sphinx", specifier = ">=5.1" },
     { name = "sphinx-markdown-builder", specifier = ">=0.6.8" },
 ]
