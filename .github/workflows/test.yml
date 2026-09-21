@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  test-lowest-versions:
+  test-mindeps:
     runs-on: ubuntu-latest
 
     steps:
