@@ -1483,7 +1483,7 @@ dev = [
 requires-dist = [
     { name = "markdown-it-py", specifier = ">=3" },
     { name = "openai", marker = "extra == 'gen'", specifier = ">=1.0.0" },
-    { name = "sphinx", specifier = ">=5" },
+    { name = "sphinx", specifier = ">=5.1" },
     { name = "sphinx-markdown-builder", specifier = ">=0.6.8" },
 ]
 provides-extras = ["gen"]
