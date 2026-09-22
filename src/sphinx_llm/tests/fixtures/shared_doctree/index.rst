@@ -17,3 +17,7 @@ See :doc:`The guide <guide>`.
 .. toctree::
 
    guide
+   extra1
+   extra2
+   extra3
+   extra4

@@ -464,7 +464,7 @@ class MarkdownGenerator:
                 f"{EXPERIMENTAL_SHARED_DOCTREES_CONFIG} requires the POSIX fork "
                 "start method"
             )
-        if "markdown_file_suffix" not in self.app.config.values:
+        if "markdown_uri_doc_suffix" not in self.app.config.values:
             raise ExtensionError(
                 f"{EXPERIMENTAL_SHARED_DOCTREES_CONFIG} was enabled too late to "
                 "load sphinx_markdown_builder configuration"
@@ -505,6 +505,7 @@ class MarkdownGenerator:
         )
         process.start()
         self.md_build_process = _ForkedMarkdownWriterProcess(process)
+        self.app.events.emit("llms-shared-doctrees-writer-started", "primary")
         self._primary_write(build_docnames, updated_docnames, method)
         self.app.events.emit("llms-shared-doctrees-writer-finished", "primary")
 
@@ -527,12 +528,18 @@ class MarkdownGenerator:
             builder.init()
             builder.parallel_ok = False
             builder.finish_tasks = SerialTasks()
+            self.app.events.emit("llms-shared-doctrees-writer-started", "markdown")
             builder.write(None, (), "all")
             builder.finish()
             builder.finish_tasks.join()
             builder.cleanup()
             self.app.events.emit("llms-shared-doctrees-writer-finished", "markdown")
-        except BaseException:
+        except BaseException as error:
+            self.app.events.emit(
+                "llms-shared-doctrees-writer-failed",
+                "markdown",
+                type(error).__name__,
+            )
             with open(self.md_build_logfile.name, "a", encoding="utf-8") as logfile:
                 traceback.print_exc(file=logfile)
             raise
@@ -570,6 +577,12 @@ class MarkdownGenerator:
             logger.info("Waiting for markdown build subprocess to finish...")
             self.md_build_process.wait()
             logger.info("Markdown build subprocess finished")
+
+        if self.experimental_shared_doctrees:
+            self.app.events.emit(
+                "llms-shared-doctrees-writer-exited",
+                self.md_build_process.returncode,
+            )
 
         remaining_log, relayed_warning_count = self._relay_unknown_node_warnings()
         if (
@@ -1523,7 +1536,10 @@ class MarkdownGenerator:
 def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
     app.add_event("llms-shared-doctrees-ready")
+    app.add_event("llms-shared-doctrees-writer-started")
     app.add_event("llms-shared-doctrees-writer-finished")
+    app.add_event("llms-shared-doctrees-writer-failed")
+    app.add_event("llms-shared-doctrees-writer-exited")
     app.setup_extension("sphinx_llm.summary")
     if app.tags.has("sphinx_llm_markdown"):
         app.setup_extension("sphinx_markdown_builder")

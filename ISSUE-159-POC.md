@@ -53,19 +53,22 @@ incremental document selection while still avoiding source reads and execution.
 
 ## Evidence and distinct claims
 
-The integration fixture contains two real read-time directives. Each obtains an
+The integration fixture contains six real read-time directives. Each obtains an
 exclusive `fcntl` lock and appends its document name and generated ordinal to a
 durable counter. It separately records `source-read`, `env-updated`, snapshot,
-writer start/overlap/finish, and process IDs.
+writer start/overlap/finish/failure/exit, and process IDs. POC-owned writer
+lifecycle events are registered before the probe extension loads, so the same
+instrumentation works on every supported Sphinx release and fires immediately
+before each real writer call.
 
 - **Exactly-once evaluation:** the established independent subprocess mode
-  records four evaluations and four source reads for two documents. The POC
-  records two evaluations and two source reads total. Both HTML and Markdown
+  records twelve evaluations and twelve source reads for six documents. The POC
+  records six evaluations and six source reads total. Both HTML and Markdown
   contain the same per-document generated value.
 - **No secondary reread:** only the primary reader records `source-read`. The
   child entry point calls the Markdown builder's writing methods directly.
   Corrupting a prepared doctree causes an explicit failure before the child
-  starts, with two source reads total and no fallback build.
+  starts, with six source reads total and no fallback build.
 - **Mutation isolation:** an adversarial `doctree-resolved` listener mutates the
   child environment and doctree. Markdown contains the child-only mutation;
   HTML contains the parent-only mutation and observes no child environment
@@ -75,14 +78,18 @@ writer start/overlap/finish, and process IDs.
   overlap and completion for both roles. This is a synchronization barrier, not
   a sleep-based timing assertion.
 
-The matrix covers `html` and `dirhtml`, serial reading and Sphinx reader
-parallelism of two, titles, body text, internal links, HTML-tag-conditioned
+The matrix covers `html` and `dirhtml`, serial reading and requested Sphinx
+reader parallelism of two, titles, body text, internal links, HTML-tag-conditioned
 content, metadata descriptions, nested paths, `llms.txt`, and `llms-full.txt`.
-Two independent clean runs produce byte-identical Markdown and llms text files.
+Six documents ensure Sphinx 7+ enters its parallel reader path; worker PID data
+is diagnostic rather than an assertion because scheduling varies by release.
+Sphinx 5.1 runs the requested-parallel case serially because
+`sphinx-markdown-builder` 0.6.8 does not declare parallel-read safety. Two
+independent clean runs produce byte-identical Markdown and llms text files.
 
 The incremental scenario records:
 
-- clean build: two evaluations;
+- clean build: six evaluations;
 - unchanged build: zero additional evaluations, with both writers still using
   the finalized cached environment;
 - one changed source: one additional evaluation, updated HTML and Markdown, and
@@ -93,7 +100,9 @@ Failure probes show:
 - a primary read error starts no secondary writer;
 - a corrupt doctree fails before the fork and does not reread;
 - a Markdown writer error produces a nonzero Sphinx status, removes staging,
-  and removes previously published extension-owned Markdown and sitemap files;
+  and removes previously published extension-owned Markdown and sitemap files.
+  The trace independently records child start, child exception type, and the
+  nonzero reaped child exit code;
 - a primary writer error terminates and reaps a child held at a barrier, with
   bounded cleanup through the existing ten-second terminate/kill path.
 
@@ -126,9 +135,11 @@ Failure probes show:
   spawn-only platforms are explicitly rejected. Forking applications that have
   initialized threads, GPU runtimes, network clients, or other native state can
   itself be unsafe; a production design needs a documented compatibility model.
-- Only Sphinx 9.1 on Linux was used for the POC. The project supports Sphinx
-  5.1+, so representative version testing and compatibility shims are a release
-  blocker.
+- The focused experiment is exercised on Sphinx 5.1, 6.x, 7.4, 8.x, and 9.x
+  on Linux.
+  The full supported matrix remains CI evidence rather than a portability
+  guarantee, and future Sphinx lifecycle compatibility remains a release
+  concern.
 - Secondary warnings are not yet integrated into the primary application's
   warning count or `-W` behavior. Structured child diagnostics are needed.
 - Interrupt and external termination handling is not tested. The existing
@@ -143,9 +154,14 @@ Failure probes show:
 - The child has a memory-efficient copy-on-write snapshot in the common case,
   but resolving many doctrees can dirty substantial memory. Large-project memory
   and disk benchmarks are needed.
-- Extensions' `write-started` and `doctree-resolved` hooks run once per writer.
+- On Sphinx releases that provide it, extensions' `write-started` hooks run once
+  per writer; `doctree-resolved` hooks do so on every supported release.
   Compatibility needs auditing for hooks with external side effects, global
   registries, file writes, or assumptions that `app.builder` never changes.
+- The directly constructed child builder does not receive Sphinx's normal
+  `builder-inited` event and retains the phase inherited from the primary
+  application. Production code must either reproduce the required lifecycle or
+  explicitly define and test a narrower extension compatibility contract.
 - `llms_txt_experimental_shared_doctrees` is intentionally documented only in
   this report and should not be advertised as a supported public option.
 

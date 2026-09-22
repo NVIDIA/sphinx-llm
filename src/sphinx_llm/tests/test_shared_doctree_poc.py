@@ -15,6 +15,7 @@ import pytest
 from sphinx.application import Sphinx
 
 FIXTURE = Path(__file__).parent / "fixtures" / "shared_doctree"
+DOCNAMES = {"index", "guide", "extra1", "extra2", "extra3", "extra4"}
 
 
 def _build(
@@ -99,8 +100,8 @@ def test_control_build_evaluates_sources_twice(tmp_path, monkeypatch):
     source_reads = [
         event for event in _events(probe) if event["event"] == "source-read"
     ]
-    assert len(evaluations) == 4
-    assert len(source_reads) == 4
+    assert len(evaluations) == 2 * len(DOCNAMES)
+    assert len(source_reads) == 2 * len(DOCNAMES)
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
@@ -117,14 +118,15 @@ def test_shared_doctree_build_evaluates_once_and_overlaps_writers(
     )
 
     evaluations = (probe / "evaluations.txt").read_text(encoding="utf-8").splitlines()
-    assert len(evaluations) == 2
-    assert {value.split(":")[1] for value in evaluations} == {"index", "guide"}
+    assert len(evaluations) == len(DOCNAMES)
+    assert {value.split(":")[1] for value in evaluations} == DOCNAMES
 
     events = _events(probe)
     source_reads = [event for event in events if event["event"] == "source-read"]
-    assert len(source_reads) == 2
-    assert {event["docname"] for event in source_reads} == {"index", "guide"}
-    assert len({event["pid"] for event in source_reads}) == parallel
+    assert len(source_reads) == len(DOCNAMES)
+    assert {event["docname"] for event in source_reads} == DOCNAMES
+    if parallel == 2:
+        assert app.parallel == parallel
     assert {
         event["role"] for event in events if event["event"] == "writer-overlap"
     } == {
@@ -136,7 +138,7 @@ def test_shared_doctree_build_evaluates_once_and_overlaps_writers(
     ].index("snapshot-ready")
     assert next(event for event in events if event["event"] == "snapshot-ready")[
         "docnames"
-    ] == ["guide", "index"]
+    ] == sorted(DOCNAMES)
     for role in ("primary", "markdown"):
         start = next(
             index
@@ -218,23 +220,24 @@ def test_shared_doctree_incremental_builds(tmp_path, monkeypatch):
     shutil.copytree(FIXTURE, source)
 
     _run_build(source, output, probe, monkeypatch, freshenv=True)
-    assert len((probe / "evaluations.txt").read_text().splitlines()) == 2
+    assert len((probe / "evaluations.txt").read_text().splitlines()) == len(DOCNAMES)
 
     _run_build(source, output, probe, monkeypatch, freshenv=False)
-    assert len((probe / "evaluations.txt").read_text().splitlines()) == 2
+    assert len((probe / "evaluations.txt").read_text().splitlines()) == len(DOCNAMES)
 
     with (source / "guide.rst").open("a", encoding="utf-8") as stream:
         stream.write("\nChanged content marker.\n")
     _run_build(source, output, probe, monkeypatch, freshenv=False)
 
     evaluations = (probe / "evaluations.txt").read_text().splitlines()
-    assert len(evaluations) == 3
+    assert len(evaluations) == len(DOCNAMES) + 1
     assert evaluations[-1].startswith("evaluation:guide:")
     assert "Changed content marker." in (output / "guide.html").read_text()
     assert "Changed content marker." in (output / "guide.html.md").read_text()
     assert "evaluation:index:" in (output / "index.html.md").read_text()
     assert (
-        len([event for event in _events(probe) if event["event"] == "source-read"]) == 3
+        len([event for event in _events(probe) if event["event"] == "source-read"])
+        == len(DOCNAMES) + 1
     )
 
 
@@ -251,27 +254,70 @@ def test_corrupt_doctree_fails_without_reread_fallback(tmp_path, monkeypatch):
         _build(tmp_path, monkeypatch, experimental=True)
     probe = tmp_path / "probe"
     assert not (probe / "markdown.started").exists()
-    assert (
-        len([event for event in _events(probe) if event["event"] == "source-read"]) == 2
-    )
+    assert len(
+        [event for event in _events(probe) if event["event"] == "source-read"]
+    ) == len(DOCNAMES)
 
 
+@pytest.mark.parametrize("builder", ["html", "dirhtml"])
 def test_secondary_failure_sets_nonzero_status_and_removes_staging(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, builder
 ):
     source = tmp_path / "source"
     output = tmp_path / "output"
     probe = tmp_path / "probe"
     shutil.copytree(FIXTURE, source)
-    _run_build(source, output, probe, monkeypatch, freshenv=True)
+    _run_build(source, output, probe, monkeypatch, builder=builder, freshenv=True)
     assert (output / "index.html.md").exists()
+    assert (output / "llms.txt").exists()
+    assert (output / "llms-full.txt").exists()
+    if builder == "dirhtml":
+        assert (output / "guide" / "llms.txt").exists()
+    assert len((probe / "evaluations.txt").read_text().splitlines()) == len(DOCNAMES)
 
+    with (source / "guide.rst").open("a", encoding="utf-8") as stream:
+        stream.write("\nForce a secondary writer for this failure probe.\n")
     monkeypatch.setenv("SPHINX_LLM_POC_FAIL_WRITER", "markdown")
-    app = _run_build(source, output, probe, monkeypatch, freshenv=False)
+    app = _run_build(
+        source,
+        output,
+        probe,
+        monkeypatch,
+        builder=builder,
+        freshenv=False,
+    )
+
+    events = _events(probe)
+    markdown_start = next(
+        event
+        for event in reversed(events)
+        if event["event"] == "writer-start" and event["role"] == "markdown"
+    )
+    markdown_failure = next(
+        event
+        for event in reversed(events)
+        if event["event"] == "writer-failed" and event["role"] == "markdown"
+    )
+    assert markdown_failure["pid"] == markdown_start["pid"]
+    assert markdown_failure["error_type"] == "ExtensionError"
+    writer_exit = next(
+        event for event in reversed(events) if event["event"] == "writer-exited"
+    )
+    assert writer_exit["returncode"] > 0
     assert app.statuscode != 0
     assert not (output / "_markdown_build").exists()
-    assert not (output / "index.html.md").exists()
-    assert not (output / "llms.txt").exists()
+    assert not list(output.rglob("*.md"))
+    assert not list(output.rglob("llms.txt"))
+    assert not (output / "llms-full.txt").exists()
+    with pytest.raises(ProcessLookupError):
+        os.kill(markdown_start["pid"], 0)
+    assert len((probe / "evaluations.txt").read_text().splitlines()) == (
+        len(DOCNAMES) + 1
+    )
+    assert (
+        len([event for event in events if event["event"] == "source-read"])
+        == len(DOCNAMES) + 1
+    )
 
 
 def test_primary_failure_terminates_secondary_writer(tmp_path, monkeypatch):

@@ -59,7 +59,9 @@ def _environment_updated(app, env) -> None:
     _append_event({"event": "env-updated", "pid": os.getpid()})
     corrupt_docname = os.environ.get("SPHINX_LLM_POC_CORRUPT_DOCTREE")
     if corrupt_docname:
-        env._pickled_doctree_cache.pop(corrupt_docname, None)
+        pickled_cache = getattr(env, "_pickled_doctree_cache", None)
+        if pickled_cache is not None:
+            pickled_cache.pop(corrupt_docname, None)
         (Path(env.doctreedir) / f"{corrupt_docname}.doctree").write_bytes(b"broken")
 
 
@@ -77,6 +79,27 @@ def _writer_finished(app, role) -> None:
     _append_event({"event": "writer-finished", "role": role, "pid": os.getpid()})
 
 
+def _writer_failed(app, role, error_type) -> None:
+    _append_event(
+        {
+            "error_type": error_type,
+            "event": "writer-failed",
+            "pid": os.getpid(),
+            "role": role,
+        }
+    )
+
+
+def _writer_exited(app, returncode) -> None:
+    _append_event(
+        {
+            "event": "writer-exited",
+            "pid": os.getpid(),
+            "returncode": returncode,
+        }
+    )
+
+
 def _wait_for(path: Path, description: str) -> None:
     deadline = time.monotonic() + 10
     while not path.exists():
@@ -85,10 +108,9 @@ def _wait_for(path: Path, description: str) -> None:
         time.sleep(0.01)
 
 
-def _write_started(app, builder) -> None:
+def _writer_started(app, role) -> None:
     if not os.environ.get("SPHINX_LLM_POC_WRITER_BARRIER"):
         return
-    role = "markdown" if builder.name == "llms-markdown" else "primary"
     other = "primary" if role == "markdown" else "markdown"
     probe_dir = _probe_dir()
     (probe_dir / f"{role}.started").touch()
@@ -125,7 +147,9 @@ def setup(app):
     app.connect("env-updated", _environment_updated)
     app.connect("llms-shared-doctrees-ready", _snapshot_ready)
     app.connect("llms-shared-doctrees-writer-finished", _writer_finished)
-    app.connect("write-started", _write_started)
+    app.connect("llms-shared-doctrees-writer-failed", _writer_failed)
+    app.connect("llms-shared-doctrees-writer-exited", _writer_exited)
+    app.connect("llms-shared-doctrees-writer-started", _writer_started)
     app.connect("doctree-resolved", _doctree_resolved)
     return {
         "version": "1",
