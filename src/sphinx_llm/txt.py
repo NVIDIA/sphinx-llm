@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import multiprocessing
 import os
 import posixpath
 import re
@@ -19,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import traceback
 from collections.abc import Iterable
 from contextlib import nullcontext
 from dataclasses import dataclass
@@ -34,6 +36,7 @@ from sphinx.errors import ExtensionError
 from sphinx.util import logging
 from sphinx.util.matching import patmatch
 from sphinx.util.osutil import relative_uri
+from sphinx.util.parallel import SerialTasks
 
 from .extract_prose import extract_prose
 from .markdown_builder import (
@@ -54,6 +57,7 @@ UNKNOWN_NODE_WARNING_PATTERN = re.compile(
     r"(?P<message>unknown node type: .+)$"
 )
 SUMMARY_CACHE_VERSION = 1
+EXPERIMENTAL_SHARED_DOCTREES_CONFIG = "llms_txt_experimental_shared_doctrees"
 SITEMAP_TEXT_TRANSLATION = str.maketrans(
     {
         "&": "&amp;",
@@ -237,6 +241,33 @@ class MarkdownLayout(str, Enum):
     REPLACE = "replace"
 
 
+class _ForkedMarkdownWriterProcess:
+    """Expose the small ``subprocess.Popen`` surface used by the combiner."""
+
+    def __init__(self, process: multiprocessing.Process):
+        self._process = process
+
+    @property
+    def returncode(self) -> int | None:
+        return self._process.exitcode
+
+    def poll(self) -> int | None:
+        return self._process.exitcode
+
+    def wait(self, timeout: float | None = None) -> int:
+        self._process.join(timeout)
+        if self._process.is_alive():
+            raise subprocess.TimeoutExpired("forked Markdown writer", timeout)
+        assert self._process.exitcode is not None
+        return self._process.exitcode
+
+    def terminate(self) -> None:
+        self._process.terminate()
+
+    def kill(self) -> None:
+        self._process.kill()
+
+
 SUFFIX_MODE_ALIASES = {"both": "auto"}
 SUFFIX_MODES = ("auto", "append", "replace", "file-suffix", "url-suffix")
 SUPPORTED_SUFFIX_MODES = (*SUFFIX_MODES, *SUFFIX_MODE_ALIASES)
@@ -330,6 +361,8 @@ class MarkdownGenerator:
         self.md_build_process = None
         self.md_build_logfile = None
         self.parallel = None
+        self.experimental_shared_doctrees = False
+        self._primary_write = None
         self._summary_cache: dict[str, dict[str, str]] | None = None
         self._loaded_summary_cache_path: Path | None = None
         self._generated_llms_full_path: Path | None = None
@@ -380,6 +413,9 @@ class MarkdownGenerator:
         self.outdir = Path(app.builder.outdir)
         self.md_build_dir = self.outdir / "_markdown_build"
         self.parallel = getattr(self.app.config, "llms_txt_build_parallel", True)
+        self.experimental_shared_doctrees = getattr(
+            self.app.config, EXPERIMENTAL_SHARED_DOCTREES_CONFIG, False
+        )
         configured_suffix_mode = getattr(
             self.app.config, "llms_txt_suffix_mode", "auto"
         )
@@ -402,8 +438,10 @@ class MarkdownGenerator:
 
         self.app.connect("html-page-context", self.add_discovery_metadata)
 
-        # Start the markdown builder subproces in the background
-        if self.parallel:
+        if self.experimental_shared_doctrees:
+            self._install_shared_doctree_writer()
+        # Start the markdown builder subprocess in the background
+        elif self.parallel:
             self.build_markdown_files()
         else:
             logger.info(
@@ -412,6 +450,99 @@ class MarkdownGenerator:
             self.app.connect("build-finished", self.build_markdown_files, priority=100)
         # Once the primary build is finished, combine the markdown files
         self.app.connect("build-finished", self.combine_builds, priority=101)
+
+    def _install_shared_doctree_writer(self) -> None:
+        """Fork the Markdown writer at the primary builder's write boundary.
+
+        This is deliberately a Linux/POSIX-only proof of concept. ``fork`` gives
+        the secondary writer a copy-on-write environment snapshot, while calling
+        ``Builder.write`` directly makes rereading sources structurally
+        unavailable in the child.
+        """
+        if "fork" not in multiprocessing.get_all_start_methods():
+            raise ExtensionError(
+                f"{EXPERIMENTAL_SHARED_DOCTREES_CONFIG} requires the POSIX fork "
+                "start method"
+            )
+        if "markdown_uri_doc_suffix" not in self.app.config.values:
+            raise ExtensionError(
+                f"{EXPERIMENTAL_SHARED_DOCTREES_CONFIG} was enabled too late to "
+                "load sphinx_markdown_builder configuration"
+            )
+
+        self._primary_write = self.app.builder.write
+        self.app.builder.write = self._write_outputs_from_shared_doctrees
+
+    def _write_outputs_from_shared_doctrees(
+        self,
+        build_docnames: Iterable[str] | None,
+        updated_docnames: Iterable[str],
+        method: str = "update",
+    ) -> None:
+        """Start an isolated Markdown writer, then run the primary writer."""
+        assert self._primary_write is not None
+        if self.md_build_dir.exists():
+            shutil.rmtree(self.md_build_dir)
+        self._remove_published_markdown()
+        self.md_build_dir.mkdir()
+        self.md_build_logfile = tempfile.NamedTemporaryFile(
+            mode="w", delete=False, prefix="sphinx_llm_output_", suffix=".log"
+        )
+        self.md_build_logfile.close()
+
+        # Force every prepared doctree through deserialization before forking.
+        # A missing or corrupt doctree fails here and cannot fall back to a read.
+        for docname in sorted(self.app.env.found_docs):
+            self.app.env.get_doctree(docname)
+        self.app.events.emit(
+            "llms-shared-doctrees-ready", frozenset(self.app.env.found_docs)
+        )
+
+        context = multiprocessing.get_context("fork")
+        process = context.Process(
+            target=self._write_markdown_from_snapshot,
+            name="sphinx-llm-markdown-writer",
+        )
+        process.start()
+        self.md_build_process = _ForkedMarkdownWriterProcess(process)
+        self.app.events.emit("llms-shared-doctrees-writer-started", "primary")
+        self._primary_write(build_docnames, updated_docnames, method)
+        self.app.events.emit("llms-shared-doctrees-writer-finished", "primary")
+
+    def _remove_published_markdown(self) -> None:
+        """Remove prior extension-owned outputs before an experimental write."""
+        for docname in self.app.env.found_docs:
+            targets, _ = self._target_paths_for_docname(docname)
+            for target in targets.values():
+                target.unlink(missing_ok=True)
+        for index_path in _nested_index_paths(self.app, self.app.env.found_docs):
+            (self.outdir / index_path).unlink(missing_ok=True)
+        (self.outdir / "llms-full.txt").unlink(missing_ok=True)
+
+    def _write_markdown_from_snapshot(self) -> None:
+        """Write all Markdown from the inherited finalized environment."""
+        try:
+            self.app.outdir = self.md_build_dir
+            builder = SphinxLlmMarkdownBuilder(self.app, self.app.env)
+            self.app.builder = builder
+            builder.init()
+            builder.parallel_ok = False
+            builder.finish_tasks = SerialTasks()
+            self.app.events.emit("llms-shared-doctrees-writer-started", "markdown")
+            builder.write(None, (), "all")
+            builder.finish()
+            builder.finish_tasks.join()
+            builder.cleanup()
+            self.app.events.emit("llms-shared-doctrees-writer-finished", "markdown")
+        except BaseException as error:
+            self.app.events.emit(
+                "llms-shared-doctrees-writer-failed",
+                "markdown",
+                type(error).__name__,
+            )
+            with open(self.md_build_logfile.name, "a", encoding="utf-8") as logfile:
+                traceback.print_exc(file=logfile)
+            raise
 
     def combine_builds(self, app: Sphinx, exception: Exception | None):
         """Combine the markdown files into llms-full.txt and llms.txt and merge the build outputs together."""
@@ -447,6 +578,12 @@ class MarkdownGenerator:
             self.md_build_process.wait()
             logger.info("Markdown build subprocess finished")
 
+        if self.experimental_shared_doctrees:
+            self.app.events.emit(
+                "llms-shared-doctrees-writer-exited",
+                self.md_build_process.returncode,
+            )
+
         remaining_log, relayed_warning_count = self._relay_unknown_node_warnings()
         if (
             relayed_warning_count
@@ -465,6 +602,8 @@ class MarkdownGenerator:
                 )
                 if remaining_log.strip():
                     logger.error(remaining_log)
+                if self.experimental_shared_doctrees:
+                    self.app.statuscode = 1
                 return
 
             # Copy markdown files to the main output directory
@@ -1396,6 +1535,11 @@ class MarkdownGenerator:
 
 def setup(app: Sphinx) -> dict[str, Any]:
     """Set up the Sphinx extension."""
+    app.add_event("llms-shared-doctrees-ready")
+    app.add_event("llms-shared-doctrees-writer-started")
+    app.add_event("llms-shared-doctrees-writer-finished")
+    app.add_event("llms-shared-doctrees-writer-failed")
+    app.add_event("llms-shared-doctrees-writer-exited")
     app.setup_extension("sphinx_llm.summary")
     if app.tags.has("sphinx_llm_markdown"):
         app.setup_extension("sphinx_markdown_builder")
@@ -1403,6 +1547,16 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_enabled", True, "")
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
+    app.add_config_value(EXPERIMENTAL_SHARED_DOCTREES_CONFIG, False, "env")
+    experimental_requested = app.config._raw_config.get(
+        EXPERIMENTAL_SHARED_DOCTREES_CONFIG,
+        app.config.overrides.get(EXPERIMENTAL_SHARED_DOCTREES_CONFIG, False),
+    )
+    if experimental_requested:
+        # The existing subprocess loads this extension in its own application.
+        # The POC child inherits one already-finalized application, so register
+        # the Markdown builder's configuration before config initialization.
+        app.setup_extension("sphinx_markdown_builder")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", False, "env")
     app.add_config_value("llms_txt_nested_enabled", True, "env")
