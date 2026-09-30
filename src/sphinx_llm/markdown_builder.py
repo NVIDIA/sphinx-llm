@@ -6,6 +6,7 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional, TypedDict
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 from docutils import nodes
@@ -13,6 +14,8 @@ from sphinx.config import Config
 from sphinx.errors import ConfigError
 from sphinx_markdown_builder.builder import MarkdownBuilder
 from sphinx_markdown_builder.translator import MarkdownTranslator
+
+from .intersphinx import find_markdown_url
 
 LINK_TOKEN_PREFIX = "sphinx-llm:"
 LINK_TARGETS_FILENAME = ".sphinx-llm-link-targets.json"
@@ -73,7 +76,12 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
                 return self.builder.link_token(self.builder.current_doc_name, ref_id)
             if not node.get("refuri", ""):
                 return self.builder.link_token(self.builder.current_doc_name)
-        return super()._fetch_ref_uri(node)
+        uri = super()._fetch_ref_uri(node)
+        if not node.get("internal", self.status.default_ref_internal) and node.get(
+            "reftitle"
+        ):
+            return self.builder.intersphinx_markdown_url(uri)
+        return uri
 
     def unknown_visit(self, node: nodes.Node) -> None:
         """Optionally suppress the warning while still dropping the subtree."""
@@ -94,6 +102,24 @@ class SphinxLlmMarkdownBuilder(MarkdownBuilder):
         super().__init__(*args, **kwargs)
         self._link_target_by_token: dict[str, LinkTarget] = {}
         self._link_token_by_target: dict[tuple[str, Optional[str]], str] = {}
+        self._intersphinx_markdown_urls: dict[str, str] = {}
+
+    def intersphinx_markdown_url(self, url: str) -> str:
+        """Discover an external Markdown page once per resolved HTML URL."""
+        parsed = urlsplit(url)
+        page_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+        if page_url not in self._intersphinx_markdown_urls:
+            self._intersphinx_markdown_urls[page_url] = find_markdown_url(page_url)
+        target = urlsplit(self._intersphinx_markdown_urls[page_url])
+        return urlunsplit(
+            (
+                target.scheme,
+                target.netloc,
+                target.path,
+                parsed.query or target.query,
+                parsed.fragment,
+            )
+        )
 
     def link_token(self, docname: str, fragment: Optional[str] = None) -> str:
         """Return an opaque token for a Sphinx document target."""
