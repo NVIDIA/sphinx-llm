@@ -317,6 +317,7 @@ def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
         confdir=tmp_path / "conf",
         srcdir=tmp_path / "source",
         doctreedir=tmp_path / "doctrees",
+        builder=SimpleNamespace(name="html", format="html"),
         tags=(),
     )
     generator = MarkdownGenerator(app)
@@ -356,10 +357,17 @@ def test_rst_files_have_corresponding_output_files(sphinx_build):
         assert_file_exists_with_content(build_dir / html_md_name)
 
 
-def test_markdown_only_content_is_excluded_from_html(sphinx_build):
-    """Content tagged ``not html`` appears in Markdown, not HTML."""
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "This paragraph appears only in the Markdown page.",
+        "This paragraph is excluded from the HTML page.",
+    ],
+    ids=["markdown", "not-html"],
+)
+def test_markdown_only_content_is_excluded_from_html(sphinx_build, marker):
+    """Both Markdown conditions include content in Markdown, not HTML."""
     app, build_dir, _ = sphinx_build
-    marker = "This paragraph appears only in the Markdown page."
     html_path = (
         build_dir / "test.html"
         if app.builder.name == "html"
