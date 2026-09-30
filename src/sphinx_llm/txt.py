@@ -557,14 +557,18 @@ class MarkdownGenerator:
                 str(self.md_build_dir),
             ]
 
-            # Propagate the tags of the primary build so that conditional
-            # content (e.g. ".. only::" directives) renders the same in the
-            # markdown output. This intentionally includes the dynamic tags
-            # derived from the primary builder (e.g. "html", "format_html"):
-            # the markdown output this way stays faithful to the HTML pages it
-            # complements.
+            # Forward custom tags, but let the Markdown builder set its own
+            # builder and format tags. Forwarding HTML's dynamic tags makes
+            # ``.. only:: not html`` false in the Markdown build.
+            builder_tags = {
+                self.app.builder.name,
+                self.app.builder.format,
+                f"builder_{self.app.builder.name}",
+                f"format_{self.app.builder.format}",
+            }
             for tag in self.app.tags:
-                sphinx_build_cmd += ["-t", tag]
+                if tag not in builder_tags:
+                    sphinx_build_cmd += ["-t", tag]
 
             # Preserve command-line configuration overrides from the primary
             # build. Without forwarding these, the markdown sub-build reloads
