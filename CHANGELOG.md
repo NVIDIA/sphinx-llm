@@ -28,6 +28,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Generated Markdown now includes Sphinx project metadata, including the
+  configured version, by default. Set `llms_txt_markdown_docinfo = False` to
+  opt out.
 - Made the non-standard `llms-full.txt` convenience file opt-in. Set
   `llms_txt_full_build = True` to generate it and list it in `llms.txt`.
 - Reworked the `docref` directive around Sphinx's environment lifecycle,
