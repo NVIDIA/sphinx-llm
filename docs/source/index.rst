@@ -16,6 +16,7 @@ Welcome to sphinx-llm's documentation!
    test
    apples
    meta_example
+   docinfo
    nested/index
 
 

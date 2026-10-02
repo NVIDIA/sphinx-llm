@@ -42,6 +42,8 @@ from .markdown_builder import (
     SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG,
     LinkTarget,
     SphinxLlmMarkdownBuilder,
+    configure_docinfo,
+    strip_docinfo,
     validate_suppress_unknown_node_warnings,
 )
 from .summary import DEFAULT_API_KEY_ENV
@@ -804,7 +806,7 @@ class MarkdownGenerator:
             )
 
         source_file = self._markdown_file_by_docname[docname]
-        content = source_file.read_text(encoding="utf-8")
+        content = strip_docinfo(source_file.read_text(encoding="utf-8"))
         _, primary_layout = self._target_paths_for_docname(docname)
         llms_txt_path = self.outdir / "llms.txt"
         llms_txt_path.write_text(
@@ -967,7 +969,7 @@ class MarkdownGenerator:
         """Extract the title from a markdown file."""
         try:
             with open(md_file, encoding="utf-8") as f:
-                content = f.read()
+                content = strip_docinfo(f.read())
                 lines = content.split("\n")
 
                 # Look for the first heading (starts with #)
@@ -1360,7 +1362,7 @@ class MarkdownGenerator:
         """
         try:
             with open(md_file, encoding="utf-8") as f:
-                content = extract_prose(f.read())
+                content = extract_prose(strip_docinfo(f.read()))
                 lines = content.split("\n")
                 anchor = re.compile(r"^<a\b[^>]*>\s*</a>$", re.IGNORECASE)
 
@@ -1407,6 +1409,8 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_enabled", True, "")
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
+    app.add_config_value("llms_txt_docinfo", True, "env", types=bool)
+    app.connect("config-inited", configure_docinfo)
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", False, "env")
     app.add_config_value("llms_txt_nested_enabled", True, "env")

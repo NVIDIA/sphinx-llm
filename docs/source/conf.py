@@ -8,9 +8,15 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+from importlib.metadata import version as package_version
+
 project = "sphinx-llm"
 copyright = "2024, Jacob Tomlinson"
 author = "Jacob Tomlinson"
+# These docs describe the installed sphinx-llm build. Configure both the short
+# software version and full release so generated Markdown carries that context.
+release = package_version("sphinx-llm")
+version = ".".join(release.split(".")[:2])
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

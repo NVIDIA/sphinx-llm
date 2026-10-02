@@ -157,6 +157,16 @@ do not receive discovery links.
 
 #### Configuration
 
+Generated Markdown starts with YAML frontmatter containing configured
+documentation context, including `version`, `release`, `author` and
+`copyright`. Values remain strings, and empty values are omitted. Set
+`llms_txt_docinfo = False` (or `sphinx-build -D llms_txt_docinfo=0`) to opt out.
+This setting governs sphinx-llm output even when `markdown_docinfo` differs;
+native Markdown builds retain the upstream behavior. Matching page-local
+docinfo overrides global values, with an empty local value omitting the key.
+See [documentation version context](https://sphinx-llm.readthedocs.io/en/latest/docinfo.html)
+for supported fields, examples and links to generated Markdown.
+
 Supported `conf.py` configuration options for `sphinx_llm.txt`.
 
 <!-- markdownlint-disable MD013 -->
@@ -166,6 +176,7 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_nested_enabled` | Generate scoped nested `llms.txt` files and discover the most-specific index. Set to `False` for root-only generation and discovery. | `bool` | `True` |
 | `llms_txt_description` | Override the project description set in `llms.txt` | `str` | Uses the project description from `pyproject.toml` by default |
 | `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
+| `llms_txt_docinfo` | Preserve configured documentation context as YAML frontmatter in generated Markdown. Governs sphinx-llm output independently of upstream `markdown_docinfo`; set to `False` to opt out. | `bool` | `True` |
 | `llms_txt_suffix_mode` | Markdown output mode. `"append"` publishes `.html.md` and, for non-root `dirhtml` pages, the no-trailing-slash `.md` form. `"replace"` replaces `.html` with `.md`. `"auto"` publishes both and makes append canonical. Compatibility values remain supported: `"both"` equals `"auto"`; `"file-suffix"` publishes only `.html.md`; `"url-suffix"` publishes only the previous `dirhtml` no-trailing-slash form and behaves like `"file-suffix"` for `html`. | `str` | `"auto"` |
 | `llms_txt_full_build` | Generate the optional, non-standard `llms-full.txt` convenience file and list it in generated `llms.txt` output. Set to `True` to opt in. | `bool` | `False` |
 | `llms_txt_exclude` | A list of Sphinx wildcard patterns matched against document names (not regular expressions or source paths) to exclude from `llms.txt` and `llms-full.txt`. `*` does not cross `/`, while `**` does; for example, `"reference/generated/**"`. The individual markdown files for excluded documents are still generated. | `list[str]` | `[]` |

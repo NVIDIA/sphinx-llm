@@ -3,6 +3,7 @@
 """Markdown builder that preserves Sphinx document targets."""
 
 import json
+import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional, TypedDict
@@ -12,11 +13,26 @@ from docutils import nodes
 from sphinx.config import Config
 from sphinx.errors import ConfigError
 from sphinx_markdown_builder.builder import MarkdownBuilder
-from sphinx_markdown_builder.translator import MarkdownTranslator
+from sphinx_markdown_builder.translator import DOC_INFO_FIELDS, MarkdownTranslator
 
 LINK_TOKEN_PREFIX = "sphinx-llm:"
 LINK_TARGETS_FILENAME = ".sphinx-llm-link-targets.json"
 SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG = "llms_txt_suppress_unknown_node_warnings"
+DOCINFO_FIELDS = (*DOC_INFO_FIELDS, "project", "release")
+_DOCINFO_FRONTMATTER = re.compile(
+    r'\A---\n(?:"(?:' + "|".join(DOCINFO_FIELDS) + r')": "(?:[^"\\\n]|\\.)*"\n)+---\n\n'
+)
+
+
+def strip_docinfo(markdown: str) -> str:
+    """Remove only the leading frontmatter format emitted by this builder."""
+    return _DOCINFO_FRONTMATTER.sub("", markdown, count=1)
+
+
+def configure_docinfo(app, config: Config) -> None:
+    """Keep sphinx-llm's docinfo policy isolated from native Markdown builds."""
+    if app.tags.has("sphinx_llm_markdown"):
+        config.markdown_docinfo = config.llms_txt_docinfo
 
 
 class LinkTarget(TypedDict):
@@ -60,6 +76,31 @@ def validate_suppress_unknown_node_warnings(_app, config: Config) -> None:
 
 class SphinxLlmMarkdownTranslator(MarkdownTranslator):
     """Preserve document targets until sphinx-llm selects output paths."""
+
+    def _add_doc_info_from_config(self):
+        """Collect strings without rendering the upstream HTML metadata."""
+        values = {key: getattr(self.config, key, "") for key in DOCINFO_FIELDS}
+        local = self.builder.env.metadata.get(self.builder.current_doc_name, {})
+        values.update({key: local[key] for key in DOCINFO_FIELDS if key in local})
+        self._frontmatter = {
+            key: value
+            for key, value in values.items()
+            if isinstance(value, str) and value
+        }
+
+    def astext(self):
+        body = super().astext()
+        metadata = getattr(self, "_frontmatter", {})
+        if not metadata:
+            return body
+        # JSON double-quoted strings are valid YAML scalars. Quoting every value
+        # preserves version strings and safely escapes multiline/special text
+        # without adding a runtime YAML dependency.
+        fields = "".join(
+            f"{json.dumps(key)}: {json.dumps(value)}\n"
+            for key, value in metadata.items()
+        )
+        return f"---\n{fields}---\n\n{body}"
 
     def _adjust_url(self, url: str) -> str:
         if url.startswith(LINK_TOKEN_PREFIX):

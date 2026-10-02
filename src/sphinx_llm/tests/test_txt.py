@@ -1594,6 +1594,7 @@ def test_nested_indexes_use_existing_docs_fixture_and_canonical_targets(
         expected_indexes.update(
             {
                 "apples/llms.txt",
+                "docinfo/llms.txt",
                 "meta_example/llms.txt",
                 "nested/deeper/example/llms.txt",
                 "nested/example/llms.txt",
