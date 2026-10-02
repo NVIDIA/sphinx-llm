@@ -19,6 +19,9 @@ LINK_TOKEN_PREFIX = "sphinx-llm:"
 LINK_TARGETS_FILENAME = ".sphinx-llm-link-targets.json"
 SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG = "llms_txt_suppress_unknown_node_warnings"
 DOCINFO_FIELDS = (*DOC_INFO_FIELDS, "project", "release")
+_YAML_SPECIAL_CHARACTERS = re.compile(
+    r"[\x7f-\x9f\u2028\u2029\ud800-\udfff\ufffe\uffff]"
+)
 _DOCINFO_FRONTMATTER = re.compile(
     r'\A---\n(?:"(?:' + "|".join(DOCINFO_FIELDS) + r')": "(?:[^"\\\n]|\\.)*"\n)+---\n\n'
 )
@@ -27,6 +30,14 @@ _DOCINFO_FRONTMATTER = re.compile(
 def strip_docinfo(markdown: str) -> str:
     """Remove only the leading frontmatter format emitted by this builder."""
     return _DOCINFO_FRONTMATTER.sub("", markdown, count=1)
+
+
+def _yaml_string(value: str) -> str:
+    """Quote a YAML string without JSON surrogate pairs or YAML line folding."""
+    quoted = json.dumps(value, ensure_ascii=False)
+    return _YAML_SPECIAL_CHARACTERS.sub(
+        lambda match: f"\\u{ord(match.group()):04x}", quoted
+    )
 
 
 def configure_docinfo(app, config: Config) -> None:
@@ -93,11 +104,11 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
         metadata = getattr(self, "_frontmatter", {})
         if not metadata:
             return body
-        # JSON double-quoted strings are valid YAML scalars. Quoting every value
-        # preserves version strings and safely escapes multiline/special text
-        # without adding a runtime YAML dependency.
+        # Keep supplementary Unicode codepoints intact, and escape characters
+        # YAML disallows or folds as line breaks. Quoting every value preserves
+        # version strings without adding a runtime YAML dependency.
         fields = "".join(
-            f"{json.dumps(key)}: {json.dumps(value)}\n"
+            f"{json.dumps(key)}: {_yaml_string(value)}\n"
             for key, value in metadata.items()
         )
         return f"---\n{fields}---\n\n{body}"

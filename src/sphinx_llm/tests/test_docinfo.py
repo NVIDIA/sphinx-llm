@@ -8,7 +8,7 @@ import sys
 import pytest
 import yaml
 
-AUTHOR = 'Docs: "Team" #1 & <contributors> — 日本語\nSecond line'
+AUTHOR = 'Docs: "Team" #1 & <contributors> — 日本語 😀\nSecond line\u0085NEL\u2028LS\u2029PS\x7fDEL\x9fC1'
 
 
 def _build(
@@ -74,6 +74,8 @@ def _frontmatter(path):
     assert "<meta " not in content
     metadata = yaml.safe_load(frontmatter)
     assert len(yaml.compose(frontmatter).value) == len(metadata)
+    for value in metadata.values():
+        value.encode("utf-8")
     return metadata, body
 
 
