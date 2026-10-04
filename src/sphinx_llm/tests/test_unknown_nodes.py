@@ -18,6 +18,7 @@ from sphinx.errors import ConfigError
 from sphinx_llm.markdown_builder import validate_suppress_unknown_node_warnings
 
 CONFIG_NAME = "llms_txt_suppress_unknown_node_warnings"
+PRESERVE_CONFIG_NAME = "llms_txt_preserve_unknown_nodes"
 CUSTOM_NODE_EXTENSION_PATH = (
     Path(__file__).parent / "fixtures" / "unknown_nodes" / "custom_unknown.py"
 )
@@ -48,6 +49,7 @@ def _build(
     extra_sources: dict[str, str] | None = None,
     fail_child: bool = False,
     invalid_child_log: bool = False,
+    preserve_unknown_nodes: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], str]:
     source_dir = tmp_path / "source"
     output_dir = tmp_path / "output"
@@ -61,6 +63,7 @@ def _build(
         f"llms_txt_build_parallel = {parallel!r}",
         f"custom_fail_markdown = {fail_child!r}",
         f"custom_invalid_log_bytes = {invalid_child_log!r}",
+        f"{PRESERVE_CONFIG_NAME} = {preserve_unknown_nodes!r}",
     ]
     if value is not Ellipsis:
         config.append(f"{CONFIG_NAME} = {value!r}")
@@ -122,6 +125,16 @@ def _assert_unknown_content_omitted(markdown: str) -> None:
 
 
 @pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
+def test_primary_build_preserves_unknown_node_source(tmp_path, parallel):
+    result, markdown = _build(tmp_path, parallel=parallel, preserve_unknown_nodes=True)
+
+    assert result.returncode == 0
+    assert "`` :abbr:`API (application programming interface)` ``" in markdown
+    assert "```rst\nCentered child text.\n```" in markdown
+    assert "`` :custom-unknown:`Extension child text` ``" in markdown
+
+
+@pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
 def test_primary_build_surfaces_unknown_node_warnings_by_default(tmp_path, parallel):
     result, markdown = _build(tmp_path, parallel=parallel)
 
@@ -180,6 +193,21 @@ def test_true_suppresses_all_primary_unknown_node_warnings(tmp_path, parallel):
     assert result.returncode == 0
     assert "unknown node type" not in _output(result)
     _assert_unknown_content_omitted(markdown)
+
+
+def test_preserved_unknown_nodes_are_rendered_when_warnings_are_suppressed(tmp_path):
+    result, markdown = _build(
+        tmp_path,
+        value=True,
+        warning_is_error=True,
+        preserve_unknown_nodes=True,
+    )
+
+    assert result.returncode == 0
+    assert "unknown node type" not in _output(result)
+    assert "`` :abbr:`API (application programming interface)` ``" in markdown
+    assert "```rst\nCentered child text.\n```" in markdown
+    assert "`` :custom-unknown:`Extension child text` ``" in markdown
 
 
 @pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
