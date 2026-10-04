@@ -3,6 +3,7 @@
 """Markdown builder that preserves Sphinx document targets."""
 
 import json
+import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional, TypedDict
@@ -17,6 +18,7 @@ from sphinx_markdown_builder.translator import MarkdownTranslator
 LINK_TOKEN_PREFIX = "sphinx-llm:"
 LINK_TARGETS_FILENAME = ".sphinx-llm-link-targets.json"
 SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG = "llms_txt_suppress_unknown_node_warnings"
+PRESERVE_UNKNOWN_NODES_CONFIG = "llms_txt_preserve_unknown_nodes"
 
 
 class LinkTarget(TypedDict):
@@ -76,12 +78,41 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
         return super()._fetch_ref_uri(node)
 
     def unknown_visit(self, node: nodes.Node) -> None:
-        """Optionally suppress the warning while still dropping the subtree."""
+        """Handle unknown nodes without changing the default omission behavior."""
         suppressed = getattr(self.config, SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG)
         node_name = node.__class__.__name__
-        if suppressed is True or (suppressed is not False and node_name in suppressed):
+        preserve = getattr(self.config, PRESERVE_UNKNOWN_NODES_CONFIG)
+        warning_suppressed = suppressed is True or (
+            suppressed is not False and node_name in suppressed
+        )
+
+        if preserve:
+            if not warning_suppressed:
+                try:
+                    super().unknown_visit(node)
+                except nodes.SkipNode:
+                    pass
+            self._add_unknown_node_source(node)
+            raise nodes.SkipNode
+
+        if warning_suppressed:
             raise nodes.SkipNode
         super().unknown_visit(node)
+
+    def _add_unknown_node_source(self, node: nodes.Node) -> None:
+        source = node.rawsource or node.astext()
+        backtick_runs = re.findall(r"`+", source)
+        fence = "`" * (max((len(run) for run in backtick_runs), default=0) + 1)
+
+        if isinstance(node, nodes.Inline):
+            padding = " " if source.startswith("`") or source.endswith("`") else ""
+            self.add(f"{fence}{padding}{source}{padding}{fence}")
+            return
+
+        fence = "`" * max(3, len(fence))
+        self.add(f"{fence}rst", prefix_eol=1, suffix_eol=1)
+        self.add(source)
+        self.add(fence, prefix_eol=1, suffix_eol=2)
 
 
 class SphinxLlmMarkdownBuilder(MarkdownBuilder):
