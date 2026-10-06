@@ -26,7 +26,7 @@ jobs:
             build_command: "uv run --dev sphinx-build docs/ docs/_build/"
           - repo: breathe-doc/breathe
             install_command: "uv pip install --editable '.[build,docs]' && uv run --no-sync make parser data"
-            build_command: "uv run --no-sync python -m sphinx -b html -W -E documentation/source documentation/build/html"
+            build_command: "uv run --no-sync python -m sphinx -b html -W -E -D extensions=breathe,sphinx.ext.graphviz,sphinx.ext.imgconverter,sphinx_copybutton,sphinxcontrib.spelling,sphinx_llm.txt documentation/source documentation/build/html"
             requires_doxygen: true
             expected_markdown_file: documentation/build/html/index.html.md
             expected_markdown_content: "Crack that shell with specified tool"
