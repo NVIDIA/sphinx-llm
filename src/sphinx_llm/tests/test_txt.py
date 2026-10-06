@@ -167,6 +167,20 @@ def sphinx_build(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
     yield from _build_sphinx(builder, {"llms_txt_build_parallel": parallel})
 
 
+@pytest.fixture
+def sphinx_build_preserving_unknown_nodes() -> Generator[
+    tuple[Sphinx, Path, Path], None, None
+]:
+    """Build the example docs with unknown Markdown node preservation enabled."""
+    yield from _build_sphinx(
+        "html",
+        {
+            "llms_txt_build_parallel": False,
+            "llms_txt_preserve_unknown_nodes": True,
+        },
+    )
+
+
 @pytest.fixture(
     params=[
         (builder, parallel, full_setting)
@@ -377,6 +391,19 @@ def test_markdown_only_content_is_excluded_from_html(sphinx_build, marker):
 
     assert marker in markdown_path.read_text(encoding="utf-8")
     assert marker not in html_path.read_text(encoding="utf-8")
+
+
+def test_example_unsupported_directive_is_preserved_in_markdown(
+    sphinx_build_preserving_unknown_nodes,
+):
+    """The example's unsupported centered directive survives the Markdown build."""
+    _, build_dir, _ = sphinx_build_preserving_unknown_nodes
+    markdown = (build_dir / "test.html.md").read_text(encoding="utf-8")
+
+    assert (
+        "```rst\nContent from this directive is preserved in the generated Markdown.\n```"
+        in markdown
+    )
 
 
 def test_llms_txt_sitemap_links_exist(sphinx_build):
