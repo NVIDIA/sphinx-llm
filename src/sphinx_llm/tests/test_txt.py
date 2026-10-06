@@ -175,9 +175,15 @@ def _build_versioned_markdown(tmp_path: Path, confoverrides: dict | None = None)
     return (build_dir / "index.html.md").read_text(encoding="utf-8")
 
 
-def test_markdown_output_preserves_project_version(tmp_path: Path):
-    """Generated Markdown includes the configured Sphinx version metadata."""
+def test_markdown_output_omits_project_version_by_default(tmp_path: Path):
+    """Generated Markdown omits project metadata unless explicitly enabled."""
     markdown = _build_versioned_markdown(tmp_path)
+    assert "1.2.3" not in markdown
+
+
+def test_markdown_output_preserves_project_version_when_enabled(tmp_path: Path):
+    """Projects can opt in to configured Sphinx version metadata."""
+    markdown = _build_versioned_markdown(tmp_path, {"llms_txt_markdown_docinfo": True})
     assert "1.2.3" in markdown
 
 
@@ -385,7 +391,7 @@ def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
         "-D",
         "probe_false=0",
         "-D",
-        "markdown_docinfo=1",
+        "markdown_docinfo=0",
     ]
 
 
