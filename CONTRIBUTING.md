@@ -2,17 +2,12 @@
 
 ## Signing Your Work
 
-* Contributors outside the NVIDIA GitHub organization must "sign-off" on their
-  commits. This certifies
+* We require that all contributors "sign-off" on their commits. This certifies
   that the contribution is your original work, or you have rights to submit it
   under the same license, or a compatible license.
 
-  * Sign off every commit you author, rather than just one commit in a pull
-    request. The standard [DCO App](https://github.com/dcoapp/app) checks each
-    ordinary commit independently, with exceptions for bots and merge commits.
-    NVIDIA organization members are exempt from the check when GitHub verifies
-    their commit's cryptographic signature; unverified member commits still need
-    a sign-off. Cryptographic signing and DCO sign-off are separate.
+  * Any contribution which contains commits that are not Signed-Off will not be
+    accepted.
 
 * To sign off on a commit you simply use the `--signoff` (or `-s`) option when
   committing your changes:
@@ -26,23 +21,6 @@
   ```text
   Signed-off-by: Your Name <your@email.com>
   ```
-
-* When squash merging, retain a valid `Signed-off-by` line from every external
-  contributor in the final commit message. Preserve the original commit messages
-  or copy their sign-off lines into the squash message. Co-author attribution
-  alone does not certify the DCO. Maintainers must review contributor sign-offs:
-  the App accepts an author or committer identity and does not validate every
-  `Co-authored-by` identity, so a passing check alone does not prove that every
-  contributor personally signed off.
-
-* The configuration in `.github/dco.yml` applies on the default branch. A
-  repository administrator must ensure the organization's DCO App is enabled
-  for this repository and make its `DCO` check required in branch protection or
-  a ruleset. For squash merges, use **Default to pull request title and commit
-  details** (`squash_merge_commit_message: COMMIT_MESSAGES`) and verify the final
-  message retains every external contributor's sign-off. The App cannot prevent
-  a maintainer from removing those lines in the merge dialog. Its write-access
-  override is a trusted-maintainer bypass, not a contributor sign-off.
 
 * Full text of the DCO:
 
