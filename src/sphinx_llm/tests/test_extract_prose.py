@@ -143,3 +143,20 @@ def test_extract_prose_is_idempotent_for_nested_markup() -> None:
     result = extract_prose(markdown)
     assert result == "See diagram."
     assert extract_prose(result) == result
+
+
+def test_extract_prose_can_ignore_code_blocks() -> None:
+    """Fallback descriptions can omit fenced and indented code blocks."""
+    markdown = (
+        "> ```mermaid\n"
+        "> ---\n"
+        "> layout: elk\n"
+        "> A --> B\n"
+        "> ```\n\n"
+        "    Example code.\n\n"
+        "A useful paragraph follows the examples."
+    )
+
+    assert extract_prose(markdown, ignore_code_blocks=True) == (
+        "\n\nA useful paragraph follows the examples."
+    )

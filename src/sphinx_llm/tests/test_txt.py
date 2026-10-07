@@ -2388,6 +2388,44 @@ def test_content_fallback_plain_truncation_is_unchanged(tmp_path: Path) -> None:
     )
 
 
+def test_content_fallback_skips_fenced_code_blocks(tmp_path: Path) -> None:
+    """A code or diagram block cannot become the page's fallback description."""
+    markdown = tmp_path / "page.html.md"
+    markdown.write_text(
+        "```mermaid\n---\nlayout: elk\n---\nA --> B\n```\n\n"
+        "This page explains the diagram layout configuration.",
+        encoding="utf-8",
+    )
+
+    assert MarkdownGenerator.extract_description_from_markdown(markdown) == (
+        "This page explains the diagram layout configuration."
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("**Estimated Cost:** Variable.", "Estimated Cost: Variable."),
+        (
+            "Use `SentenceTransformers` to create embeddings.",
+            "Use SentenceTransformers to create embeddings.",
+        ),
+        (
+            "**Q: Where can I get support?**<br /> Contact support.",
+            "Q: Where can I get support? Contact support.",
+        ),
+    ],
+)
+def test_content_fallback_converts_inline_markdown_to_plain_text(
+    tmp_path: Path, source: str, expected: str
+) -> None:
+    """Fallback descriptions do not expose Markdown or HTML markup."""
+    markdown = tmp_path / "page.html.md"
+    markdown.write_text(source, encoding="utf-8")
+
+    assert MarkdownGenerator.extract_description_from_markdown(markdown) == expected
+
+
 def test_get_docname_from_md_file(sphinx_build):
     """Test that _get_docname_from_md_file returns correct Sphinx docnames."""
     app, _, _ = sphinx_build

@@ -35,7 +35,7 @@ from sphinx.util import logging
 from sphinx.util.matching import patmatch
 from sphinx.util.osutil import relative_uri
 
-from .extract_prose import extract_prose
+from .extract_prose import extract_prose, markdown_to_plain_text
 from .markdown_builder import (
     LINK_TARGETS_FILENAME,
     LINK_TOKEN_PREFIX,
@@ -1369,7 +1369,7 @@ class MarkdownGenerator:
         """
         try:
             with open(md_file, encoding="utf-8") as f:
-                content = extract_prose(f.read())
+                content = extract_prose(f.read(), ignore_code_blocks=True)
                 lines = content.split("\n")
                 anchor = re.compile(r"^<a\b[^>]*>\s*</a>$", re.IGNORECASE)
 
@@ -1385,9 +1385,10 @@ class MarkdownGenerator:
                         and not line.startswith("..")
                         and not line.lower().startswith("<meta ")
                         and not anchor.match(line)
-                        and len(line) > 10
                     ):  # Ensure it's substantial content
-                        return line[:100] + "..." if len(line) > 100 else line
+                        line = markdown_to_plain_text(line)
+                        if len(line) > 10:
+                            return line[:100] + "..." if len(line) > 100 else line
 
                 # Fallback descriptions based on filename
                 base_name = md_file.stem.replace(".html", "")
