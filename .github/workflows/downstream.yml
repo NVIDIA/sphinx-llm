@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    paths:
+      - .github/workflows/downstream.yml
   schedule:
     - cron: "0 1 * * *"
 
@@ -74,7 +77,7 @@ jobs:
           echo "$found"
 
       - name: Open issue if build fails
-        if: failure()
+        if: failure() && github.event_name != 'pull_request'
         uses: actions/github-script@v9.0.0
         with:
           script: |
