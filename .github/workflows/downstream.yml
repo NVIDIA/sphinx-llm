@@ -29,7 +29,9 @@ jobs:
             build_command: "uv run --dev sphinx-build docs/ docs/_build/"
           - repo: breathe-doc/breathe
             install_command: "sudo apt-get update && sudo apt-get install --yes doxygen graphviz libenchant-2-2 && uv pip install --editable '.[build,docs]' && uv run --active --no-sync make parser data"
-            build_command: "uv run --active --no-sync python -m sphinx -b html -W -E -D extensions=breathe,sphinx.ext.graphviz,sphinx.ext.imgconverter,sphinx_copybutton,sphinxcontrib.spelling,sphinx_llm.txt documentation/source documentation/build/html"
+            # Breathe's examples include invalid C++ declarations that warn even
+            # without sphinx-llm. Keep warnings visible, as for other downstreams.
+            build_command: "uv run --active --no-sync python -m sphinx -b html -E -D extensions=breathe,sphinx.ext.graphviz,sphinx.ext.imgconverter,sphinx_copybutton,sphinxcontrib.spelling,sphinx_llm.txt documentation/source documentation/build/html"
 
     steps:
       - name: Checkout repository
@@ -75,6 +77,13 @@ jobs:
           fi
           echo "Build files found:"
           echo "$found"
+
+      - name: Check Breathe output
+        if: matrix.downstream-project.repo == 'breathe-doc/breathe'
+        run: |
+          test -s breathe-doc/breathe/documentation/build/html/llms.txt
+          test -s breathe-doc/breathe/documentation/build/html/index.html.md
+          test -s breathe-doc/breathe/documentation/build/html/specific.html.md
 
       - name: Open issue if build fails
         if: failure() && github.event_name != 'pull_request'

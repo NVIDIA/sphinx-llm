@@ -83,6 +83,20 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
             raise nodes.SkipNode
         super().unknown_visit(node)
 
+    def visit_desc_signature(self, node: nodes.Node) -> None:
+        """Keep anonymous Breathe entities without emitting an empty heading."""
+        if not node.astext().strip():
+            if self.config.markdown_anchor_signatures:
+                for anchor in node.get("ids", []):
+                    self._add_anchor(anchor)
+            for target in node.findall(nodes.target):
+                self.visit_target(target)
+            raise nodes.SkipNode
+        super().visit_desc_signature(node)
+
+    def depart_desc_signature(self, node: nodes.Node) -> None:
+        self._pop_context(node)
+
 
 class SphinxLlmMarkdownBuilder(MarkdownBuilder):
     """Write Markdown with links that retain Sphinx document names."""

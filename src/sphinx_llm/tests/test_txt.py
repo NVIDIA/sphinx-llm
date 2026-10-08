@@ -61,6 +61,46 @@ def test_extensions_override_loads_markdown_builder(tmp_path: Path, parallel: bo
     assert (output_dir / "llms.txt").is_file()
 
 
+def test_anonymous_description_keeps_content_and_targets(tmp_path: Path):
+    """Breathe's empty signatures must not crash or discard entity content."""
+    source_dir = tmp_path / "source"
+    output_dir = tmp_path / "output"
+    source_dir.mkdir()
+    (source_dir / "conf.py").write_text(
+        'extensions = ["sphinx_llm.txt"]\n'
+        "markdown_anchor_signatures = True\n"
+        "from docutils import nodes\n"
+        "from sphinx import addnodes\n"
+        "def add_description(app, doctree):\n"
+        "    description = addnodes.desc()\n"
+        "    signature = addnodes.desc_signature(ids=['anonymous-signature'])\n"
+        "    signature += nodes.target(refid='anonymous-target')\n"
+        "    signature += addnodes.desc_name()\n"
+        "    description += signature\n"
+        "    content = addnodes.desc_content()\n"
+        "    content += nodes.paragraph(text='Anonymous entity content.')\n"
+        "    description += content\n"
+        "    doctree += description\n"
+        "def setup(app):\n"
+        "    app.connect('doctree-read', add_description)\n"
+    )
+    (source_dir / "index.rst").write_text(
+        "Entities\n========\n\n.. cpp:struct:: NamedEntity\n\n   Named entity content.\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "sphinx", "-W", str(source_dir), str(output_dir)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    markdown = (output_dir / "index.html.md").read_text()
+    assert "Anonymous entity content." in markdown
+    assert "NamedEntity" in markdown
+    assert "Named entity content." in markdown
+    assert '<a id="anonymous-signature"></a>' in markdown
+    assert '<a id="anonymous-target"></a>' in markdown
+
+
 class _ToctreeLinkParser(HTMLParser):
     """Collect links from toctree wrappers in generated HTML."""
 
@@ -423,11 +463,13 @@ def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
             generator.build_markdown_files()
 
     command = popen.call_args.args[0]
-    assert command[-6:] == [
+    assert command[-8:] == [
         "-D",
         "probe_true=1",
         "-D",
         "probe_false=0",
+        "-D",
+        "extensions=sphinx_llm.txt",
         "-D",
         "markdown_docinfo=0",
     ]
