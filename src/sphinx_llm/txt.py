@@ -581,6 +581,14 @@ class MarkdownGenerator:
                     value = "1" if value else "0"
                 sphinx_build_cmd += ["-D", f"{name}={value}"]
 
+            # Sphinx consumes the extensions override before storing the other
+            # overrides. Forward the effective list explicitly so extensions
+            # enabled with -D are also available to the Markdown subprocess.
+            sphinx_build_cmd += [
+                "-D",
+                f"extensions={','.join(self.app.config.extensions)}",
+            ]
+
             # Include project/version metadata only when explicitly enabled.
             sphinx_build_cmd += [
                 "-D",

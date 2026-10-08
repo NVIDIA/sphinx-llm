@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    paths:
+      - .github/workflows/downstream.yml
   schedule:
     - cron: "0 1 * * *"
 
@@ -24,6 +27,11 @@ jobs:
           - repo: kr8s-org/kr8s
             install_command: "uv sync --dev"
             build_command: "uv run --dev sphinx-build docs/ docs/_build/"
+          - repo: breathe-doc/breathe
+            install_command: "sudo apt-get update && sudo apt-get install --yes doxygen graphviz libenchant-2-2 && uv pip install --editable '.[build,docs]' && uv run --active --no-sync make parser data"
+            # Breathe's examples include invalid C++ declarations that warn even
+            # without sphinx-llm. Keep warnings visible, as for other downstreams.
+            build_command: "uv run --active --no-sync python -m sphinx -b html -E -D extensions=breathe,sphinx.ext.graphviz,sphinx.ext.imgconverter,sphinx_copybutton,sphinxcontrib.spelling,sphinx_llm.txt documentation/source documentation/build/html"
 
     steps:
       - name: Checkout repository
@@ -71,7 +79,7 @@ jobs:
           echo "$found"
 
       - name: Open issue if build fails
-        if: failure()
+        if: failure() && github.event_name != 'pull_request'
         uses: actions/github-script@v9.0.0
         with:
           script: |
