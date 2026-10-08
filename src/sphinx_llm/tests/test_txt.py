@@ -72,6 +72,14 @@ def test_anonymous_description_keeps_content_and_targets(tmp_path: Path):
         "from docutils import nodes\n"
         "from sphinx import addnodes\n"
         "def add_description(app, doctree):\n"
+        "    named = addnodes.desc()\n"
+        "    named_signature = addnodes.desc_signature()\n"
+        "    named_signature += addnodes.desc_name(text='NamedEntity')\n"
+        "    named += named_signature\n"
+        "    named_content = addnodes.desc_content()\n"
+        "    named_content += nodes.paragraph(text='Named entity content.')\n"
+        "    named += named_content\n"
+        "    doctree += named\n"
         "    description = addnodes.desc()\n"
         "    signature = addnodes.desc_signature(ids=['anonymous-signature'])\n"
         "    signature += nodes.target(refid='anonymous-target')\n"
@@ -84,9 +92,7 @@ def test_anonymous_description_keeps_content_and_targets(tmp_path: Path):
         "def setup(app):\n"
         "    app.connect('doctree-read', add_description)\n"
     )
-    (source_dir / "index.rst").write_text(
-        "Entities\n========\n\n.. cpp:struct:: NamedEntity\n\n   Named entity content.\n"
-    )
+    (source_dir / "index.rst").write_text("Entities\n========\n")
     result = subprocess.run(
         [sys.executable, "-m", "sphinx", "-W", str(source_dir), str(output_dir)],
         capture_output=True,
