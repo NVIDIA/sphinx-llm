@@ -4,7 +4,12 @@
 
 import pytest
 
-from sphinx_llm.extract_prose import extract_prose
+from sphinx_llm.extract_prose import extract_prose, markdown_to_plain_text
+
+
+def test_markdown_to_plain_text_separates_text_after_block_html() -> None:
+    """Closing block tags preserve a word boundary before following text."""
+    assert markdown_to_plain_text("Read <div>this</div>next") == "Read this next"
 
 
 @pytest.mark.parametrize(

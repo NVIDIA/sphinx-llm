@@ -114,6 +114,10 @@ class _PlainTextHTMLParser(HTMLParser):
         if tag in self._SEPARATOR_TAGS:
             self.parts.append(" ")
 
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._SEPARATOR_TAGS:
+            self.parts.append(" ")
+
     def handle_data(self, data: str) -> None:
         self.parts.append(data)
 
