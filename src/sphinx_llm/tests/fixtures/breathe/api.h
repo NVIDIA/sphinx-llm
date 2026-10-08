@@ -15,7 +15,7 @@ enum Mode {
     First
 };
 
-/** Add two item counts.
+/** \brief Add two item counts.
  *
  * The detailed description survives the Markdown build.
  * \param left First item count.

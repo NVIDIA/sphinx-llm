@@ -48,9 +48,9 @@
           <declname>right</declname>
         </param>
         <briefdescription>
+<para>Add two item counts. </para>
         </briefdescription>
         <detaileddescription>
-<para>Add two item counts.</para>
 <para>The detailed description survives the Markdown build. <parameterlist kind="param"><parameteritem>
 <parameternamelist>
 <parametername>left</parametername>

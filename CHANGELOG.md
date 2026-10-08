@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - Documented Doxygen/Breathe setup and Markdown limitations, with real-XML
   regression coverage for API content and references across HTML builders and
   sequential/parallel Markdown builds.
+- Documented the signature-anchor setting needed by Breathe domain references
+  and the remaining upstream limitation with source-relative Doxygen images.
+  Added domain-reference and explicit brief-description regression assertions.
 - Added `llms_txt_suppress_unknown_node_warnings` for opt-in suppression of all
   or selected unknown-node diagnostics from generated Markdown while
   continuing to omit unsupported node subtrees.

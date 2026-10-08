@@ -85,7 +85,8 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
 
     def visit_target(self, node: nodes.target) -> None:
         """Keep explicit IDs, including Breathe's Doxygen entity targets."""
-        anchors = dict.fromkeys(node.get("ids", []))
+        # External hyperlink definitions do not define local destinations.
+        anchors = dict.fromkeys(node.get("ids", []) if "refuri" not in node else [])
         if node.get("refid") is not None:
             anchors[node["refid"]] = None
         for anchor in anchors:

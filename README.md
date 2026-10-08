@@ -162,9 +162,12 @@ the directory containing `conf.py`):
 extensions = ["breathe", "sphinx_llm.txt"]
 breathe_projects = {"myproject": "../../build/doxygen/xml"}
 breathe_default_project = "myproject"
+markdown_anchor_signatures = True
 ```
 
-Use Breathe directives in your reStructuredText pages, for example:
+Signature anchors are required for Sphinx domain references such as
+`:cpp:class:` to resolve in Markdown. Use Breathe directives in your
+reStructuredText pages, for example:
 
 ```rst
 .. doxygenfunction:: my_function
@@ -179,11 +182,16 @@ Set `llms_txt_full_build = True` if you also want `llms-full.txt`.
 
 Markdown support has limits. Unsupported nodes emit warnings and their
 subtrees are omitted; inspect the generated API Markdown when adopting it.
-Breathe's own examples currently expose unsupported Graphviz graphs, figure
-captions, generic admonitions, and Sphinx `desc_inline` nodes (including inline
+Depending on the Markdown builder version, Breathe's own examples can expose
+unsupported Graphviz graphs, figure captions, generic admonitions, and Sphinx
+`desc_inline` nodes (including inline
 exception types). HTML still renders these nodes. Suppressing a warning does
-not recover its content. Doxygen must be rerun when the API sources change;
-sphinx-llm does not run Doxygen itself.
+not recover its content. Doxygen image paths outside the Sphinx source tree
+can also remain as source-relative URLs in Markdown instead of pointing to
+the copied `_images` assets, leaving broken image links even when HTML works.
+This remains an upstream Markdown builder limitation; inspect image URLs in
+the generated pages as well as API text. Doxygen must be rerun when the API
+sources change; sphinx-llm does not run Doxygen itself.
 
 #### HTML discovery metadata
 

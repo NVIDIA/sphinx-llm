@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,15 @@ def test_breathe_api_output(tmp_path: Path, builder: str, parallel: bool):
     source.mkdir()
     shutil.copytree(
         Path(__file__).parent / "fixtures" / "breathe" / "xml", source / "xml"
+    )
+    function_xml = ET.parse(source / "xml" / "api_8h.xml").find(
+        ".//memberdef[@kind='function']"
+    )
+    assert "Add two item counts." in "".join(
+        function_xml.find("briefdescription").itertext()
+    )
+    assert "The detailed description survives" in "".join(
+        function_xml.find("detaileddescription").itertext()
     )
     (source / "conf.py").write_text(
         'extensions = ["breathe", "sphinx_llm.txt"]\n'
@@ -32,7 +42,8 @@ def test_breathe_api_output(tmp_path: Path, builder: str, parallel: bool):
         "API reference\n=============\n\n.. toctree::\n\n   function\n   types\n"
     )
     (source / "function.rst").write_text(
-        "Functions\n=========\n\n.. doxygenfunction:: add\n"
+        "Functions\n=========\n\n.. doxygenfunction:: add\n\n"
+        "Domain reference: :cpp:class:`Widget`.\n"
     )
     (source / "types.rst").write_text(
         "Types\n=====\n\n.. doxygenstruct:: Widget\n   :members:\n\n"
@@ -99,6 +110,11 @@ def test_breathe_api_output(tmp_path: Path, builder: str, parallel: bool):
     linked_page = (page("function").parent / path).resolve()
     assert linked_page == page("types").resolve()
     assert f'<a id="{fragment}"></a>' in linked_page.read_text()
+    domain_target = re.search(r"Domain reference: \[`Widget`\]\(([^)]+)\)", function)
+    assert domain_target is not None, function
+    domain_path, domain_fragment = domain_target.group(1).split("#")
+    assert (page("function").parent / domain_path).resolve() == page("types").resolve()
+    assert f'<a id="{domain_fragment}"></a>' in types
 
     sitemap = (output / "llms.txt").read_text()
     for name in ("function", "types"):
