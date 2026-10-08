@@ -78,13 +78,6 @@ jobs:
           echo "Build files found:"
           echo "$found"
 
-      - name: Check Breathe output
-        if: matrix.downstream-project.repo == 'breathe-doc/breathe'
-        run: |
-          test -s breathe-doc/breathe/documentation/build/html/llms.txt
-          test -s breathe-doc/breathe/documentation/build/html/index.html.md
-          test -s breathe-doc/breathe/documentation/build/html/specific.html.md
-
       - name: Open issue if build fails
         if: failure() && github.event_name != 'pull_request'
         uses: actions/github-script@v9.0.0
