@@ -401,7 +401,10 @@ def test_build_markdown_files_skips_failed_primary_build(sphinx_build):
 def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
     """Boolean overrides must use Sphinx's ``1`` and ``0`` CLI syntax."""
     app = SimpleNamespace(
-        config=SimpleNamespace(overrides={"probe_true": True, "probe_false": False}),
+        config=SimpleNamespace(
+            overrides={"probe_true": True, "probe_false": False},
+            extensions=["sphinx_llm.txt"],
+        ),
         confdir=tmp_path / "conf",
         srcdir=tmp_path / "source",
         doctreedir=tmp_path / "doctrees",
