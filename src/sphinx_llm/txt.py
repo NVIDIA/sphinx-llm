@@ -380,6 +380,9 @@ class MarkdownGenerator:
         self.outdir = Path(app.builder.outdir)
         self.md_build_dir = self.outdir / "_markdown_build"
         self.parallel = getattr(self.app.config, "llms_txt_build_parallel", True)
+        self.markdown_docinfo = getattr(
+            self.app.config, "llms_txt_markdown_docinfo", False
+        )
         configured_suffix_mode = getattr(
             self.app.config, "llms_txt_suffix_mode", "auto"
         )
@@ -577,6 +580,12 @@ class MarkdownGenerator:
                 if isinstance(value, bool):
                     value = "1" if value else "0"
                 sphinx_build_cmd += ["-D", f"{name}={value}"]
+
+            # Include project/version metadata only when explicitly enabled.
+            sphinx_build_cmd += [
+                "-D",
+                f"markdown_docinfo={'1' if getattr(self, 'markdown_docinfo', False) else '0'}",
+            ]
 
             # When building sequentially we can reuse the doctree directory from the primary build
             # but in parallel builds these may clobber each other so we need to use a separate one
@@ -1374,6 +1383,7 @@ class MarkdownGenerator:
                         and not line.startswith("<!--")
                         and not line.startswith("-->")
                         and not line.startswith("..")
+                        and not line.lower().startswith("<meta ")
                         and not anchor.match(line)
                         and len(line) > 10
                     ):  # Ensure it's substantial content
@@ -1407,6 +1417,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_enabled", True, "")
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
+    app.add_config_value("llms_txt_markdown_docinfo", False, "env")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", False, "env")
     app.add_config_value("llms_txt_nested_enabled", True, "env")

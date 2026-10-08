@@ -28,6 +28,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Generated Markdown can include Sphinx project metadata, including the
+  configured version, when `llms_txt_markdown_docinfo = True`. It is opt-in
+  until the Markdown builder supports structured frontmatter.
 - Made the non-standard `llms-full.txt` convenience file opt-in. Set
   `llms_txt_full_build = True` to generate it and list it in `llms.txt`.
 - Reworked the `docref` directive around Sphinx's environment lifecycle,

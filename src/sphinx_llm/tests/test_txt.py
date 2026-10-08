@@ -140,6 +140,59 @@ def _build_sphinx(
         yield app, build_dir, docs_source_dir
 
 
+def _build_versioned_markdown(tmp_path: Path, confoverrides: dict | None = None) -> str:
+    source_dir = tmp_path / "source"
+    build_dir = tmp_path / "build"
+    doctree_dir = tmp_path / "doctrees"
+    source_dir.mkdir()
+    (source_dir / "conf.py").write_text(
+        'extensions = ["sphinx_llm.txt"]\n'
+        'project = "Example project"\n'
+        'version = "1.2.3"\n'
+        'release = "1.2.3.post1"\n',
+        encoding="utf-8",
+    )
+    (source_dir / "index.rst").write_text(
+        "Example project\n===============\n\nProject content.\n",
+        encoding="utf-8",
+    )
+
+    app = Sphinx(
+        srcdir=str(source_dir),
+        confdir=str(source_dir),
+        outdir=str(build_dir),
+        doctreedir=str(doctree_dir),
+        buildername="html",
+        warningiserror=False,
+        freshenv=True,
+        confoverrides={
+            "llms_txt_build_parallel": False,
+            **(confoverrides or {}),
+        },
+    )
+    app.build()
+
+    return (build_dir / "index.html.md").read_text(encoding="utf-8")
+
+
+def test_markdown_output_omits_project_version_by_default(tmp_path: Path):
+    """Generated Markdown omits project metadata unless explicitly enabled."""
+    markdown = _build_versioned_markdown(tmp_path)
+    assert "1.2.3" not in markdown
+
+
+def test_markdown_output_preserves_project_version_when_enabled(tmp_path: Path):
+    """Projects can opt in to configured Sphinx version metadata."""
+    markdown = _build_versioned_markdown(tmp_path, {"llms_txt_markdown_docinfo": True})
+    assert "1.2.3" in markdown
+
+
+def test_markdown_output_can_disable_project_version(tmp_path: Path):
+    """Projects can opt out of project/version metadata in Markdown."""
+    markdown = _build_versioned_markdown(tmp_path, {"llms_txt_markdown_docinfo": False})
+    assert "1.2.3" not in markdown
+
+
 def assert_file_exists_with_content(path: Path) -> None:
     """Assert a file exists and is non-empty."""
     assert path.exists(), f"File not found: {path}"
@@ -332,7 +385,14 @@ def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
             generator.build_markdown_files()
 
     command = popen.call_args.args[0]
-    assert command[-4:] == ["-D", "probe_true=1", "-D", "probe_false=0"]
+    assert command[-6:] == [
+        "-D",
+        "probe_true=1",
+        "-D",
+        "probe_false=0",
+        "-D",
+        "markdown_docinfo=0",
+    ]
 
 
 def test_rst_files_have_corresponding_output_files(sphinx_build):
