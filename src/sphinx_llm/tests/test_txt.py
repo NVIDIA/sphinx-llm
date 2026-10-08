@@ -1874,9 +1874,10 @@ def test_nested_indexes_can_be_disabled(
     assert get_llms_txt_index_path(app, "nested/example") == PurePosixPath("llms.txt")
 
 
+@pytest.mark.parametrize("nested_enabled", [True, False])
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
 def test_nested_indexes_computed_once_per_build(
-    builder: str, monkeypatch: pytest.MonkeyPatch
+    builder: str, nested_enabled: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Discovery metadata does not recompute the indexes for every page."""
     calls = 0
@@ -1901,12 +1902,16 @@ def test_nested_indexes_computed_once_per_build(
             buildername=builder,
             warningiserror=False,
             freshenv=True,
-            confoverrides={"llms_txt_build_parallel": False},
+            confoverrides={
+                "llms_txt_build_parallel": False,
+                "llms_txt_nested_enabled": nested_enabled,
+            },
         )
         app.build()
 
     assert len(app.env.found_docs) > 1
-    assert calls == 1
+    # without nested indexes, every page links the root llms.txt
+    assert calls == (1 if nested_enabled else 0)
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])

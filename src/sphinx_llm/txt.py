@@ -379,7 +379,9 @@ class MarkdownGenerator:
             ),
             quote=True,
         )
-        if self._llms_txt_index_paths is None:
+        if self._llms_txt_index_paths is None and getattr(
+            app.config, "llms_txt_nested_enabled", True
+        ):
             self._llms_txt_index_paths = get_llms_txt_index_paths(app)
         llms_txt_path = get_llms_txt_index_path(
             app, pagename, self._llms_txt_index_paths
