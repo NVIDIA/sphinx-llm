@@ -10,6 +10,7 @@ import posixpath
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from collections.abc import Generator, Iterable
 from html.parser import HTMLParser
@@ -24,6 +25,40 @@ from sphinx.errors import ExtensionError
 
 from sphinx_llm.markdown_builder import LINK_TARGETS_FILENAME
 from sphinx_llm.txt import MarkdownGenerator, get_llms_txt_index_path
+
+
+@pytest.mark.parametrize("parallel", [False, True])
+def test_extensions_override_loads_markdown_builder(tmp_path: Path, parallel: bool):
+    """Extensions enabled on the command line also load in the subprocess."""
+    source_dir = tmp_path / "source"
+    output_dir = tmp_path / "output"
+    source_dir.mkdir()
+    (source_dir / "conf.py").write_text('project = "Override test"\n')
+    (source_dir / "index.rst").write_text(
+        "Override test\n=============\n\nMarkdown subprocess content.\n"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "sphinx",
+            "-b",
+            "html",
+            "-W",
+            "-E",
+            "-D",
+            "extensions=sphinx.ext.graphviz,sphinx_llm.txt",
+            "-D",
+            f"llms_txt_build_parallel={int(parallel)}",
+            str(source_dir),
+            str(output_dir),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Markdown subprocess content." in (output_dir / "index.html.md").read_text()
+    assert (output_dir / "llms.txt").is_file()
 
 
 class _ToctreeLinkParser(HTMLParser):
