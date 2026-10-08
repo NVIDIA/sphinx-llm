@@ -106,6 +106,21 @@ wheels = [
 ]
 
 [[package]]
+name = "breathe"
+version = "5.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "sphinx", version = "7.4.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "sphinx", version = "8.1.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
+    { name = "sphinx", version = "9.0.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "sphinx", version = "9.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7d/7f/c64ce129d35f05bac6b3d044ee2d3aea24b0c819f2f57cd34020b74d5efc/breathe-5.1.0.tar.gz", hash = "sha256:ff56af8bfd0b50ebf10c81a07b8a5739787eb015d26b4ba162b6983d6e17c7c3", size = 201885, upload-time = "2026-10-02T13:42:51.164Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/7c/ff68c2846946ed17daca3355e47d49fcb8422ad373627d2b56488d6bd484/breathe-5.1.0-py3-none-any.whl", hash = "sha256:6a81b5fff50fb35b7f6bec1aa1a8621a596ee5ffec453eccd7d5e1f9e682d9a0", size = 100534, upload-time = "2026-10-02T13:42:49.767Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.7.22"
 source = { registry = "https://pypi.org/simple" }
@@ -1473,6 +1488,7 @@ gen = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "breathe" },
     { name = "llms-txt", marker = "python_full_version >= '3.10'" },
     { name = "pytest", version = "8.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "pytest", version = "9.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -1493,6 +1509,7 @@ provides-extras = ["gen"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "breathe", specifier = ">=4.35.0" },
     { name = "llms-txt", marker = "python_full_version >= '3.10'", specifier = "==0.0.6" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "pytest-cov", specifier = ">=4.1.0" },

@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Documented Doxygen/Breathe setup and Markdown limitations, with real-XML
+  regression coverage for API content and references across HTML builders and
+  sequential/parallel Markdown builds.
 - Added `llms_txt_suppress_unknown_node_warnings` for opt-in suppression of all
   or selected unknown-node diagnostics from generated Markdown while
   continuing to omit unsupported node subtrees.
@@ -17,6 +20,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Preserved explicit Doxygen target IDs emitted by Breathe so API references
+  reach their anchors in generated Markdown.
+- Kept Breathe signature content when using the minimum supported Markdown
+  builder (0.6.8), which does not recognize signature-line wrappers.
 - Surfaced unknown-node warnings from the spawned Markdown build in the primary
   documentation build, including under warnings-as-errors.
 - Forwarded the primary build's tags (`sphinx-build -t` option, including the

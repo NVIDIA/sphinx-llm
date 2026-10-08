@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygenindex xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="index.xsd" version="1.9.8" xml:lang="en-US">
+  <compound refid="structWidget" kind="struct"><name>Widget</name>
+    <member refid="structWidget_1a6d63594bd67850e37a833ea0c1e8e6ca" kind="variable"><name>count</name></member>
+  </compound>
+  <compound refid="api_8h" kind="file"><name>api.h</name>
+    <member refid="api_8h_1a46c8a310cf4c094f8c80e1cb8dc1f911" kind="enum"><name>Mode</name></member>
+    <member refid="api_8h_1a46c8a310cf4c094f8c80e1cb8dc1f911a54991d225c58ce0af43461d4e9a82312" kind="enumvalue"><name>All</name></member>
+    <member refid="api_8h_1a46c8a310cf4c094f8c80e1cb8dc1f911ac5222d41f21bc883f0c0b9754191b350" kind="enumvalue"><name>First</name></member>
+    <member refid="api_8h_1a22435ab98e2040a304ed14e1c89f851d" kind="function"><name>add</name></member>
+  </compound>
+</doxygenindex>

@@ -34,6 +34,7 @@ gen = ["openai>=1.55.3"]
 
 [dependency-groups]
 dev = [
+    "breathe>=4.35.0",
     "llms-txt==0.0.6; python_version >= '3.10'",
     "pytest>=8.4.1",
     "pytest-cov>=4.1.0",

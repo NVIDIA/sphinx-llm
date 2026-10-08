@@ -130,6 +130,61 @@ extension never guesses that an unselected file is stale or deletes it.
 > [!NOTE]
 > This extension only works with HTML builders (like `html` and `dirhtml`).
 
+#### Doxygen and Breathe
+
+`sphinx_llm.txt` supports Doxygen API documentation rendered through
+[Breathe](https://www.breathe-doc.org/) alongside `html` and `dirhtml` output.
+Regression tests verify function signatures, brief and detailed descriptions,
+parameters, return values, code examples, struct members, enum values, and
+cross-page Doxygen references in both sequential and parallel Markdown builds.
+The downstream CI also builds Breathe's own documentation with Doxygen.
+
+Install Doxygen separately and install the Python extensions:
+
+```console
+pip install breathe sphinx-llm
+```
+
+Generate the XML before running Sphinx. For example, use this `Doxyfile`:
+
+```text
+INPUT = include/
+OUTPUT_DIRECTORY = build/doxygen
+GENERATE_XML = YES
+GENERATE_HTML = NO
+GENERATE_LATEX = NO
+```
+
+Then run `doxygen Doxyfile` and configure Sphinx (the XML path is relative to
+the directory containing `conf.py`):
+
+```python
+extensions = ["breathe", "sphinx_llm.txt"]
+breathe_projects = {"myproject": "../../build/doxygen/xml"}
+breathe_default_project = "myproject"
+```
+
+Use Breathe directives in your reStructuredText pages, for example:
+
+```rst
+.. doxygenfunction:: my_function
+
+.. doxygenstruct:: MyStruct
+   :members:
+```
+
+Build those pages with `sphinx-build -b html docs/source docs/build/html`.
+API content is included in the per-page Markdown and indexed by `llms.txt`.
+Set `llms_txt_full_build = True` if you also want `llms-full.txt`.
+
+Markdown support has limits. Unsupported nodes emit warnings and their
+subtrees are omitted; inspect the generated API Markdown when adopting it.
+Breathe's own examples currently expose unsupported Graphviz graphs, figure
+captions, generic admonitions, and Sphinx `desc_inline` nodes (including inline
+exception types). HTML still renders these nodes. Suppressing a warning does
+not recover its content. Doxygen must be rerun when the API sources change;
+sphinx-llm does not run Doxygen itself.
+
 #### HTML discovery metadata
 
 Each source-backed HTML page advertises both its canonical Markdown
