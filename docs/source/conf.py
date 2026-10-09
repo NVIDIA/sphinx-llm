@@ -16,6 +16,7 @@ author = "Jacob Tomlinson"
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
+    "myst_parser",
     "sphinx_llm.docref",
     "sphinx_llm.txt",
 ]

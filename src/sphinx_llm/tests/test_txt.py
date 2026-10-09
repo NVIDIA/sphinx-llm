@@ -1741,6 +1741,8 @@ def test_nested_indexes_use_existing_docs_fixture_and_canonical_targets(
             {
                 "apples/llms.txt",
                 "meta_example/llms.txt",
+                "myst/llms.txt",
+                "myst-links/llms.txt",
                 "nested/deeper/example/llms.txt",
                 "nested/example/llms.txt",
                 "test/llms.txt",

@@ -17,6 +17,8 @@ Welcome to sphinx-llm's documentation!
    apples
    meta_example
    nested/index
+   myst
+   myst-links
 
 
 Indices and tables
