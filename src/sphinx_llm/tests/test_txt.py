@@ -547,8 +547,9 @@ def test_example_unsupported_directive_is_preserved_by_default(
 
     assert app.config.llms_txt_preserve_unknown_nodes is True
     assert (
-        "```rst\nContent from this directive is preserved in the generated Markdown.\n```"
-        in markdown
+        "```rst\n"
+        ".. centered:: Content from this directive is preserved in the generated "
+        "Markdown.\n```" in markdown
     )
 
 

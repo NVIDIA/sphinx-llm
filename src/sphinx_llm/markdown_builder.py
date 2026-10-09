@@ -4,12 +4,14 @@
 
 import json
 import re
+import textwrap
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional, TypedDict
 from uuid import uuid4
 
 from docutils import nodes
+from sphinx import addnodes
 from sphinx.config import Config
 from sphinx.errors import ConfigError
 from sphinx_markdown_builder.builder import MarkdownBuilder
@@ -113,8 +115,40 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
     def depart_desc_signature(self, node: nodes.Node) -> None:
         self._pop_context(node)
 
+    def _unknown_node_source(self, node: nodes.Node) -> str:
+        """Return node source with any parsed-only descendants restored."""
+        rawsource = getattr(node, "rawsource", "")
+        source = rawsource or node.astext()
+
+        if isinstance(node, addnodes.centered):
+            return f".. centered:: {source}"
+
+        if rawsource and not isinstance(node, nodes.Inline):
+            missing_child_sources = []
+            directive_match = re.match(
+                r"^(?P<indent>[ \t]*)\.\. [^\n]+::[^\n]*(?:\n|$)", source
+            )
+            preserved_body = (
+                textwrap.dedent(source[directive_match.end() :])
+                if directive_match
+                else source
+            )
+            for child in node.children:
+                child_source = self._unknown_node_source(child).strip()
+                if child_source and child_source in preserved_body:
+                    preserved_body = preserved_body.replace(child_source, "", 1)
+                elif child_source:
+                    if directive_match:
+                        content_indent = f"{directive_match.group('indent')}   "
+                        child_source = textwrap.indent(child_source, content_indent)
+                    missing_child_sources.append(child_source)
+            if missing_child_sources:
+                source = "\n\n".join([source.rstrip(), *missing_child_sources])
+        return source
+
     def _add_unknown_node_source(self, node: nodes.Node) -> None:
-        source = node.rawsource or node.astext()
+        source = self._unknown_node_source(node)
+
         backtick_runs = re.findall(r"`+", source)
         fence = "`" * (max((len(run) for run in backtick_runs), default=0) + 1)
 
