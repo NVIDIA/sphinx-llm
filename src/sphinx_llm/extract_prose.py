@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from html.parser import HTMLParser
 from typing import Any
 
@@ -186,6 +187,19 @@ def markdown_to_plain_text(markdown: str) -> str:
     parser.feed(rendered)
     parser.close()
     return " ".join("".join(parser.parts).split())
+
+
+def markdown_lines_to_plain_text(markdown_lines: Iterable[str]) -> list[str]:
+    """Render Markdown lines while preserving HTML state between them."""
+    parser = _PlainTextHTMLParser()
+    plain_text_lines = []
+    for markdown in markdown_lines:
+        rendered = _MARKDOWN_PARSER.renderInline(markdown)
+        start = len(parser.parts)
+        parser.feed(rendered)
+        plain_text_lines.append(" ".join("".join(parser.parts[start:]).split()))
+    parser.close()
+    return plain_text_lines
 
 
 def _markdown_context(

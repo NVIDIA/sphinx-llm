@@ -2402,6 +2402,25 @@ def test_content_fallback_skips_fenced_code_blocks(tmp_path: Path) -> None:
     )
 
 
+def test_content_fallback_skips_multiline_non_rendered_html(tmp_path: Path) -> None:
+    """Hidden HTML state is retained while scanning description lines."""
+    markdown = tmp_path / "page.html.md"
+    markdown.write_text(
+        "<script>\n"
+        'const description = "This script text must not be selected.";\n'
+        "</script>\n"
+        "<style>\n"
+        ".description { content: 'This style text must not be selected.'; }\n"
+        "</style>\n\n"
+        "This page contains the visible description.",
+        encoding="utf-8",
+    )
+
+    assert MarkdownGenerator.extract_description_from_markdown(markdown) == (
+        "This page contains the visible description."
+    )
+
+
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
