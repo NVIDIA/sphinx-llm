@@ -104,22 +104,79 @@ _MARKDOWN_PARSER.inline.ruler.at("autolink", _tracked_markdown_autolink)
 class _PlainTextHTMLParser(HTMLParser):
     """Collect rendered inline text while preserving HTML line breaks."""
 
-    _SEPARATOR_TAGS = frozenset({"br", "div", "li", "p", "pre"})
+    _SEPARATOR_TAGS = frozenset(
+        {
+            "address",
+            "article",
+            "aside",
+            "blockquote",
+            "br",
+            "dd",
+            "details",
+            "dialog",
+            "div",
+            "dl",
+            "dt",
+            "fieldset",
+            "figcaption",
+            "figure",
+            "footer",
+            "form",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "header",
+            "hgroup",
+            "hr",
+            "li",
+            "main",
+            "nav",
+            "ol",
+            "p",
+            "pre",
+            "section",
+            "summary",
+            "table",
+            "tbody",
+            "td",
+            "tfoot",
+            "th",
+            "thead",
+            "tr",
+            "ul",
+        }
+    )
+    _NON_RENDERED_TAGS = frozenset({"head", "script", "style", "template", "title"})
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
+        self._non_rendered_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in self._NON_RENDERED_TAGS:
+            self._non_rendered_depth += 1
+            return
+        if self._non_rendered_depth:
+            return
         if tag in self._SEPARATOR_TAGS:
             self.parts.append(" ")
 
     def handle_endtag(self, tag: str) -> None:
+        if tag in self._NON_RENDERED_TAGS:
+            self._non_rendered_depth = max(0, self._non_rendered_depth - 1)
+            return
+        if self._non_rendered_depth:
+            return
         if tag in self._SEPARATOR_TAGS:
             self.parts.append(" ")
 
     def handle_data(self, data: str) -> None:
-        self.parts.append(data)
+        if not self._non_rendered_depth:
+            self.parts.append(data)
 
 
 def markdown_to_plain_text(markdown: str) -> str:

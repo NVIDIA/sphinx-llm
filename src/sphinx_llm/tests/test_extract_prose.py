@@ -12,6 +12,33 @@ def test_markdown_to_plain_text_separates_text_after_block_html() -> None:
     assert markdown_to_plain_text("Read <div>this</div>next") == "Read this next"
 
 
+def test_markdown_to_plain_text_separates_structural_html() -> None:
+    """Visible text from structural elements retains its word boundaries."""
+    assert (
+        markdown_to_plain_text(
+            "Read <details><summary>more</summary>next</details> now"
+        )
+        == "Read more next now"
+    )
+    assert (
+        markdown_to_plain_text(
+            "Compare <table><tr><td>one</td><td>two</td></tr></table> values"
+        )
+        == "Compare one two values"
+    )
+
+
+def test_markdown_to_plain_text_ignores_non_rendered_html() -> None:
+    """Script, style, and template contents do not enter visible prose."""
+    assert (
+        markdown_to_plain_text(
+            "Visible <script>hidden()</script><style>.hidden {}</style>"
+            "<template>deferred</template><title>metadata</title> text."
+        )
+        == "Visible text."
+    )
+
+
 @pytest.mark.parametrize(
     ("markdown", "expected"),
     [
