@@ -1879,7 +1879,7 @@ def test_nested_indexes_can_be_disabled(
 def test_nested_indexes_computed_once_per_build(
     builder: str, nested_enabled: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Discovery metadata does not recompute the indexes for every page."""
+    """Discovery metadata computes the indexes once per build, not per page."""
     calls = 0
     nested_index_paths = sphinx_llm.txt._nested_index_paths
 
@@ -1908,10 +1908,13 @@ def test_nested_indexes_computed_once_per_build(
             },
         )
         app.build()
+        assert len(app.env.found_docs) > 1
+        # without nested indexes, every page links the root llms.txt
+        assert calls == (1 if nested_enabled else 0)
 
-    assert len(app.env.found_docs) > 1
-    # without nested indexes, every page links the root llms.txt
-    assert calls == (1 if nested_enabled else 0)
+        # another build of the same app recomputes them once
+        app.build(force_all=True)
+        assert calls == (2 if nested_enabled else 0)
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])

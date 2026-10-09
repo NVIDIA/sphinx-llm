@@ -196,11 +196,12 @@ def _validated_exclude_patterns(app: Sphinx) -> list[str]:
     return patterns
 
 
-def get_llms_txt_index_paths(app: Sphinx) -> set[PurePosixPath]:
-    """Return all generated nested ``llms.txt`` indexes.
+def _get_llms_txt_index_paths(app: Sphinx) -> set[PurePosixPath]:
+    """Return all nested ``llms.txt`` indexes of the published documents.
 
     They depend on every published document, so callers that need them for
-    many documents should compute them once.
+    many documents should compute them once. They are only generated if
+    ``llms_txt_nested_enabled`` is set, which callers have to check.
     """
     exclude_patterns = _validated_exclude_patterns(app)
     included_docnames = (
@@ -220,14 +221,14 @@ def get_llms_txt_index_path(
 
     The path is POSIX and relative to the HTML build root so discovery metadata
     can render it relative to the current page. The root index is the fallback.
-    ``index_paths`` are the result of ``get_llms_txt_index_paths``, which is
+    ``index_paths`` are the result of ``_get_llms_txt_index_paths``, which is
     called if they are not given.
     """
     if not getattr(app.config, "llms_txt_nested_enabled", True):
         return PurePosixPath("llms.txt")
 
     if index_paths is None:
-        index_paths = get_llms_txt_index_paths(app)
+        index_paths = _get_llms_txt_index_paths(app)
     return _most_specific_index_path(_published_html_path(app, docname), index_paths)
 
 
@@ -382,7 +383,7 @@ class MarkdownGenerator:
         if self._llms_txt_index_paths is None and getattr(
             app.config, "llms_txt_nested_enabled", True
         ):
-            self._llms_txt_index_paths = get_llms_txt_index_paths(app)
+            self._llms_txt_index_paths = _get_llms_txt_index_paths(app)
         llms_txt_path = get_llms_txt_index_path(
             app, pagename, self._llms_txt_index_paths
         )
