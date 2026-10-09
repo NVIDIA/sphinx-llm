@@ -83,6 +83,20 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
             raise nodes.SkipNode
         super().unknown_visit(node)
 
+    def visit_target(self, node: nodes.target) -> None:
+        """Keep explicit IDs, including Breathe's Doxygen entity targets."""
+        # External hyperlink definitions do not define local destinations.
+        anchors = dict.fromkeys(node.get("ids", []) if "refuri" not in node else [])
+        if node.get("refid") is not None:
+            anchors[node["refid"]] = None
+        for anchor in anchors:
+            self._add_anchor(anchor)
+
+    def visit_desc_signature_line(self, node: nodes.Node) -> None:
+        """Traverse Breathe signature wrappers, also on Markdown builder 0.6.8."""
+
+    depart_desc_signature_line = visit_desc_signature_line
+
     def visit_desc_signature(self, node: nodes.Node) -> None:
         """Keep anonymous Breathe entities without emitting an empty heading."""
         if not node.astext().strip():

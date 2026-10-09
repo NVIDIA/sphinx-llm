@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structWidget" kind="struct" language="C++" prot="public">
+    <compoundname>Widget</compoundname>
+    <includes refid="api_8h" local="no">api.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structWidget_1a6d63594bd67850e37a833ea0c1e8e6ca" prot="public" static="no" mutable="no">
+        <type>int</type>
+        <definition>int Widget::count</definition>
+        <argsstring></argsstring>
+        <name>count</name>
+        <qualifiedname>Widget::count</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Number of items in the widget. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="api.h" line="7" column="9" bodyfile="api.h" bodystart="7" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>A widget with a documented member. </para>
+    </detaileddescription>
+    <location file="api.h" line="5" column="1" bodyfile="api.h" bodystart="5" bodyend="8"/>
+    <listofallmembers>
+      <member refid="structWidget_1a6d63594bd67850e37a833ea0c1e8e6ca" prot="public" virt="non-virtual"><scope>Widget</scope><name>count</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>
