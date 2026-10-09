@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Fixed the HTML build taking quadratic time in the number of documents with
+  nested `llms.txt` indexes, which were recomputed for every page (#179).
 - Surfaced unknown-node warnings from the spawned Markdown build in the primary
   documentation build, including under warnings-as-errors.
 - Forwarded the primary build's tags (`sphinx-build -t` option, including the

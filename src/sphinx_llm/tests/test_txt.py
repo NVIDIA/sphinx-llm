@@ -23,6 +23,7 @@ import pytest
 from sphinx.application import Sphinx
 from sphinx.errors import ExtensionError
 
+import sphinx_llm.txt
 from sphinx_llm.markdown_builder import LINK_TARGETS_FILENAME
 from sphinx_llm.txt import MarkdownGenerator, get_llms_txt_index_path
 
@@ -1871,6 +1872,49 @@ def test_nested_indexes_can_be_disabled(
     ]
     assert describedby == [{"rel": "describedby", "href": root_href}]
     assert get_llms_txt_index_path(app, "nested/example") == PurePosixPath("llms.txt")
+
+
+@pytest.mark.parametrize("nested_enabled", [True, False])
+@pytest.mark.parametrize("builder", ["html", "dirhtml"])
+def test_nested_indexes_computed_once_per_build(
+    builder: str, nested_enabled: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Discovery metadata computes the indexes once per build, not per page."""
+    calls = 0
+    nested_index_paths = sphinx_llm.txt._nested_index_paths
+
+    def counted_nested_index_paths(app, docnames):
+        nonlocal calls
+        calls += 1
+        return nested_index_paths(app, docnames)
+
+    monkeypatch.setattr(
+        sphinx_llm.txt, "_nested_index_paths", counted_nested_index_paths
+    )
+    docs_source_dir = Path(__file__).parents[3] / "docs" / "source"
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        app = Sphinx(
+            srcdir=str(docs_source_dir),
+            confdir=str(docs_source_dir),
+            outdir=str(temp_path / "build"),
+            doctreedir=str(temp_path / "doctrees"),
+            buildername=builder,
+            warningiserror=False,
+            freshenv=True,
+            confoverrides={
+                "llms_txt_build_parallel": False,
+                "llms_txt_nested_enabled": nested_enabled,
+            },
+        )
+        app.build()
+        assert len(app.env.found_docs) > 1
+        # without nested indexes, every page links the root llms.txt
+        assert calls == (1 if nested_enabled else 0)
+
+        # another build of the same app recomputes them once
+        app.build(force_all=True)
+        assert calls == (2 if nested_enabled else 0)
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])

@@ -30,6 +30,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 import docutils.nodes
 from sphinx.application import Sphinx
+from sphinx.environment import BuildEnvironment
 from sphinx.errors import ExtensionError
 from sphinx.util import logging
 from sphinx.util.matching import patmatch
@@ -195,22 +196,39 @@ def _validated_exclude_patterns(app: Sphinx) -> list[str]:
     return patterns
 
 
-def get_llms_txt_index_path(app: Sphinx, docname: str) -> PurePosixPath:
-    """Return the most-specific generated ``llms.txt`` covering a document.
+def _get_llms_txt_index_paths(app: Sphinx) -> set[PurePosixPath]:
+    """Return all nested ``llms.txt`` indexes of the published documents.
 
-    The path is POSIX and relative to the HTML build root so discovery metadata
-    can render it relative to the current page. The root index is the fallback.
+    They depend on every published document, so callers that need them for
+    many documents should compute them once. They are only generated if
+    ``llms_txt_nested_enabled`` is set, which callers have to check.
     """
-    if not getattr(app.config, "llms_txt_nested_enabled", True):
-        return PurePosixPath("llms.txt")
-
     exclude_patterns = _validated_exclude_patterns(app)
     included_docnames = (
         candidate
         for candidate in app.env.found_docs
         if not any(patmatch(candidate, pattern) for pattern in exclude_patterns)
     )
-    index_paths = _nested_index_paths(app, included_docnames)
+    return _nested_index_paths(app, included_docnames)
+
+
+def get_llms_txt_index_path(
+    app: Sphinx,
+    docname: str,
+    index_paths: Iterable[PurePosixPath] | None = None,
+) -> PurePosixPath:
+    """Return the most-specific generated ``llms.txt`` covering a document.
+
+    The path is POSIX and relative to the HTML build root so discovery metadata
+    can render it relative to the current page. The root index is the fallback.
+    ``index_paths`` are the result of ``_get_llms_txt_index_paths``, which is
+    called if they are not given.
+    """
+    if not getattr(app.config, "llms_txt_nested_enabled", True):
+        return PurePosixPath("llms.txt")
+
+    if index_paths is None:
+        index_paths = _get_llms_txt_index_paths(app)
     return _most_specific_index_path(_published_html_path(app, docname), index_paths)
 
 
@@ -333,6 +351,9 @@ class MarkdownGenerator:
         self._summary_cache: dict[str, dict[str, str]] | None = None
         self._loaded_summary_cache_path: Path | None = None
         self._generated_llms_full_path: Path | None = None
+        # nested llms.txt indexes, computed once per build for the discovery
+        # metadata of all pages
+        self._llms_txt_index_paths: set[PurePosixPath] | None = None
 
     def setup(self):
         """Set up the extension."""
@@ -359,7 +380,13 @@ class MarkdownGenerator:
             ),
             quote=True,
         )
-        llms_txt_path = get_llms_txt_index_path(app, pagename)
+        if self._llms_txt_index_paths is None and getattr(
+            app.config, "llms_txt_nested_enabled", True
+        ):
+            self._llms_txt_index_paths = _get_llms_txt_index_paths(app)
+        llms_txt_path = get_llms_txt_index_path(
+            app, pagename, self._llms_txt_index_paths
+        )
         llms_txt_href = html.escape(
             relative_uri(page_uri, llms_txt_path.as_posix()), quote=True
         )
@@ -368,6 +395,10 @@ class MarkdownGenerator:
             f'href="{markdown_href}">'
             f'\n<link rel="describedby" href="{llms_txt_href}">'
         )
+
+    def _reset_llms_txt_index_paths(self, app: Sphinx, env: BuildEnvironment) -> None:
+        """Recompute the nested indexes once the documents of a build are known."""
+        self._llms_txt_index_paths = None
 
     def build_llms_txt(self, app: Sphinx):
         """Generate markdown files using sphinx_markdown_builder and concatenate them into llms.txt."""
@@ -403,6 +434,7 @@ class MarkdownGenerator:
             )
             return
 
+        self.app.connect("env-updated", self._reset_llms_txt_index_paths)
         self.app.connect("html-page-context", self.add_discovery_metadata)
 
         # Start the markdown builder subproces in the background
