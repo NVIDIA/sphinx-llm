@@ -187,11 +187,11 @@ def test_invalid_summary_environment_values_raise(
 
 
 def test_disabled_summary_path_does_not_call_provider(tmp_path):
-    """Default-disabled descriptions retain the Markdown fallback."""
+    """Default-disabled descriptions use the plain-text Markdown fallback."""
     generator, markdown_file = _generator(tmp_path, llms_txt_summary_enabled=False)
     with patch.object(generator, "generate_page_summary") as generate:
         assert generator.get_page_description(markdown_file) == (
-            "Complete **Markdown** contents."
+            "Complete Markdown contents."
         )
     generate.assert_not_called()
 

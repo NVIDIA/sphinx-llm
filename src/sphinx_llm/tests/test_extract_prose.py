@@ -4,7 +4,39 @@
 
 import pytest
 
-from sphinx_llm.extract_prose import extract_prose
+from sphinx_llm.extract_prose import extract_prose, markdown_to_plain_text
+
+
+def test_markdown_to_plain_text_separates_text_after_block_html() -> None:
+    """Closing block tags preserve a word boundary before following text."""
+    assert markdown_to_plain_text("Read <div>this</div>next") == "Read this next"
+
+
+def test_markdown_to_plain_text_separates_structural_html() -> None:
+    """Visible text from structural elements retains its word boundaries."""
+    assert (
+        markdown_to_plain_text(
+            "Read <details><summary>more</summary>next</details> now"
+        )
+        == "Read more next now"
+    )
+    assert (
+        markdown_to_plain_text(
+            "Compare <table><tr><td>one</td><td>two</td></tr></table> values"
+        )
+        == "Compare one two values"
+    )
+
+
+def test_markdown_to_plain_text_ignores_non_rendered_html() -> None:
+    """Script, style, and template contents do not enter visible prose."""
+    assert (
+        markdown_to_plain_text(
+            "Visible <script>hidden()</script><style>.hidden {}</style>"
+            "<template>deferred</template><title>metadata</title> text."
+        )
+        == "Visible text."
+    )
 
 
 @pytest.mark.parametrize(
@@ -143,3 +175,20 @@ def test_extract_prose_is_idempotent_for_nested_markup() -> None:
     result = extract_prose(markdown)
     assert result == "See diagram."
     assert extract_prose(result) == result
+
+
+def test_extract_prose_can_ignore_code_blocks() -> None:
+    """Fallback descriptions can omit fenced and indented code blocks."""
+    markdown = (
+        "> ```mermaid\n"
+        "> ---\n"
+        "> layout: elk\n"
+        "> A --> B\n"
+        "> ```\n\n"
+        "    Example code.\n\n"
+        "A useful paragraph follows the examples."
+    )
+
+    assert extract_prose(markdown, ignore_code_blocks=True) == (
+        "\n\nA useful paragraph follows the examples."
+    )
