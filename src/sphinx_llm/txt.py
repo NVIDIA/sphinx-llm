@@ -1438,7 +1438,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
         "env",
         types=(bool, list, tuple),
     )
-    app.add_config_value(PRESERVE_UNKNOWN_NODES_CONFIG, False, "env", types=(bool,))
+    app.add_config_value(PRESERVE_UNKNOWN_NODES_CONFIG, True, "env", types=(bool,))
     app.connect("config-inited", validate_suppress_unknown_node_warnings)
     if "markdown_http_base" not in app.config.values:
         app.add_config_value("markdown_http_base", "", "env")
