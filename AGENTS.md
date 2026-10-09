@@ -110,6 +110,25 @@ temporary directories with different builders and parallel settings.
 Key test fixture: `sphinx_build` - parametrized fixture that tests both `html`
 and `dirhtml` builders with parallel and sequential markdown building.
 
+## Documentation Guidelines
+
+Treat the configuration options table as the canonical documentation for each
+setting's name, purpose, type, default value, and basic enable/disable behavior.
+
+When adding or changing a configuration option:
+
+- Update its entry in the configuration table.
+- Keep the option's name, purpose, type, default value, and basic behavior in the
+  table as their single source of truth.
+- Add prose outside the table only when it provides distinct information that
+  does not fit concisely in the table, such as a workflow, an interaction between
+  multiple settings, migration guidance, or a substantial usage example.
+- When additional prose is necessary, refer readers to the configuration table
+  instead of restating the option's description or default value.
+
+Before submitting a documentation change, compare all newly added prose against
+the configuration table and remove duplicated explanations.
+
 ## Commit Requirements
 
 All commits by contributors who are not employed by NVIDIA must be signed off
