@@ -113,7 +113,8 @@ and `dirhtml` builders with parallel and sequential markdown building.
 ## Documentation Guidelines
 
 Treat the configuration options table as the canonical documentation for each
-setting's name, purpose, type, default value, and basic enable/disable behavior.
+setting's name, purpose, type, default value, and basic behavior, including
+enable/disable behavior when applicable.
 
 When adding or changing a configuration option:
 
