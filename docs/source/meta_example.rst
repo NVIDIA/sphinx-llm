@@ -13,6 +13,7 @@ In MyST Markdown, the equivalent frontmatter is:
 .. code-block:: yaml
 
    ---
-   html_meta:
-     description: A page demonstrating the use of html_meta for llms.txt descriptions.
+   myst:
+     html_meta:
+       description: A page demonstrating the use of html_meta for llms.txt descriptions.
    ---
