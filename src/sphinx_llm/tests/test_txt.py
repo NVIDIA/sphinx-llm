@@ -301,6 +301,19 @@ def sphinx_build(request) -> Generator[tuple[Sphinx, Path, Path], None, None]:
     yield from _build_sphinx(builder, {"llms_txt_build_parallel": parallel})
 
 
+@pytest.fixture
+def sphinx_build_preserving_unknown_nodes() -> Generator[
+    tuple[Sphinx, Path, Path], None, None
+]:
+    """Build the example docs with default unknown-node preservation."""
+    yield from _build_sphinx(
+        "html",
+        {
+            "llms_txt_build_parallel": False,
+        },
+    )
+
+
 @pytest.fixture(
     params=[
         (builder, parallel, full_setting)
@@ -523,6 +536,21 @@ def test_markdown_only_content_is_excluded_from_html(sphinx_build, marker):
 
     assert marker in markdown_path.read_text(encoding="utf-8")
     assert marker not in html_path.read_text(encoding="utf-8")
+
+
+def test_example_unsupported_directive_is_preserved_by_default(
+    sphinx_build_preserving_unknown_nodes,
+):
+    """The example's unsupported centered directive is preserved by default."""
+    app, build_dir, _ = sphinx_build_preserving_unknown_nodes
+    markdown = (build_dir / "test.html.md").read_text(encoding="utf-8")
+
+    assert app.config.llms_txt_preserve_unknown_nodes is True
+    assert (
+        "```rst\n"
+        ".. centered:: Content from this directive is preserved in the generated "
+        "Markdown.\n```" in markdown
+    )
 
 
 def test_llms_txt_sitemap_links_exist(sphinx_build):
@@ -2632,7 +2660,7 @@ def test_html_meta_description_used_in_incremental_build():
 def sphinx_build_with_exclude(
     request,
 ) -> Generator[tuple[Sphinx, Path, Path], None, None]:
-    """Build Sphinx docs with llms_txt_exclude set."""
+    """Build with exclusions while omitting unrelated unknown-node output."""
     builder, parallel = request.param
     yield from _build_sphinx(
         builder,
@@ -2640,6 +2668,10 @@ def sphinx_build_with_exclude(
             "llms_txt_build_parallel": parallel,
             "llms_txt_exclude": ["apples", "nested/**"],
             "llms_txt_full_build": True,
+            # The non-excluded test page contains a docref to the excluded apples
+            # page. Keep these tests focused on excluding page artifacts rather
+            # than the separately tested preservation of that generated node.
+            "llms_txt_preserve_unknown_nodes": False,
         },
     )
 

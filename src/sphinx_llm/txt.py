@@ -39,6 +39,7 @@ from .extract_prose import extract_prose, markdown_lines_to_plain_text
 from .markdown_builder import (
     LINK_TARGETS_FILENAME,
     LINK_TOKEN_PREFIX,
+    PRESERVE_UNKNOWN_NODES_CONFIG,
     SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG,
     LinkTarget,
     SphinxLlmMarkdownBuilder,
@@ -1442,6 +1443,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
         "env",
         types=(bool, list, tuple),
     )
+    app.add_config_value(PRESERVE_UNKNOWN_NODES_CONFIG, True, "env", types=(bool,))
     app.connect("config-inited", validate_suppress_unknown_node_warnings)
     if "markdown_http_base" not in app.config.values:
         app.add_config_value("markdown_http_base", "", "env")

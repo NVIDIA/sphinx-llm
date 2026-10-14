@@ -3,12 +3,15 @@
 """Markdown builder that preserves Sphinx document targets."""
 
 import json
+import re
+import textwrap
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional, TypedDict
 from uuid import uuid4
 
 from docutils import nodes
+from sphinx import addnodes
 from sphinx.config import Config
 from sphinx.errors import ConfigError
 from sphinx_markdown_builder.builder import MarkdownBuilder
@@ -17,6 +20,7 @@ from sphinx_markdown_builder.translator import MarkdownTranslator
 LINK_TOKEN_PREFIX = "sphinx-llm:"
 LINK_TARGETS_FILENAME = ".sphinx-llm-link-targets.json"
 SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG = "llms_txt_suppress_unknown_node_warnings"
+PRESERVE_UNKNOWN_NODES_CONFIG = "llms_txt_preserve_unknown_nodes"
 
 
 class LinkTarget(TypedDict):
@@ -76,10 +80,24 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
         return super()._fetch_ref_uri(node)
 
     def unknown_visit(self, node: nodes.Node) -> None:
-        """Optionally suppress the warning while still dropping the subtree."""
+        """Handle unknown nodes without changing the default omission behavior."""
         suppressed = getattr(self.config, SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG)
         node_name = node.__class__.__name__
-        if suppressed is True or (suppressed is not False and node_name in suppressed):
+        preserve = getattr(self.config, PRESERVE_UNKNOWN_NODES_CONFIG)
+        warning_suppressed = suppressed is True or (
+            suppressed is not False and node_name in suppressed
+        )
+
+        if preserve:
+            if not warning_suppressed:
+                try:
+                    super().unknown_visit(node)
+                except nodes.SkipNode:
+                    pass
+            self._add_unknown_node_source(node)
+            raise nodes.SkipNode
+
+        if warning_suppressed:
             raise nodes.SkipNode
         super().unknown_visit(node)
 
@@ -96,6 +114,53 @@ class SphinxLlmMarkdownTranslator(MarkdownTranslator):
 
     def depart_desc_signature(self, node: nodes.Node) -> None:
         self._pop_context(node)
+
+    def _unknown_node_source(self, node: nodes.Node) -> str:
+        """Return node source with any parsed-only descendants restored."""
+        rawsource = getattr(node, "rawsource", "")
+        source = rawsource or node.astext()
+
+        if isinstance(node, addnodes.centered):
+            return f".. centered:: {source}"
+
+        if rawsource and not isinstance(node, nodes.Inline):
+            missing_child_sources = []
+            directive_match = re.match(
+                r"^(?P<indent>[ \t]*)\.\. [^\n]+::[^\n]*(?:\n|$)", source
+            )
+            preserved_body = (
+                textwrap.dedent(source[directive_match.end() :])
+                if directive_match
+                else source
+            )
+            for child in node.children:
+                child_source = self._unknown_node_source(child).strip()
+                if child_source and child_source in preserved_body:
+                    preserved_body = preserved_body.replace(child_source, "", 1)
+                elif child_source:
+                    if directive_match:
+                        content_indent = f"{directive_match.group('indent')}   "
+                        child_source = textwrap.indent(child_source, content_indent)
+                    missing_child_sources.append(child_source)
+            if missing_child_sources:
+                source = "\n\n".join([source.rstrip(), *missing_child_sources])
+        return source
+
+    def _add_unknown_node_source(self, node: nodes.Node) -> None:
+        source = self._unknown_node_source(node)
+
+        backtick_runs = re.findall(r"`+", source)
+        fence = "`" * (max((len(run) for run in backtick_runs), default=0) + 1)
+
+        if isinstance(node, nodes.Inline):
+            padding = " " if source.startswith("`") or source.endswith("`") else ""
+            self.add(f"{fence}{padding}{source}{padding}{fence}")
+            return
+
+        fence = "`" * max(3, len(fence))
+        self.add(f"{fence}rst", prefix_eol=1, suffix_eol=1)
+        self.add(source)
+        self.add(fence, prefix_eol=1, suffix_eol=2)
 
 
 class SphinxLlmMarkdownBuilder(MarkdownBuilder):
