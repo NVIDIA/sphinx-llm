@@ -65,6 +65,16 @@ def validate_suppress_unknown_node_warnings(_app, config: Config) -> None:
 class SphinxLlmMarkdownTranslator(MarkdownTranslator):
     """Preserve document targets until sphinx-llm selects output paths."""
 
+    def visit_raw(self, node: nodes.raw) -> None:
+        """Emit only raw content intended for Markdown output."""
+        formats = {value.casefold() for value in node.get("format", "").split()}
+        if formats.intersection({"markdown", "md"}):
+            self.add(node.astext())
+
+        # Work around https://github.com/liran-funaro/sphinx-markdown-builder/issues/74.
+        # This can be removed if/when raw-format filtering is implemented upstream.
+        raise nodes.SkipNode
+
     def _adjust_url(self, url: str) -> str:
         if url.startswith(LINK_TOKEN_PREFIX):
             return url
