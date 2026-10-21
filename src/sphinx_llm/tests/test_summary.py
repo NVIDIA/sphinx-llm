@@ -11,15 +11,11 @@ from sphinx.errors import ExtensionError
 from sphinx_llm.summary import SYSTEM_PROMPT, summarize_text
 
 
-def test_summarize_text_uses_openai_compatible_endpoint(monkeypatch):
+def test_summarize_text_uses_openai_compatible_endpoint(openai_response, monkeypatch):
     """Test model, endpoint, credentials, and prompt forwarding."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
     monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
-    response = SimpleNamespace(
-        choices=[
-            SimpleNamespace(message=SimpleNamespace(content=" Generated summary. "))
-        ]
-    )
+    response = openai_response(" Generated summary. ")
 
     with patch("openai.OpenAI") as mock_openai:
         mock_openai.return_value.chat.completions.create.return_value = response
@@ -55,13 +51,11 @@ def test_summarize_text_uses_openai_compatible_endpoint(monkeypatch):
     "base_url",
     ["", "http://localhost:8000/v1", "http://models.internal/v1"],
 )
-def test_summarize_text_allows_missing_api_key(monkeypatch, base_url):
+def test_summarize_text_allows_missing_api_key(openai_response, monkeypatch, base_url):
     """Test that any compatible endpoint can use a dummy credential."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    response = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
-    )
+    response = openai_response("Summary.")
 
     with patch("openai.OpenAI") as mock_openai:
         mock_openai.return_value.chat.completions.create.return_value = response
@@ -86,15 +80,13 @@ def test_summarize_text_requires_an_explicit_model(monkeypatch):
         summarize_text("Page contents.")
 
 
-def test_summarize_text_uses_environment_configuration(monkeypatch):
+def test_summarize_text_uses_environment_configuration(openai_response, monkeypatch):
     """Test model, endpoint, credential, and reasoning environment variables."""
     monkeypatch.setenv("OPENAI_MODEL", "env-model")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://models.example.com/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_REASONING_EFFORT", "low")
-    response = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
-    )
+    response = openai_response("Summary.")
 
     with patch("openai.OpenAI") as mock_openai:
         mock_openai.return_value.chat.completions.create.return_value = response
@@ -112,13 +104,11 @@ def test_summarize_text_uses_environment_configuration(monkeypatch):
     ] == {"reasoning_effort": "low"}
 
 
-def test_summarize_text_can_omit_reasoning_effort(monkeypatch):
+def test_summarize_text_can_omit_reasoning_effort(openai_response, monkeypatch):
     """Test endpoints without reasoning support can omit the setting."""
     monkeypatch.setenv("OPENAI_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_REASONING_EFFORT", "high")
-    response = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
-    )
+    response = openai_response("Summary.")
 
     with patch("openai.OpenAI") as mock_openai:
         mock_openai.return_value.chat.completions.create.return_value = response
@@ -130,13 +120,11 @@ def test_summarize_text_can_omit_reasoning_effort(monkeypatch):
     )
 
 
-def test_summarize_text_can_disable_environment_defaults(monkeypatch):
+def test_summarize_text_can_disable_environment_defaults(openai_response, monkeypatch):
     """Dedicated adapters can isolate themselves from ambient OPENAI settings."""
     monkeypatch.setenv("OPENAI_BASE_URL", "https://ambient.example/v1")
     monkeypatch.setenv("OPENAI_REASONING_EFFORT", "high")
-    response = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
-    )
+    response = openai_response("Summary.")
     with patch("openai.OpenAI") as mock_openai:
         mock_openai.return_value.chat.completions.create.return_value = response
         summarize_text(
@@ -167,12 +155,12 @@ def test_summarize_text_rejects_key_over_remote_plain_http(monkeypatch):
     assert "top-secret" not in str(error.value)
 
 
-def test_summarize_text_can_allow_key_over_remote_plain_http(monkeypatch):
+def test_summarize_text_can_allow_key_over_remote_plain_http(
+    openai_response, monkeypatch
+):
     """An explicit override permits authentication on a trusted HTTP network."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    response = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
-    )
+    response = openai_response("Summary.")
     with patch("openai.OpenAI") as mock_openai:
         mock_openai.return_value.chat.completions.create.return_value = response
         summarize_text(
@@ -196,12 +184,12 @@ def test_summarize_text_can_allow_key_over_remote_plain_http(monkeypatch):
         "http://[::1]:8000/v1",
     ],
 )
-def test_summarize_text_allows_key_over_loopback_http(monkeypatch, base_url):
+def test_summarize_text_allows_key_over_loopback_http(
+    openai_response, monkeypatch, base_url
+):
     """Authenticated local development endpoints remain supported."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    response = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="Summary."))]
-    )
+    response = openai_response("Summary.")
     with patch("openai.OpenAI") as mock_openai:
         mock_openai.return_value.chat.completions.create.return_value = response
         summarize_text(
