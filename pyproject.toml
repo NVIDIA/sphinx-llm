@@ -35,6 +35,7 @@ docs = ["myst-parser>=1"]
 gen = ["openai>=1.55.3"]
 
 [dependency-groups]
+docs = ["nvidia-sphinx-theme>=0.0.9.post1"]
 dev = [
     "llms-txt==0.0.6; python_version >= '3.10'",
     "myst-parser>=1",
@@ -98,3 +99,6 @@ line-ending = "auto"
 
 [tool.ruff.isort]
 known-first-party = ["sphinx_llm"]
+
+[tool.uv.dependency-groups]
+docs = { requires-python = ">=3.10" }

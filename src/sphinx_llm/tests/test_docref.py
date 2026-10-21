@@ -94,7 +94,7 @@ def _build(
 def docs_source_styling_build(request):
     """Build the documentation fixture across builders and markdown modes."""
     builder, parallel = request.param
-    docs_source_dir = Path(__file__).parent.parent.parent.parent / "docs" / "source"
+    docs_source_dir = Path(__file__).parent / "fixtures" / "integration_docs"
     warning = StringIO()
     with tempfile.TemporaryDirectory() as temp_dir:
         root = Path(temp_dir)
