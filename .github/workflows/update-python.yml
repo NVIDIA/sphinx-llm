@@ -1,0 +1,45 @@
+name: Update Python
+
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-python
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: >-
+      github.repository == 'NVIDIA/sphinx-llm' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.12"
+      - run: uv run --no-project ci/update-python.py
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          # Repository-scoped PAT/App token with Contents, Pull requests and
+          # Workflows write access, needed to edit workflows and trigger PR CI.
+          token: ${{ secrets.BOT_TOKEN }}
+          base: main
+          branch: automation/update-python
+          add-paths: .github/workflows/test.yml
+          commit-message: "ci: update supported Python test jobs"
+          signoff: true
+          title: "ci: update supported Python test jobs"
+          body: |
+            Refresh Python CI jobs using non-EOL stable Python releases from
+            endoflife.date and compatible stable Sphinx releases from PyPI.
+            Keep security-maintained Python and the fixed Sphinx compatibility rows.
+            Package support metadata and unrelated jobs are unchanged.

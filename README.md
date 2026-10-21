@@ -375,10 +375,18 @@ wins.
 
 ## Building the docs
 
-Try it out yourself by building the example documentation.
+Build the primary documentation site with Python 3.10 or newer. Normal builds
+generate LLM-friendly output without calling a model.
 
 ```console
-uv run --dev sphinx-autobuild docs/source docs/build/html
+uv run --dev --group docs sphinx-autobuild docs/source docs/build/html
+```
+
+The integration-test corpus lives separately in
+`src/sphinx_llm/tests/fixtures/integration_docs/`. Build it without the site theme:
+
+```console
+uv run --dev sphinx-build -W src/sphinx_llm/tests/fixtures/integration_docs docs/build/fixtures
 ```
 
 ## Alternatives

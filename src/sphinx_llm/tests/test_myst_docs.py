@@ -13,7 +13,7 @@ import pytest
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
 @pytest.mark.parametrize("parallel", [False, True])
 def test_myst_documentation_outputs(tmp_path: Path, builder: str, parallel: bool):
-    source = Path(__file__).resolve().parents[3] / "docs" / "source"
+    source = Path(__file__).parent / "fixtures" / "integration_docs"
     output = tmp_path / "build"
     result = subprocess.run(
         [

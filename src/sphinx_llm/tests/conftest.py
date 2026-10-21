@@ -22,8 +22,8 @@ from sphinx_llm.txt import MarkdownGenerator
 
 @pytest.fixture
 def docs_source_dir() -> Path:
-    """Repository example documentation (treat as read-only)."""
-    return Path(__file__).parents[3] / "docs" / "source"
+    """Unthemed integration documentation corpus (treat as read-only)."""
+    return Path(__file__).parent / "fixtures" / "integration_docs"
 
 
 @pytest.fixture

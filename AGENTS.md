@@ -58,11 +58,11 @@ uv run pre-commit run --all-files
 ### Building Documentation
 
 ```bash
-# Build the example docs (recommended for development)
-uv run --dev sphinx-autobuild docs/source docs/build/html
+# Build the primary site (Python >=3.10)
+uv run --dev --group docs sphinx-autobuild docs/source docs/build/html
 
 # Build docs once
-uv run --dev sphinx-build docs/source docs/build/html
+uv run --group docs sphinx-build docs/source docs/build/html
 ```
 
 ## Architecture
@@ -104,8 +104,11 @@ uv run --dev sphinx-build docs/source docs/build/html
 ## Test Structure
 
 Tests live in `src/sphinx_llm/tests/` (not a separate `tests/` directory).
-Tests use pytest fixtures that build the example docs in `docs/source/` into
-temporary directories with different builders and parallel settings.
+Tests build `src/sphinx_llm/tests/fixtures/integration_docs/` into temporary
+directories with different builders and parallel settings. Keep that corpus and
+its unthemed configuration independent of the primary site in `docs/source/`.
+The opt-in `docs` dependency group is for the primary site, not compatibility
+tests; its theme has a higher Python/Sphinx floor than the library.
 
 Key test fixture: `sphinx_build` - parametrized fixture that tests both `html`
 and `dirhtml` builders with parallel and sequential markdown building.
