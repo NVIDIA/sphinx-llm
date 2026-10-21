@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Configuration for the primary project documentation, not test fixtures."""
+"""Configuration for the primary project documentation."""
 
 project = "sphinx-llm"
 author = "NVIDIA Corporation"

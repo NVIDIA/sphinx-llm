@@ -33,12 +33,23 @@ Build your documentation:
 
 .. code-block:: console
 
-   sphinx-build -b html docs/source docs/build/html
+   sphinx-build -b html path/to/your/docs path/to/your/build/html
 
 The output includes HTML, an ``llms.txt`` index, and Markdown versions of your
 pages. No model or API key is needed for this workflow. To generate summaries
 with a model, install ``sphinx-llm[gen]`` and follow the configuration instructions
 in the README.
+
+Build this project's documentation
+----------------------------------
+
+From a checkout of the repository, install the documentation dependencies and
+build the site (Python 3.10 or newer):
+
+.. code-block:: console
+
+   uv sync --group docs
+   uv run --group docs sphinx-build -b html docs/source docs/build/html
 
 Learn more
 ----------
