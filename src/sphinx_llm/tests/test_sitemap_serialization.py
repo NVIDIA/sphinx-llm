@@ -7,41 +7,24 @@ from __future__ import annotations
 import html
 import posixpath
 from pathlib import Path
-from types import SimpleNamespace
 from urllib.parse import quote, unquote, urlsplit
 
 import pytest
 
 from sphinx_llm.txt import (
-    MarkdownGenerator,
     _serialize_sitemap_entry,
 )
-
-
-def _generator(tmp_path: Path, http_base: str = "") -> MarkdownGenerator:
-    config = SimpleNamespace(
-        _raw_config={"markdown_http_base": http_base},
-        copyright="",
-        llms_txt_exclude=[],
-        markdown_http_base=http_base,
-        project="Serialization test",
-    )
-    app = SimpleNamespace(config=config, builder=SimpleNamespace(name="html"))
-    generator = MarkdownGenerator(app)
-    generator.outdir = tmp_path
-    generator.suffix_mode = "auto"
-    return generator
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
 @pytest.mark.parametrize("nested", [False, True], ids=["root", "nested"])
 @pytest.mark.parametrize("absolute", [False, True], ids=["relative", "absolute"])
 def test_generated_entries_round_trip_markdown_edges(
-    tmp_path: Path, builder: str, nested: bool, absolute: bool
+    sitemap_generator, tmp_path: Path, builder: str, nested: bool, absolute: bool
 ) -> None:
     """Generated fields stay parseable, readable, and artifact-resolving."""
     http_base = "https://example.test/docs%20base/(archive)" if absolute else ""
-    generator = _generator(tmp_path, http_base)
+    generator = sitemap_generator(tmp_path, http_base)
     generator.app.builder.name = builder
 
     scope = Path("nested area") if nested else Path()
@@ -192,10 +175,10 @@ def test_generated_entries_round_trip_markdown_edges(
     ],
 )
 def test_generated_summary_strips_links_but_keeps_readable_text(
-    tmp_path: Path, description: str, expected: str
+    sitemap_generator, tmp_path: Path, description: str, expected: str
 ) -> None:
     """Relocated summaries keep their prose without Markdown destinations."""
-    generator = _generator(tmp_path)
+    generator = sitemap_generator(tmp_path)
     artifact = tmp_path / "python" / "callbacks.html.md"
     artifact.parent.mkdir()
     artifact.write_text("# Callbacks\n", encoding="utf-8")
@@ -213,9 +196,11 @@ def test_generated_summary_strips_links_but_keeps_readable_text(
     assert "images/callback.png" not in entry.desc
 
 
-def test_fallback_link_is_sanitized_before_sitemap_truncation(tmp_path: Path) -> None:
+def test_fallback_link_is_sanitized_before_sitemap_truncation(
+    sitemap_generator, tmp_path: Path
+) -> None:
     """A link crossing character 100 cannot leak malformed syntax or its target."""
-    generator = _generator(tmp_path)
+    generator = sitemap_generator(tmp_path)
     artifact = tmp_path / "page.html.md"
     artifact.write_text(
         "A" * 75 + " [Readable label](python_api.html.md#callback-api) trailing prose",
@@ -265,9 +250,11 @@ def test_generated_destination_serialization(destination: str, expected: str) ->
     )
 
 
-def test_generated_ordinary_entry_keeps_existing_output(tmp_path: Path) -> None:
+def test_generated_ordinary_entry_keeps_existing_output(
+    sitemap_generator, tmp_path: Path
+) -> None:
     """Plain generated content does not change byte source representation."""
-    generator = _generator(tmp_path)
+    generator = sitemap_generator(tmp_path)
     artifact = tmp_path / "guide" / "page.html.md"
     artifact.parent.mkdir()
     artifact.write_text("# Plain Title\n", encoding="utf-8")
@@ -284,9 +271,11 @@ def test_generated_ordinary_entry_keeps_existing_output(tmp_path: Path) -> None:
     )
 
 
-def test_custom_override_content_is_not_serialized(tmp_path: Path) -> None:
+def test_custom_override_content_is_not_serialized(
+    sitemap_generator, tmp_path: Path
+) -> None:
     """Arbitrary authored Markdown remains byte-for-byte user-owned."""
-    generator = _generator(tmp_path)
+    generator = sitemap_generator(tmp_path)
     generator.app.config.llms_txt_override_source = "index"
     source = tmp_path / "custom.md"
     authored = (

@@ -8,141 +8,73 @@ import hashlib
 import json
 import os
 import shutil
-import tempfile
 import time
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from sphinx.application import Sphinx
 from sphinx.errors import ExtensionError, NoUri
 
 from sphinx_llm import docref
 from sphinx_llm import summary as summary_client
 
-
-@pytest.fixture(autouse=True)
-def _clear_summary_environment(monkeypatch):
-    """Keep configuration tests independent of the caller's environment."""
-    for name in list(os.environ):
-        if name.startswith(("SPHINX_LLM_SUMMARY_", "OPENAI_")):
-            monkeypatch.delenv(name)
-
-
-def _write_project(
-    tmp_path: Path,
-    *,
-    index: str,
-    target: str = "Target\n======\n\nThe first target paragraph.\n",
-    extra_documents: dict[str, str] | None = None,
-) -> Path:
-    source_dir = tmp_path / "source"
-    source_dir.mkdir(parents=True)
-    (source_dir / "conf.py").write_text(
-        "\n".join(
-            [
-                'project = "docref tests"',
-                'extensions = ["sphinx_llm.docref"]',
-                'master_doc = "index"',
-                "nitpicky = True",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    (source_dir / "index.rst").write_text(index, encoding="utf-8")
-    (source_dir / "target.rst").write_text(target, encoding="utf-8")
-    for name, contents in (extra_documents or {}).items():
-        path = source_dir / f"{name}.rst"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(contents, encoding="utf-8")
-    return source_dir
-
-
-def _build(
-    source_dir: Path,
-    *,
-    freshenv: bool = True,
-    confoverrides: dict | None = None,
-    parallel: int = 0,
-) -> tuple[Sphinx, Path, StringIO]:
-    root = source_dir.parent
-    output_dir = root / "build"
-    warning = StringIO()
-    app = Sphinx(
-        srcdir=str(source_dir),
-        confdir=str(source_dir),
-        outdir=str(output_dir),
-        doctreedir=str(root / "doctrees"),
-        buildername="html",
-        confoverrides=confoverrides or {},
-        status=StringIO(),
-        warning=warning,
-        warningiserror=False,
-        freshenv=freshenv,
-        parallel=parallel,
-    )
-    app.build()
-    assert app.statuscode == 0, warning.getvalue()
-    return app, output_dir, warning
+pytestmark = pytest.mark.usefixtures("clear_summary_environment")
 
 
 @pytest.fixture(
     params=[("html", True), ("html", False), ("dirhtml", True), ("dirhtml", False)]
 )
-def docs_source_styling_build(request):
+def docs_source_styling_build(docs_source_dir, tmp_path, make_sphinx_app, request):
     """Build the documentation fixture across builders and markdown modes."""
     builder, parallel = request.param
-    docs_source_dir = Path(__file__).parent / "fixtures" / "integration_docs"
     warning = StringIO()
-    with tempfile.TemporaryDirectory() as temp_dir:
-        root = Path(temp_dir)
-        source_dir = root / "source"
-        shutil.copytree(docs_source_dir, source_dir)
-        test_page = source_dir / "test.rst"
-        test_page.write_text(
-            test_page.read_text(encoding="utf-8")
-            + "\n"
-            + ".. docref:: apples\n"
-            + "   :style-title-prefix: Local <style>\n"
-            + "   :style-visit-link-text: Local <link>\n"
-            + "   :style-visit-link-class: local-style compact\n"
-            + "   :title-prefix: Ignored legacy title\n"
-            + "   :visit-link-text: Ignored legacy link\n"
-            + "   :visit-link-class: ignored-legacy\n\n"
-            + ".. docref:: apples\n"
-            + "   :title-prefix: Legacy style\n"
-            + "   :visit-link-text: Legacy link\n"
-            + "   :visit-link-class: legacy-style\n\n"
-            + ".. docref:: apples\n"
-            + "   :style-title-prefix:\n"
-            + "   :style-visit-link-text:\n"
-            + "   :style-visit-link-class:\n",
-            encoding="utf-8",
-        )
-        output_dir = root / "build"
-        app = Sphinx(
-            srcdir=str(source_dir),
-            confdir=str(source_dir),
-            outdir=str(output_dir),
-            doctreedir=str(root / "doctrees"),
-            buildername=builder,
-            confoverrides={
-                "llms_txt_build_parallel": parallel,
-                "llms_txt_full_build": True,
-                "llms_txt_docref_style_title_prefix": "Global style",
-                "llms_txt_docref_style_visit_link_text": "Global link",
-                "llms_txt_docref_style_visit_link_class": "global-style shared",
-            },
-            status=StringIO(),
-            warning=warning,
-            warningiserror=False,
-            freshenv=True,
-        )
-        app.build()
-        assert app.statuscode == 0, warning.getvalue()
-        yield app, output_dir, warning
+    root = tmp_path
+    source_dir = root / "source"
+    shutil.copytree(docs_source_dir, source_dir)
+    test_page = source_dir / "test.rst"
+    test_page.write_text(
+        test_page.read_text(encoding="utf-8")
+        + "\n"
+        + ".. docref:: apples\n"
+        + "   :style-title-prefix: Local <style>\n"
+        + "   :style-visit-link-text: Local <link>\n"
+        + "   :style-visit-link-class: local-style compact\n"
+        + "   :title-prefix: Ignored legacy title\n"
+        + "   :visit-link-text: Ignored legacy link\n"
+        + "   :visit-link-class: ignored-legacy\n\n"
+        + ".. docref:: apples\n"
+        + "   :title-prefix: Legacy style\n"
+        + "   :visit-link-text: Legacy link\n"
+        + "   :visit-link-class: legacy-style\n\n"
+        + ".. docref:: apples\n"
+        + "   :style-title-prefix:\n"
+        + "   :style-visit-link-text:\n"
+        + "   :style-visit-link-class:\n",
+        encoding="utf-8",
+    )
+    output_dir = root / "build"
+    app = make_sphinx_app(
+        srcdir=str(source_dir),
+        confdir=str(source_dir),
+        outdir=str(output_dir),
+        doctreedir=str(root / "doctrees"),
+        buildername=builder,
+        confoverrides={
+            "llms_txt_build_parallel": parallel,
+            "llms_txt_full_build": True,
+            "llms_txt_docref_style_title_prefix": "Global style",
+            "llms_txt_docref_style_visit_link_text": "Global link",
+            "llms_txt_docref_style_visit_link_class": "global-style shared",
+        },
+        status=StringIO(),
+        warning=warning,
+        warningiserror=False,
+        freshenv=True,
+    )
+    app.build()
+    assert app.statuscode == 0, warning.getvalue()
+    yield app, output_dir, warning
 
 
 def _automatic_index(*, references: int = 1) -> str:
@@ -156,25 +88,17 @@ def _report(output_dir: Path) -> dict:
     )
 
 
-def _fake_generator(calls: list, prefix: str = "Generated summary"):
-    def generate(settings, contents: str) -> str:
-        calls.append((settings, contents))
-        return f"{prefix} {len(calls)}."
-
-    return generate
-
-
 def test_automatic_summaries_are_deduplicated_and_sources_are_unchanged(
-    tmp_path, monkeypatch
+    fake_summary_generator, build_sphinx_app, docref_project, tmp_path, monkeypatch
 ):
-    source_dir = _write_project(tmp_path, index=_automatic_index(references=2))
+    source_dir = docref_project(tmp_path, index=_automatic_index(references=2))
     original_sources = {
         path: path.read_text(encoding="utf-8") for path in source_dir.glob("*.rst")
     }
     calls: list = []
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator(calls))
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator(calls))
 
-    app, output_dir, _ = _build(
+    app, output_dir, _ = build_sphinx_app(
         source_dir,
         confoverrides={
             "llms_txt_summary_enabled": True,
@@ -246,14 +170,23 @@ def test_automatic_summaries_are_deduplicated_and_sources_are_unchanged(
     ],
 )
 def test_override_precedence_and_disabled_fallback(
-    tmp_path, monkeypatch, directive, target, enabled, expected, origin
+    fake_summary_generator,
+    build_sphinx_app,
+    docref_project,
+    tmp_path,
+    monkeypatch,
+    directive,
+    target,
+    enabled,
+    expected,
+    origin,
 ):
     index = f"Index\n=====\n\n.. toctree::\n   :hidden:\n\n   target\n\n{directive}"
-    source_dir = _write_project(tmp_path, index=index, target=target)
+    source_dir = docref_project(tmp_path, index=index, target=target)
     calls: list = []
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator(calls))
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator(calls))
 
-    _, output_dir, _ = _build(
+    _, output_dir, _ = build_sphinx_app(
         source_dir, confoverrides={"llms_txt_summary_enabled": enabled}
     )
 
@@ -266,8 +199,10 @@ def test_override_precedence_and_disabled_fallback(
     assert "model" not in summary
 
 
-def test_docref_styling_configuration_and_directive_precedence(tmp_path):
-    source_dir = _write_project(
+def test_docref_styling_configuration_and_directive_precedence(
+    build_sphinx_app, docref_project, tmp_path
+):
+    source_dir = docref_project(
         tmp_path,
         index=(
             "Index\n=====\n\n"
@@ -287,7 +222,7 @@ def test_docref_styling_configuration_and_directive_precedence(tmp_path):
         ),
     )
 
-    _, output_dir, warning = _build(
+    _, output_dir, warning = build_sphinx_app(
         source_dir,
         confoverrides={
             "llms_txt_docref_style_title_prefix": "Global prefix",
@@ -311,10 +246,12 @@ def test_docref_styling_configuration_and_directive_precedence(tmp_path):
     assert "deprecated and ignored" in warning.getvalue()
 
 
-def test_docref_styling_defaults_remain_unchanged(tmp_path):
-    source_dir = _write_project(tmp_path, index=_automatic_index())
+def test_docref_styling_defaults_remain_unchanged(
+    build_sphinx_app, docref_project, tmp_path
+):
+    source_dir = docref_project(tmp_path, index=_automatic_index())
 
-    _, output_dir, _ = _build(source_dir)
+    _, output_dir, _ = build_sphinx_app(source_dir)
 
     html = (output_dir / "index.html").read_text(encoding="utf-8")
     assert "See also: Target" in html
@@ -355,8 +292,10 @@ def test_docs_source_docref_styling_matrix(docs_source_styling_build):
         assert (output_dir / "apples.md").is_file()
 
 
-def test_legacy_docref_styling_configuration_and_options_are_supported(tmp_path):
-    source_dir = _write_project(
+def test_legacy_docref_styling_configuration_and_options_are_supported(
+    build_sphinx_app, docref_project, tmp_path
+):
+    source_dir = docref_project(
         tmp_path,
         index=(
             "Index\n=====\n\n"
@@ -369,7 +308,7 @@ def test_legacy_docref_styling_configuration_and_options_are_supported(tmp_path)
         ),
     )
 
-    _, output_dir, warning = _build(
+    _, output_dir, warning = build_sphinx_app(
         source_dir,
         confoverrides={
             "llms_txt_docref_title_prefix": "Legacy global",
@@ -388,10 +327,12 @@ def test_legacy_docref_styling_configuration_and_options_are_supported(tmp_path)
     assert "is deprecated" in warning.getvalue()
 
 
-def test_canonical_docref_styling_configuration_wins_over_legacy(tmp_path):
-    source_dir = _write_project(tmp_path, index=_automatic_index())
+def test_canonical_docref_styling_configuration_wins_over_legacy(
+    build_sphinx_app, docref_project, tmp_path
+):
+    source_dir = docref_project(tmp_path, index=_automatic_index())
 
-    _, output_dir, warning = _build(
+    _, output_dir, warning = build_sphinx_app(
         source_dir,
         confoverrides={
             "llms_txt_docref_style_title_prefix": "Canonical",
@@ -410,10 +351,12 @@ def test_canonical_docref_styling_configuration_wins_over_legacy(tmp_path):
     assert "is deprecated" in warning.getvalue()
 
 
-def test_empty_global_docref_styling_values_are_not_replaced_by_defaults(tmp_path):
-    source_dir = _write_project(tmp_path, index=_automatic_index())
+def test_empty_global_docref_styling_values_are_not_replaced_by_defaults(
+    build_sphinx_app, docref_project, tmp_path
+):
+    source_dir = docref_project(tmp_path, index=_automatic_index())
 
-    _, output_dir, _ = _build(
+    _, output_dir, _ = build_sphinx_app(
         source_dir,
         confoverrides={
             "llms_txt_docref_style_title_prefix": "",
@@ -430,18 +373,24 @@ def test_empty_global_docref_styling_values_are_not_replaced_by_defaults(tmp_pat
     assert '<p><a class="reference internal" href="target.html"></a></p>' in html
 
 
-def test_incremental_cache_hit_and_target_content_invalidation(tmp_path, monkeypatch):
-    source_dir = _write_project(tmp_path, index=_automatic_index())
+def test_incremental_cache_hit_and_target_content_invalidation(
+    fake_summary_generator, build_sphinx_app, docref_project, tmp_path, monkeypatch
+):
+    source_dir = docref_project(tmp_path, index=_automatic_index())
     first_calls: list = []
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator(first_calls))
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator(first_calls))
     overrides = {"llms_txt_summary_enabled": True}
 
-    _build(source_dir, confoverrides=overrides)
+    build_sphinx_app(source_dir, confoverrides=overrides)
     assert len(first_calls) == 1
 
     cached_calls: list = []
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator(cached_calls))
-    _, output_dir, _ = _build(source_dir, freshenv=False, confoverrides=overrides)
+    monkeypatch.setattr(
+        docref, "generate_summary", fake_summary_generator(cached_calls)
+    )
+    _, output_dir, _ = build_sphinx_app(
+        source_dir, freshenv=False, confoverrides=overrides
+    )
     assert cached_calls == []
     assert _report(output_dir)["summaries"][0]["summary"] == "Generated summary 1."
 
@@ -453,9 +402,13 @@ def test_incremental_cache_hit_and_target_content_invalidation(tmp_path, monkeyp
     os.utime(target, (newer, newer))
     invalidated_calls: list = []
     monkeypatch.setattr(
-        docref, "generate_summary", _fake_generator(invalidated_calls, "Regenerated")
+        docref,
+        "generate_summary",
+        fake_summary_generator(invalidated_calls, "Regenerated"),
     )
-    _, output_dir, _ = _build(source_dir, freshenv=False, confoverrides=overrides)
+    _, output_dir, _ = build_sphinx_app(
+        source_dir, freshenv=False, confoverrides=overrides
+    )
 
     assert len(invalidated_calls) == 1
     assert "The target content has now changed." in invalidated_calls[0][1]
@@ -476,9 +429,14 @@ def test_incremental_cache_hit_and_target_content_invalidation(tmp_path, monkeyp
     ],
 )
 def test_generation_setting_changes_invalidate_cache(
-    tmp_path, monkeypatch, changed_setting
+    fake_summary_generator,
+    build_sphinx_app,
+    docref_project,
+    tmp_path,
+    monkeypatch,
+    changed_setting,
 ):
-    source_dir = _write_project(tmp_path, index=_automatic_index())
+    source_dir = docref_project(tmp_path, index=_automatic_index())
     first_overrides = {
         "llms_txt_summary_enabled": True,
         "llms_txt_summary_api_key_env": "FIRST_API_KEY",
@@ -489,8 +447,8 @@ def test_generation_setting_changes_invalidate_cache(
         "llms_txt_summary_base_url": "https://one.invalid",
     }
     first_calls: list = []
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator(first_calls))
-    _build(source_dir, confoverrides=first_overrides)
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator(first_calls))
+    build_sphinx_app(source_dir, confoverrides=first_overrides)
     assert len(first_calls) == 1
 
     second_overrides = dict(first_overrides)
@@ -515,9 +473,9 @@ def test_generation_setting_changes_invalidate_cache(
 
     second_calls: list = []
     monkeypatch.setattr(
-        docref, "generate_summary", _fake_generator(second_calls, "Changed")
+        docref, "generate_summary", fake_summary_generator(second_calls, "Changed")
     )
-    _, output_dir, _ = _build(
+    _, output_dir, _ = build_sphinx_app(
         source_dir, freshenv=False, confoverrides=second_overrides
     )
 
@@ -525,8 +483,10 @@ def test_generation_setting_changes_invalidate_cache(
     assert _report(output_dir)["summaries"][0]["summary"] == "Changed 1."
 
 
-def test_parallel_reading_merges_requests_and_generates_once(tmp_path, monkeypatch):
-    source_dir = _write_project(
+def test_parallel_reading_merges_requests_and_generates_once(
+    fake_summary_generator, build_sphinx_app, docref_project, tmp_path, monkeypatch
+):
+    source_dir = docref_project(
         tmp_path,
         index=(
             "Index\n=====\n\n"
@@ -542,9 +502,9 @@ def test_parallel_reading_merges_requests_and_generates_once(tmp_path, monkeypat
         },
     )
     calls: list = []
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator(calls))
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator(calls))
 
-    _, output_dir, _ = _build(
+    _, output_dir, _ = build_sphinx_app(
         source_dir,
         confoverrides={"llms_txt_summary_enabled": True},
         parallel=2,
@@ -561,7 +521,12 @@ def test_parallel_reading_merges_requests_and_generates_once(tmp_path, monkeypat
 
 @pytest.mark.parametrize("hash_kind", ["md5", "pr115"])
 def test_legacy_hash_seeds_cache_without_modifying_source(
-    tmp_path, monkeypatch, hash_kind
+    fake_summary_generator,
+    build_sphinx_app,
+    docref_project,
+    tmp_path,
+    monkeypatch,
+    hash_kind,
 ):
     target_text = "Target\n\nThe first target paragraph."
     if hash_kind == "md5":
@@ -581,13 +546,13 @@ def test_legacy_hash_seeds_cache_without_modifying_source(
         "   :model: legacy-model\n\n"
         "   A legacy generated summary.\n"
     )
-    source_dir = _write_project(tmp_path, index=index)
+    source_dir = docref_project(tmp_path, index=index)
     source = source_dir / "index.rst"
     original = source.read_text(encoding="utf-8")
     calls: list = []
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator(calls))
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator(calls))
 
-    _, output_dir, warning = _build(
+    _, output_dir, warning = build_sphinx_app(
         source_dir, confoverrides={"llms_txt_summary_enabled": True}
     )
 
@@ -603,7 +568,7 @@ def test_legacy_hash_seeds_cache_without_modifying_source(
 
 
 def test_environment_configuration_and_report_do_not_expose_secrets(
-    tmp_path, monkeypatch
+    fake_summary_generator, build_sphinx_app, docref_project, tmp_path, monkeypatch
 ):
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_ENABLED", "true")
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_PROVIDER", "openai-compatible")
@@ -613,11 +578,11 @@ def test_environment_configuration_and_report_do_not_expose_secrets(
     )
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_API_KEY_ENV", "SUMMARY_SECRET")
     monkeypatch.setenv("SUMMARY_SECRET", "super-secret-value")
-    source_dir = _write_project(tmp_path, index=_automatic_index())
+    source_dir = docref_project(tmp_path, index=_automatic_index())
     calls: list = []
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator(calls))
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator(calls))
 
-    _, output_dir, _ = _build(source_dir)
+    _, output_dir, _ = build_sphinx_app(source_dir)
 
     settings = calls[0][0]
     assert settings.enabled is True
@@ -631,13 +596,13 @@ def test_environment_configuration_and_report_do_not_expose_secrets(
 
 
 def test_authored_overrides_take_precedence_over_an_existing_cache(
-    tmp_path, monkeypatch
+    fake_summary_generator, build_sphinx_app, docref_project, tmp_path, monkeypatch
 ):
-    source_dir = _write_project(tmp_path, index=_automatic_index())
+    source_dir = docref_project(tmp_path, index=_automatic_index())
     calls: list = []
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator(calls))
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator(calls))
     overrides = {"llms_txt_summary_enabled": True}
-    _build(source_dir, confoverrides=overrides)
+    build_sphinx_app(source_dir, confoverrides=overrides)
     assert len(calls) == 1
 
     target = source_dir / "target.rst"
@@ -649,7 +614,9 @@ def test_authored_overrides_take_precedence_over_an_existing_cache(
     newer = time.time() + 60
     os.utime(target, (newer, newer))
     calls.clear()
-    _, output_dir, _ = _build(source_dir, freshenv=False, confoverrides=overrides)
+    _, output_dir, _ = build_sphinx_app(
+        source_dir, freshenv=False, confoverrides=overrides
+    )
     assert calls == []
     assert _report(output_dir)["summaries"][0]["origin"] == "html_meta"
 
@@ -661,18 +628,22 @@ def test_authored_overrides_take_precedence_over_an_existing_cache(
     )
     newer = time.time() + 60
     os.utime(index, (newer, newer))
-    _, output_dir, _ = _build(source_dir, freshenv=False, confoverrides=overrides)
+    _, output_dir, _ = build_sphinx_app(
+        source_dir, freshenv=False, confoverrides=overrides
+    )
     assert calls == []
     [summary] = _report(output_dir)["summaries"]
     assert summary["origin"] == "directive"
     assert summary["summary"] == "A reference-specific review."
 
 
-def test_purge_removes_requests_for_a_changed_consumer(tmp_path, monkeypatch):
-    source_dir = _write_project(tmp_path, index=_automatic_index())
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator([]))
+def test_purge_removes_requests_for_a_changed_consumer(
+    fake_summary_generator, build_sphinx_app, docref_project, tmp_path, monkeypatch
+):
+    source_dir = docref_project(tmp_path, index=_automatic_index())
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator([]))
     overrides = {"llms_txt_summary_enabled": True}
-    _build(source_dir, confoverrides=overrides)
+    build_sphinx_app(source_dir, confoverrides=overrides)
 
     index = source_dir / "index.rst"
     index.write_text(
@@ -681,28 +652,30 @@ def test_purge_removes_requests_for_a_changed_consumer(tmp_path, monkeypatch):
     )
     newer = time.time() + 60
     os.utime(index, (newer, newer))
-    app, output_dir, _ = _build(source_dir, freshenv=False, confoverrides=overrides)
+    app, output_dir, _ = build_sphinx_app(
+        source_dir, freshenv=False, confoverrides=overrides
+    )
 
     assert getattr(app.env, docref.REQUESTS_ATTRIBUTE) == {}
     assert _report(output_dir)["summaries"] == []
 
 
 def test_manual_body_preserves_markup_and_generated_text_is_not_parsed(
-    tmp_path, monkeypatch
+    fake_summary_generator, build_sphinx_app, docref_project, tmp_path, monkeypatch
 ):
     index = (
         "Index\n=====\n\n.. toctree::\n   :hidden:\n\n   target\n\n"
         ".. docref:: target\n\n"
         "   A **reviewed** summary with an `external link <https://example.com>`_.\n"
     )
-    source_dir = _write_project(tmp_path, index=index)
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator([]))
-    _, output_dir, _ = _build(source_dir)
+    source_dir = docref_project(tmp_path, index=index)
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator([]))
+    _, output_dir, _ = build_sphinx_app(source_dir)
     html = (output_dir / "index.html").read_text(encoding="utf-8")
     assert "<strong>reviewed</strong>" in html
     assert 'href="https://example.com"' in html
 
-    automatic_source = _write_project(tmp_path / "automatic", index=_automatic_index())
+    automatic_source = docref_project(tmp_path / "automatic", index=_automatic_index())
     monkeypatch.setattr(
         docref,
         "generate_summary",
@@ -710,7 +683,7 @@ def test_manual_body_preserves_markup_and_generated_text_is_not_parsed(
             "Safe text.\n\n.. raw:: html\n\n   <script>x</script>"
         ),
     )
-    _, output_dir, _ = _build(
+    _, output_dir, _ = build_sphinx_app(
         automatic_source, confoverrides={"llms_txt_summary_enabled": True}
     )
     html = (output_dir / "index.html").read_text(encoding="utf-8")
@@ -718,13 +691,15 @@ def test_manual_body_preserves_markup_and_generated_text_is_not_parsed(
     assert "&lt;script&gt;x&lt;/script&gt;" in html
 
 
-def test_scalar_override_wins_over_environment(tmp_path, monkeypatch):
+def test_scalar_override_wins_over_environment(
+    fake_summary_generator, build_sphinx_app, docref_project, tmp_path, monkeypatch
+):
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_MODEL", "environment-model")
-    source_dir = _write_project(tmp_path, index=_automatic_index())
+    source_dir = docref_project(tmp_path, index=_automatic_index())
     calls: list = []
-    monkeypatch.setattr(docref, "generate_summary", _fake_generator(calls))
+    monkeypatch.setattr(docref, "generate_summary", fake_summary_generator(calls))
 
-    app, _, _ = _build(
+    app, _, _ = build_sphinx_app(
         source_dir,
         confoverrides={
             "llms_txt_summary_enabled": True,
@@ -739,22 +714,26 @@ def test_scalar_override_wins_over_environment(tmp_path, monkeypatch):
     )
 
 
-def test_enabled_generation_requires_explicit_model(tmp_path, monkeypatch):
+def test_enabled_generation_requires_explicit_model(
+    build_sphinx_app, docref_project, tmp_path, monkeypatch
+):
     monkeypatch.delenv("SPHINX_LLM_SUMMARY_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
-    source_dir = _write_project(tmp_path, index=_automatic_index())
+    source_dir = docref_project(tmp_path, index=_automatic_index())
 
     with pytest.raises(ExtensionError, match="llms_txt_summary_model"):
-        _build(source_dir, confoverrides={"llms_txt_summary_enabled": True})
+        build_sphinx_app(source_dir, confoverrides={"llms_txt_summary_enabled": True})
 
 
-def test_missing_target_warns_and_uses_fallback(tmp_path):
-    source_dir = _write_project(
+def test_missing_target_warns_and_uses_fallback(
+    build_sphinx_app, docref_project, tmp_path
+):
+    source_dir = docref_project(
         tmp_path,
         index="Index\n=====\n\n.. docref:: missing\n",
     )
 
-    _, output_dir, warning = _build(source_dir)
+    _, output_dir, warning = build_sphinx_app(source_dir)
 
     assert "Unable to load document referenced by docref" in warning.getvalue()
     assert "See missing." in (output_dir / "index.html").read_text(encoding="utf-8")

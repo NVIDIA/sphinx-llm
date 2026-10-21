@@ -5,10 +5,7 @@
 import json
 import sys
 import traceback
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import import_module
-from pathlib import Path
-from threading import Thread
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -18,100 +15,16 @@ from httpx import Request
 from openai import APIConnectionError
 from sphinx.errors import ExtensionError
 
-from sphinx_llm.tests.test_txt import (
-    _HTML_META_PAGE,
-    _build_sphinx,
-    _get_html_meta_description,
+from sphinx_llm.tests.helpers import HTML_META_PAGE as _HTML_META_PAGE
+from sphinx_llm.tests.helpers import (
+    get_html_meta_description as _get_html_meta_description,
 )
 from sphinx_llm.txt import MarkdownGenerator
 
 
-@pytest.fixture
-def summary_server():
-    """Serve deterministic chat completions to parent and subprocess builds."""
-    requests = []
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            content_length = int(self.headers["Content-Length"])
-            requests.append(json.loads(self.rfile.read(content_length)))
-            response = json.dumps(
-                {
-                    "id": "test-completion",
-                    "object": "chat.completion",
-                    "created": 0,
-                    "model": "test-model",
-                    "choices": [
-                        {
-                            "index": 0,
-                            "message": {
-                                "role": "assistant",
-                                "content": (
-                                    "Generated summary with "
-                                    "[Callback API](python_api.html.md#callback-api)."
-                                ),
-                            },
-                            "finish_reason": "stop",
-                        }
-                    ],
-                }
-            ).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(response)))
-            self.end_headers()
-            self.wfile.write(response)
-
-        def log_message(self, format, *args):
-            pass
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield f"http://127.0.0.1:{server.server_port}/v1", requests
-    finally:
-        server.shutdown()
-        thread.join()
-        server.server_close()
-
-
-def _generator(tmp_path: Path, **config_values) -> tuple[MarkdownGenerator, Path]:
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    defaults = {
-        "llms_txt_summary_enabled": True,
-        "llms_txt_summary_provider": "openai-compatible",
-        "llms_txt_summary_model": "test-model",
-        "llms_txt_summary_base_url": "https://example.com/v1",
-        "llms_txt_summary_api_key_env": "TEST_API_KEY",
-        "llms_txt_summary_allow_insecure_auth": False,
-        "llms_txt_summary_max_input_chars": 12_000,
-        "llms_txt_summary_timeout": 60,
-        "llms_txt_summary_cache_path": "",
-    }
-    defaults.update(config_values)
-    config = SimpleNamespace(**defaults, overrides={})
-    environment = SimpleNamespace(
-        get_doctree=lambda _: SimpleNamespace(traverse=lambda _: [])
-    )
-    app = SimpleNamespace(
-        config=config,
-        env=environment,
-        doctreedir=tmp_path / "doctrees",
-        confdir=tmp_path,
-    )
-    generator = MarkdownGenerator(app)
-    markdown_file = tmp_path / "page.html.md"
-    markdown_file.write_text(
-        "# Page\n\nComplete **Markdown** contents.", encoding="utf-8"
-    )
-    generator._docname_by_output_file[markdown_file] = "page"
-    return generator, markdown_file
-
-
-def test_summary_configuration_precedence(monkeypatch, tmp_path):
+def test_summary_configuration_precedence(summary_generator, monkeypatch, tmp_path):
     """Command-line overrides beat environment, then conf.py, then defaults."""
-    generator, _ = _generator(
+    generator, _ = summary_generator(
         tmp_path,
         llms_txt_summary_model="conf-model",
         llms_txt_summary_timeout=20,
@@ -140,21 +53,20 @@ def test_summary_configuration_precedence(monkeypatch, tmp_path):
     assert options.allow_insecure_auth is False
 
 
-def test_sphinx_command_line_override_and_built_in_defaults(monkeypatch):
+def test_sphinx_command_line_override_and_built_in_defaults(
+    build_example_docs, monkeypatch
+):
     """A real Sphinx ``-D`` value wins over env and defaults remain exact."""
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_MODEL", "env-model")
-    build = _build_sphinx(
+    build = build_example_docs(
         "html",
         {
             "llms_txt_summary_enabled": False,
             "llms_txt_summary_model": "cli-model",
         },
     )
-    try:
-        app, _, _ = next(build)
-        options = MarkdownGenerator(app)._get_summary_options()
-    finally:
-        build.close()
+    app, _, _ = build
+    options = MarkdownGenerator(app)._get_summary_options()
 
     assert options.enabled is False
     assert options.provider == "openai-compatible"
@@ -177,18 +89,20 @@ def test_sphinx_command_line_override_and_built_in_defaults(monkeypatch):
     ],
 )
 def test_invalid_summary_environment_values_raise(
-    monkeypatch, tmp_path, env_name, value
+    summary_generator, monkeypatch, tmp_path, env_name, value
 ):
     """Invalid environment configuration fails clearly when generation is used."""
-    generator, _ = _generator(tmp_path)
+    generator, _ = summary_generator(tmp_path)
     monkeypatch.setenv(env_name, value)
     with pytest.raises(ExtensionError, match="SPHINX_LLM_SUMMARY"):
         generator._get_summary_options()
 
 
-def test_disabled_summary_path_does_not_call_provider(tmp_path):
+def test_disabled_summary_path_does_not_call_provider(summary_generator, tmp_path):
     """Default-disabled descriptions use the plain-text Markdown fallback."""
-    generator, markdown_file = _generator(tmp_path, llms_txt_summary_enabled=False)
+    generator, markdown_file = summary_generator(
+        tmp_path, llms_txt_summary_enabled=False
+    )
     with patch.object(generator, "generate_page_summary") as generate:
         assert generator.get_page_description(markdown_file) == (
             "Complete Markdown contents."
@@ -196,9 +110,9 @@ def test_disabled_summary_path_does_not_call_provider(tmp_path):
     generate.assert_not_called()
 
 
-def test_html_meta_precedence_and_whitespace_fallback(tmp_path):
+def test_html_meta_precedence_and_whitespace_fallback(summary_generator, tmp_path):
     """Non-empty authored metadata wins, while whitespace-only metadata does not."""
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     meta = docutils.nodes.Element()
     meta["name"] = "description"
     meta["content"] = "  Authored description.  "
@@ -216,11 +130,13 @@ def test_html_meta_precedence_and_whitespace_fallback(tmp_path):
 
 
 def test_summary_uses_bounded_markdown_and_complete_fingerprint(
-    monkeypatch, tmp_path, caplog
+    summary_generator, monkeypatch, tmp_path, caplog
 ):
     """Only a prefix is sent, but changes beyond it invalidate the page cache."""
     monkeypatch.setenv("TEST_API_KEY", "top-secret")
-    generator, markdown_file = _generator(tmp_path, llms_txt_summary_max_input_chars=12)
+    generator, markdown_file = summary_generator(
+        tmp_path, llms_txt_summary_max_input_chars=12
+    )
     with patch(
         "sphinx_llm.summary.summarize_text",
         side_effect=[" First\nsummary. ", "Second summary."],
@@ -254,11 +170,11 @@ def test_summary_uses_bounded_markdown_and_complete_fingerprint(
     ],
 )
 def test_generation_setting_changes_invalidate_cache(
-    monkeypatch, tmp_path, setting, changed
+    summary_generator, monkeypatch, tmp_path, setting, changed
 ):
     """Every generation parameter participates in the page fingerprint."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     with patch(
         "sphinx_llm.summary.summarize_text",
         side_effect=["First summary.", "Second summary."],
@@ -278,11 +194,11 @@ def test_generation_setting_changes_invalidate_cache(
     ["not json", json.dumps({"version": 999, "summaries": {}})],
 )
 def test_corrupt_or_incompatible_cache_regenerates(
-    monkeypatch, tmp_path, cache_content
+    summary_generator, monkeypatch, tmp_path, cache_content
 ):
     """Bad cache files recover without suppressing generation."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     generator._summary_cache_path.parent.mkdir(parents=True)
     generator._summary_cache_path.write_text(cache_content, encoding="utf-8")
     with patch("sphinx_llm.summary.summarize_text", return_value="Summary.") as call:
@@ -290,9 +206,11 @@ def test_corrupt_or_incompatible_cache_regenerates(
     call.assert_called_once()
 
 
-def test_failed_cache_write_removes_temporary_file(monkeypatch, tmp_path):
+def test_failed_cache_write_removes_temporary_file(
+    summary_generator, monkeypatch, tmp_path
+):
     """An interrupted atomic write does not leave its temporary file behind."""
-    generator, _ = _generator(tmp_path)
+    generator, _ = summary_generator(tmp_path)
     generator._summary_cache_path.parent.mkdir(parents=True)
     with patch("sphinx_llm.txt.json.dump", side_effect=OSError("disk full")):
         with pytest.raises(OSError, match="disk full"):
@@ -303,10 +221,12 @@ def test_failed_cache_write_removes_temporary_file(monkeypatch, tmp_path):
     assert list(temporary_files) == []
 
 
-def test_failed_cache_persistence_does_not_discard_summary(monkeypatch, tmp_path):
+def test_failed_cache_persistence_does_not_discard_summary(
+    summary_generator, monkeypatch, tmp_path
+):
     """A valid provider response remains usable when its cache cannot be saved."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     with (
         patch("sphinx_llm.summary.summarize_text", return_value="Summary."),
         patch("sphinx_llm.txt.logger.warning") as warning,
@@ -321,10 +241,10 @@ def test_failed_cache_persistence_does_not_discard_summary(monkeypatch, tmp_path
     assert "summaries will be regenerated" in warning.call_args.args[0]
 
 
-def test_provider_failure_is_redacted(monkeypatch, tmp_path):
+def test_provider_failure_is_redacted(summary_generator, monkeypatch, tmp_path):
     """Provider failures become clear ExtensionErrors without credential leakage."""
     monkeypatch.setenv("TEST_API_KEY", "top-secret")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     with patch(
         "sphinx_llm.summary.summarize_text",
         side_effect=APIConnectionError(
@@ -343,10 +263,10 @@ def test_provider_failure_is_redacted(monkeypatch, tmp_path):
     assert "top-secret" not in formatted
 
 
-def test_unexpected_provider_error_propagates(monkeypatch, tmp_path):
+def test_unexpected_provider_error_propagates(summary_generator, monkeypatch, tmp_path):
     """Unexpected programming errors are not misreported as provider failures."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     with patch(
         "sphinx_llm.summary.summarize_text",
         side_effect=RuntimeError("unexpected failure"),
@@ -355,44 +275,50 @@ def test_unexpected_provider_error_propagates(monkeypatch, tmp_path):
             generator.get_page_description(markdown_file)
 
 
-def test_unchanged_second_build_uses_cache_without_credentials(monkeypatch, tmp_path):
+def test_unchanged_second_build_uses_cache_without_credentials(
+    summary_generator, monkeypatch, tmp_path
+):
     """A cache hit does not import or contact the provider and needs no credential."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     with patch("sphinx_llm.summary.summarize_text", return_value="Summary.") as call:
         assert generator.get_page_description(markdown_file) == "Summary."
     call.assert_called_once()
 
     monkeypatch.delenv("TEST_API_KEY")
-    second, second_markdown_file = _generator(tmp_path)
+    second, second_markdown_file = summary_generator(tmp_path)
     with patch("sphinx_llm.summary.summarize_text") as call:
         assert second.get_page_description(second_markdown_file) == "Summary."
     call.assert_not_called()
 
 
-def test_api_key_rotation_does_not_invalidate_cache(monkeypatch, tmp_path):
+def test_api_key_rotation_does_not_invalidate_cache(
+    summary_generator, monkeypatch, tmp_path
+):
     """The credential value is excluded from the cache fingerprint."""
     monkeypatch.setenv("TEST_API_KEY", "secret-one")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     with patch("sphinx_llm.summary.summarize_text", return_value="Summary."):
         assert generator.get_page_description(markdown_file) == "Summary."
 
     monkeypatch.setenv("TEST_API_KEY", "secret-two")
-    second, second_markdown_file = _generator(tmp_path)
+    second, second_markdown_file = summary_generator(tmp_path)
     with patch("sphinx_llm.summary.summarize_text") as call:
         assert second.get_page_description(second_markdown_file) == "Summary."
     call.assert_not_called()
 
 
-def test_api_key_environment_name_does_not_invalidate_cache(monkeypatch, tmp_path):
+def test_api_key_environment_name_does_not_invalidate_cache(
+    summary_generator, monkeypatch, tmp_path
+):
     """Credential variable names are excluded from the cache fingerprint."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     with patch("sphinx_llm.summary.summarize_text", return_value="Summary."):
         assert generator.get_page_description(markdown_file) == "Summary."
 
     monkeypatch.setenv("CI_API_KEY", "secret")
-    second, second_markdown_file = _generator(
+    second, second_markdown_file = summary_generator(
         tmp_path, llms_txt_summary_api_key_env="CI_API_KEY"
     )
     with patch("sphinx_llm.summary.summarize_text") as call:
@@ -400,15 +326,17 @@ def test_api_key_environment_name_does_not_invalidate_cache(monkeypatch, tmp_pat
     call.assert_not_called()
 
 
-def test_missing_credential_errors_but_empty_name_opts_out(monkeypatch, tmp_path):
+def test_missing_credential_errors_but_empty_name_opts_out(
+    summary_generator, monkeypatch, tmp_path
+):
     """Named credentials are required; an empty name explicitly opts out."""
     monkeypatch.delenv("TEST_API_KEY", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "ambient-secret")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     with pytest.raises(ExtensionError, match="API key"):
         generator.get_page_description(markdown_file)
 
-    unauthenticated, unauthenticated_file = _generator(
+    unauthenticated, unauthenticated_file = summary_generator(
         tmp_path / "local", llms_txt_summary_api_key_env=""
     )
     with patch("sphinx_llm.summary.summarize_text", return_value="Summary.") as call:
@@ -416,10 +344,12 @@ def test_missing_credential_errors_but_empty_name_opts_out(monkeypatch, tmp_path
     assert call.call_args.kwargs["api_key_env"] == ""
 
 
-def test_prompt_version_change_invalidates_cache(monkeypatch, tmp_path):
+def test_prompt_version_change_invalidates_cache(
+    summary_generator, monkeypatch, tmp_path
+):
     """Prompt revisions regenerate cached summaries."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     with patch(
         "sphinx_llm.summary.summarize_text",
         side_effect=["First summary.", "Second summary."],
@@ -430,10 +360,12 @@ def test_prompt_version_change_invalidates_cache(monkeypatch, tmp_path):
     assert summarize.call_count == 2
 
 
-def test_changing_one_page_only_regenerates_that_page(monkeypatch, tmp_path):
+def test_changing_one_page_only_regenerates_that_page(
+    summary_generator, monkeypatch, tmp_path
+):
     """Cache invalidation is page-granular."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    generator, first_file = _generator(tmp_path)
+    generator, first_file = summary_generator(tmp_path)
     second_file = tmp_path / "second.html.md"
     second_file.write_text("# Second\n\nSecond page contents.", encoding="utf-8")
     generator._docname_by_output_file[second_file] = "second"
@@ -449,14 +381,14 @@ def test_changing_one_page_only_regenerates_that_page(monkeypatch, tmp_path):
     assert summarize.call_count == 3
 
 
-def test_custom_cache_path_from_environment(monkeypatch, tmp_path):
+def test_custom_cache_path_from_environment(summary_generator, monkeypatch, tmp_path):
     """A relative configured cache path is resolved from the config directory."""
-    generator, _ = _generator(tmp_path)
+    generator, _ = summary_generator(tmp_path)
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_CACHE_PATH", "cache/summaries.json")
     assert generator._summary_cache_path == tmp_path / "cache" / "summaries.json"
 
 
-def test_all_environment_options(monkeypatch, tmp_path):
+def test_all_environment_options(summary_generator, monkeypatch, tmp_path):
     """Every public environment variable maps to its documented option."""
     values = {
         "SPHINX_LLM_SUMMARY_ENABLED": "yes",
@@ -471,7 +403,7 @@ def test_all_environment_options(monkeypatch, tmp_path):
     }
     for name, value in values.items():
         monkeypatch.setenv(name, value)
-    generator, _ = _generator(tmp_path)
+    generator, _ = summary_generator(tmp_path)
     options = generator._get_summary_options()
     assert options.enabled is True
     assert options.provider == "openai-compatible"
@@ -485,21 +417,25 @@ def test_all_environment_options(monkeypatch, tmp_path):
 
 
 def test_default_disabled_path_does_not_import_provider_dependency(
-    monkeypatch, tmp_path
+    summary_generator, monkeypatch, tmp_path
 ):
     """Normal builds do not import provider code."""
     monkeypatch.delitem(sys.modules, "openai", raising=False)
-    generator, markdown_file = _generator(tmp_path, llms_txt_summary_enabled=False)
+    generator, markdown_file = summary_generator(
+        tmp_path, llms_txt_summary_enabled=False
+    )
     assert generator.get_page_description(markdown_file)
     assert "openai" not in sys.modules
 
 
-def test_page_summary_disables_ambient_openai_defaults(monkeypatch, tmp_path):
+def test_page_summary_disables_ambient_openai_defaults(
+    summary_generator, monkeypatch, tmp_path
+):
     """Dedicated options never inherit shared OPENAI_* environment settings."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://ambient.example/v1")
     monkeypatch.setenv("OPENAI_REASONING_EFFORT", "high")
-    generator, markdown_file = _generator(tmp_path, llms_txt_summary_base_url="")
+    generator, markdown_file = summary_generator(tmp_path, llms_txt_summary_base_url="")
     with patch("sphinx_llm.summary.summarize_text", return_value="Summary.") as call:
         assert generator.get_page_description(markdown_file) == "Summary."
     assert call.call_args.kwargs["base_url"] == ""
@@ -523,11 +459,11 @@ def test_page_summary_disables_ambient_openai_defaults(monkeypatch, tmp_path):
     ],
 )
 def test_known_safe_provider_errors_remain_actionable(
-    monkeypatch, tmp_path, error_type, provider_message, expected
+    summary_generator, monkeypatch, tmp_path, error_type, provider_message, expected
 ):
     """Safe setup/response errors survive redaction with useful guidance."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
-    generator, markdown_file = _generator(tmp_path)
+    generator, markdown_file = summary_generator(tmp_path)
     error_class = getattr(import_module("sphinx_llm.summary"), error_type)
     with patch(
         "sphinx_llm.summary.summarize_text",
@@ -537,10 +473,12 @@ def test_known_safe_provider_errors_remain_actionable(
             generator.get_page_description(markdown_file)
 
 
-def test_page_summary_rejects_key_over_remote_plain_http(monkeypatch, tmp_path):
+def test_page_summary_rejects_key_over_remote_plain_http(
+    summary_generator, monkeypatch, tmp_path
+):
     """The page adapter preserves safe HTTPS guidance without leaking the key."""
     monkeypatch.setenv("TEST_API_KEY", "top-secret")
-    generator, markdown_file = _generator(
+    generator, markdown_file = summary_generator(
         tmp_path, llms_txt_summary_base_url="http://models.example.com/v1"
     )
     with patch("openai.OpenAI") as mock_openai:
@@ -550,10 +488,12 @@ def test_page_summary_rejects_key_over_remote_plain_http(monkeypatch, tmp_path):
     assert "top-secret" not in str(error.value)
 
 
-def test_page_summary_can_allow_key_over_remote_plain_http(monkeypatch, tmp_path):
+def test_page_summary_can_allow_key_over_remote_plain_http(
+    summary_generator, monkeypatch, tmp_path
+):
     """An explicit opt-in forwards credentials to a trusted plain-HTTP endpoint."""
     monkeypatch.setenv("TEST_API_KEY", "top-secret")
-    generator, markdown_file = _generator(
+    generator, markdown_file = summary_generator(
         tmp_path,
         llms_txt_summary_base_url="http://models.internal/v1",
         llms_txt_summary_allow_insecure_auth=True,
@@ -573,12 +513,12 @@ def test_page_summary_can_allow_key_over_remote_plain_http(monkeypatch, tmp_path
     ],
 )
 def test_page_summaries_in_full_build_matrix(
-    monkeypatch, summary_server, builder, parallel
+    build_example_docs, monkeypatch, summary_server, builder, parallel
 ):
     """Generated summaries work across supported builders and build modes."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
     base_url, requests = summary_server
-    build = _build_sphinx(
+    build = build_example_docs(
         builder,
         {
             "llms_txt_build_parallel": parallel,
@@ -588,22 +528,17 @@ def test_page_summaries_in_full_build_matrix(
             "llms_txt_summary_api_key_env": "TEST_API_KEY",
         },
     )
-    try:
-        app, build_dir, _ = next(build)
+    app, build_dir, _ = build
 
-        content = (build_dir / "llms.txt").read_text(encoding="utf-8")
-        apples_line = next(
-            line for line in content.splitlines() if "apples" in line.lower()
-        )
-        assert apples_line.endswith(": Generated summary with Callback API.")
-        assert "python_api.html.md#callback-api" not in apples_line
+    content = (build_dir / "llms.txt").read_text(encoding="utf-8")
+    apples_line = next(
+        line for line in content.splitlines() if "apples" in line.lower()
+    )
+    assert apples_line.endswith(": Generated summary with Callback API.")
+    assert "python_api.html.md#callback-api" not in apples_line
 
-        authored = _get_html_meta_description(app, _HTML_META_PAGE)
-        meta_line = next(
-            line for line in content.splitlines() if _HTML_META_PAGE in line
-        )
-        assert meta_line.endswith(f": {authored}")
-        assert requests
-        assert all(authored not in str(request) for request in requests)
-    finally:
-        build.close()
+    authored = _get_html_meta_description(app, _HTML_META_PAGE)
+    meta_line = next(line for line in content.splitlines() if _HTML_META_PAGE in line)
+    assert meta_line.endswith(f": {authored}")
+    assert requests
+    assert all(authored not in str(request) for request in requests)
