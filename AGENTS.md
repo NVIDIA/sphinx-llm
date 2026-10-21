@@ -110,6 +110,12 @@ temporary directories with different builders and parallel settings.
 Key test fixture: `sphinx_build` - parametrized fixture that tests both `html`
 and `dirhtml` builders with parallel and sequential markdown building.
 
+When adding or changing tests, reuse or extend shared fixtures in
+`src/sphinx_llm/tests/conftest.py` before duplicating setup. Share project/build
+mechanics, provider stubs, and cleanup where the duplication removed outweighs
+the added indirection; keep scenario-specific inputs and assertions in each test.
+Prefer lightweight fixtures for unit tests and real builds for integration tests.
+
 ## Documentation Guidelines
 
 Treat the configuration options table as the canonical documentation for each
