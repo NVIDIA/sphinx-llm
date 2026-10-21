@@ -6,8 +6,28 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  primary-site:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.11"
+          python-version: "3.12"
+
+      - name: Build primary documentation without generation
+        run: uv run --frozen --group docs sphinx-build -W -b html docs/source docs/build/html
+
+  generation-smoke:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -36,22 +56,22 @@ jobs:
 
       - name: Prepare generation smoke test
         run: |
-          printf "\n\nBuild ID: %s\n" "$GITHUB_RUN_ID" >> docs/source/apples.rst
-          find docs/source -type f -print0 | sort -z | xargs -0 sha256sum > /tmp/docs-source-before-build.sha256
+          printf "\n\nBuild ID: %s\n" "$GITHUB_RUN_ID" >> src/sphinx_llm/tests/fixtures/integration_docs/apples.rst
+          find src/sphinx_llm/tests/fixtures/integration_docs -type f -print0 | sort -z | xargs -0 sha256sum > /tmp/docs-source-before-build.sha256
 
-      - name: Build Sphinx documentation
+      - name: Build generation fixtures
         env:
           SPHINX_LLM_SUMMARY_MODEL: qwen3.5:2b
           SPHINX_LLM_SUMMARY_BASE_URL: http://localhost:11434/v1
           SPHINX_LLM_SUMMARY_API_KEY_ENV: ""
         run: |
-          uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -D llms_txt_build_parallel=0 -D llms_txt_summary_enabled=1 -b html docs/source docs/build/html
+          uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" sphinx-build -D llms_txt_build_parallel=0 -D llms_txt_summary_enabled=1 -b html src/sphinx_llm/tests/fixtures/integration_docs docs/build/fixtures
 
       - name: Verify sources and generated summary report
         run: |
-          find docs/source -type f -print0 | sort -z | xargs -0 sha256sum > /tmp/docs-source-after-build.sha256
+          find src/sphinx_llm/tests/fixtures/integration_docs -type f -print0 | sort -z | xargs -0 sha256sum > /tmp/docs-source-after-build.sha256
           cmp /tmp/docs-source-before-build.sha256 /tmp/docs-source-after-build.sha256
-          jq -e '.summaries | any(.target == "apples" and .origin == "generated" and (.summary | length > 0) and (.fingerprint | length == 64))' docs/build/html/sphinx-llm-summaries.json
+          jq -e '.summaries | any(.target == "apples" and .origin == "generated" and (.summary | length > 0) and (.fingerprint | length == 64))' docs/build/fixtures/sphinx-llm-summaries.json
 
       - name: Show Ollama generation logs
         if: ${{ always() }}
@@ -69,8 +89,8 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Generated summary report"
-          if [[ -f docs/build/html/sphinx-llm-summaries.json ]]; then
-            jq . docs/build/html/sphinx-llm-summaries.json
+          if [[ -f docs/build/fixtures/sphinx-llm-summaries.json ]]; then
+            jq . docs/build/fixtures/sphinx-llm-summaries.json
           else
             echo "Generated summary report is unavailable."
           fi
