@@ -164,9 +164,10 @@ Markdown only. Other builders do not automatically set either audience tag.
 
 Normal Sphinx boolean expressions and nesting work, such as
 `only:: agent and not internal` and `only:: human or agent`. Custom tags set with
-`-t` are forwarded to the Markdown sub-build, but the HTML build's `human` tag
-is not. As with other Sphinx tags, authors can explicitly set audience tags
-themselves.
+`-t` are forwarded to the Markdown sub-build, including an explicitly supplied
+`-t human`. Tags added in `conf.py` with `tags.add("human")` are also preserved.
+Only the automatically added HTML audience tag is excluded from forwarding.
+As with other Sphinx tags, authors can explicitly set audience tags themselves.
 
 #### HTML discovery metadata
 
