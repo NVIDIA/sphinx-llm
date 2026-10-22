@@ -41,6 +41,7 @@ dev = [
     "myst-parser>=1",
     "pytest>=8.4.1",
     "pytest-cov>=4.1.0",
+    "pytest-xdist>=3.8",
     "sphinx-autobuild>=2024.10.3",
 ]
 
