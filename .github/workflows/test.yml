@@ -21,7 +21,7 @@ jobs:
           python-version: "3.9"
 
       - name: Run tests with lowest supported direct dependency versions
-        run: uv run --resolution lowest-direct --dev --extra gen pytest -n 2 --dist worksteal src/sphinx_llm/tests/
+        run: uv run --resolution lowest-direct --dev --extra gen pytest -n 4 --dist worksteal src/sphinx_llm/tests/
 
   test:
     # Keep this image label in both cache keys below when upgrading the runner.
@@ -72,7 +72,7 @@ jobs:
             uv-ubuntu-24.04-${{ runner.os }}-${{ runner.arch }}-${{ matrix.python-version }}-${{ strategy.job-index }}-
 
       - name: Run tests
-        run: uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" pytest -n 2 --dist worksteal src/sphinx_llm/tests/ --cov=sphinx_llm --cov-report=xml
+        run: uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" pytest -n 4 --dist worksteal src/sphinx_llm/tests/ --cov=sphinx_llm --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7.0.0
