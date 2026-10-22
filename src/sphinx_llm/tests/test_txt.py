@@ -2249,6 +2249,45 @@ def test_llms_txt_does_not_reference_stale_full_artifact(
         assert "llms-full.txt" not in nested_index.read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize(
+    ("summary", "expected"),
+    [("One-line package summary.", "One-line package summary."), (None, "HTML title")],
+    ids=["summary", "no-summary"],
+)
+def test_project_description_uses_package_summary(
+    make_markdown_generator,
+    monkeypatch,
+    tmp_path: Path,
+    summary: str | None,
+    expected: str,
+):
+    """The pyproject.toml description is used, never the package README."""
+    site_packages = tmp_path / "site-packages"
+    dist_info = site_packages / "example_docs_package-1.0.dist-info"
+    dist_info.mkdir(parents=True)
+    summary_header = f"Summary: {summary}\n" if summary else ""
+    (dist_info / "METADATA").write_text(
+        "Metadata-Version: 2.4\n"
+        "Name: example-docs-package\n"
+        "Version: 1.0\n"
+        f"{summary_header}"
+        "\n"
+        "# Example docs package\n\n"
+        "The long description is the package README.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(site_packages))
+    generator = make_markdown_generator(
+        config=SimpleNamespace(
+            project="example-docs-package",
+            llms_txt_description="",
+            html_title="HTML title",
+        )
+    )
+
+    assert generator.get_project_description() == expected
+
+
 # ---------------------------------------------------------------------------
 # html_meta description tests
 # ---------------------------------------------------------------------------
