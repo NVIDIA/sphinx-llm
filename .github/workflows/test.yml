@@ -24,7 +24,8 @@ jobs:
         run: uv run --resolution lowest-direct --dev --extra gen pytest src/sphinx_llm/tests/
 
   test:
-    runs-on: ubuntu-latest
+    # Keep this image label in both cache keys below when upgrading the runner.
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -65,10 +66,10 @@ jobs:
         with:
           path: ${{ runner.temp }}/uv-cache
           # Matrix indices isolate Sphinx rows without commas in cache keys.
-          key: uv-${{ runner.os }}-${{ runner.arch }}-${{ matrix.python-version }}-${{ strategy.job-index }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          key: uv-ubuntu-24.04-${{ runner.os }}-${{ runner.arch }}-${{ matrix.python-version }}-${{ strategy.job-index }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
           # Reuse unchanged source-built wheels after dependency updates.
           restore-keys: |
-            uv-${{ runner.os }}-${{ runner.arch }}-${{ matrix.python-version }}-${{ strategy.job-index }}-
+            uv-ubuntu-24.04-${{ runner.os }}-${{ runner.arch }}-${{ matrix.python-version }}-${{ strategy.job-index }}-
 
       - name: Run tests
         run: uv run --dev --extra gen --with "sphinx${{ matrix.sphinx-version }}" pytest src/sphinx_llm/tests/ --cov=sphinx_llm --cov-report=xml
