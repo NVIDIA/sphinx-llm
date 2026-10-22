@@ -346,9 +346,9 @@ def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
     ]
 
 
-def test_rst_files_have_corresponding_output_files(sphinx_build):
+def test_rst_files_have_corresponding_output_files(readonly_sphinx_build):
     """Test that all RST files have corresponding HTML and HTML.MD files in output."""
-    app, build_dir, source_dir = sphinx_build
+    app, build_dir, source_dir = readonly_sphinx_build
 
     rst_files = list(source_dir.rglob("*.rst"))
     assert len(rst_files) > 0, "No RST files found in source directory"
@@ -376,9 +376,9 @@ def test_rst_files_have_corresponding_output_files(sphinx_build):
     ],
     ids=["markdown", "not-html"],
 )
-def test_markdown_only_content_is_excluded_from_html(sphinx_build, marker):
+def test_markdown_only_content_is_excluded_from_html(readonly_sphinx_build, marker):
     """Both Markdown conditions include content in Markdown, not HTML."""
-    app, build_dir, _ = sphinx_build
+    app, build_dir, _ = readonly_sphinx_build
     html_path = (
         build_dir / "test.html"
         if app.builder.name == "html"
@@ -405,9 +405,9 @@ def test_example_unsupported_directive_is_preserved_by_default(
     )
 
 
-def test_llms_txt_sitemap_links_exist(sphinx_build):
+def test_llms_txt_sitemap_links_exist(readonly_sphinx_build):
     """Test that all markdown pages listed in the llms.txt sitemap actually exist."""
-    _, build_dir, _ = sphinx_build
+    _, build_dir, _ = readonly_sphinx_build
 
     llms_txt_path = build_dir / "llms.txt"
     assert llms_txt_path.exists(), f"llms.txt not found: {llms_txt_path}"
@@ -424,9 +424,9 @@ def test_llms_txt_sitemap_links_exist(sphinx_build):
             assert_file_exists_with_content(build_dir / url)
 
 
-def test_llms_txt_sitemap_follows_toctree_order(sphinx_build):
+def test_llms_txt_sitemap_follows_toctree_order(readonly_sphinx_build):
     """Test that pages in llms.txt follow the order in the HTML index."""
-    _, build_dir, _ = sphinx_build
+    _, build_dir, _ = readonly_sphinx_build
 
     parser = _ToctreeLinkParser()
     parser.feed((build_dir / "index.html").read_text(encoding="utf-8"))
@@ -457,9 +457,9 @@ def test_llms_txt_sitemap_follows_toctree_order(sphinx_build):
     assert llms_page_urls[: len(expected_markdown_urls)] == expected_markdown_urls
 
 
-def test_llms_txt_does_not_use_anchor_tag_as_description(sphinx_build):
+def test_llms_txt_does_not_use_anchor_tag_as_description(readonly_sphinx_build):
     """Test that anchor-only HTML tags are not used as page descriptions in llms.txt."""
-    _, build_dir, _ = sphinx_build
+    _, build_dir, _ = readonly_sphinx_build
 
     llms_txt_path = build_dir / "llms.txt"
     content = llms_txt_path.read_text(encoding="utf-8")
@@ -2099,9 +2099,9 @@ def test_unsupported_and_internal_builders_do_not_register_discovery(builder: st
     )
 
 
-def test_llms_full_txt_not_created_by_default(sphinx_build):
+def test_llms_full_txt_not_created_by_default(readonly_sphinx_build):
     """Test that llms-full.txt is not created or referenced by default."""
-    _, build_dir, _ = sphinx_build
+    _, build_dir, _ = readonly_sphinx_build
 
     llms_full_txt_path = build_dir / "llms-full.txt"
     assert not llms_full_txt_path.exists()
@@ -2135,13 +2135,13 @@ def test_llms_full_setting_matrix(sphinx_build_llms_full_matrix):
 
 
 @pytest.mark.parametrize(
-    "sphinx_build_no_llms_full",
+    "readonly_sphinx_build_no_llms_full",
     ["html", "dirhtml"],
     indirect=True,
 )
-def test_llms_full_txt_not_created_when_disabled(sphinx_build_no_llms_full):
+def test_llms_full_txt_not_created_when_disabled(readonly_sphinx_build_no_llms_full):
     """Test that llms-full.txt is NOT created when llms_txt_full_build is False."""
-    _, build_dir, _ = sphinx_build_no_llms_full
+    _, build_dir, _ = readonly_sphinx_build_no_llms_full
 
     llms_full_txt_path = build_dir / "llms-full.txt"
     assert not llms_full_txt_path.exists(), (
@@ -2150,13 +2150,15 @@ def test_llms_full_txt_not_created_when_disabled(sphinx_build_no_llms_full):
 
 
 @pytest.mark.parametrize(
-    "sphinx_build_no_llms_full",
+    "readonly_sphinx_build_no_llms_full",
     ["html", "dirhtml"],
     indirect=True,
 )
-def test_llms_txt_sitemap_still_created_when_full_disabled(sphinx_build_no_llms_full):
+def test_llms_txt_sitemap_still_created_when_full_disabled(
+    readonly_sphinx_build_no_llms_full,
+):
     """Test that llms.txt sitemap is still created when llms-full.txt is disabled."""
-    _, build_dir, _ = sphinx_build_no_llms_full
+    _, build_dir, _ = readonly_sphinx_build_no_llms_full
 
     llms_txt_path = build_dir / "llms.txt"
     assert llms_txt_path.exists(), (
@@ -2166,13 +2168,15 @@ def test_llms_txt_sitemap_still_created_when_full_disabled(sphinx_build_no_llms_
 
 
 @pytest.mark.parametrize(
-    "sphinx_build_no_llms_full",
+    "readonly_sphinx_build_no_llms_full",
     ["html", "dirhtml"],
     indirect=True,
 )
-def test_markdown_files_still_created_when_full_disabled(sphinx_build_no_llms_full):
+def test_markdown_files_still_created_when_full_disabled(
+    readonly_sphinx_build_no_llms_full,
+):
     """Test that per-page markdown files are still created when llms-full.txt is disabled."""
-    app, build_dir, source_dir = sphinx_build_no_llms_full
+    app, build_dir, source_dir = readonly_sphinx_build_no_llms_full
 
     rst_files = list(source_dir.rglob("*.rst"))
     assert len(rst_files) > 0, "No RST files found in source directory"
@@ -2196,13 +2200,15 @@ def test_markdown_files_still_created_when_full_disabled(sphinx_build_no_llms_fu
 
 
 @pytest.mark.parametrize(
-    "sphinx_build_no_llms_full",
+    "readonly_sphinx_build_no_llms_full",
     ["html", "dirhtml"],
     indirect=True,
 )
-def test_llms_txt_does_not_link_to_llms_full_when_disabled(sphinx_build_no_llms_full):
+def test_llms_txt_does_not_link_to_llms_full_when_disabled(
+    readonly_sphinx_build_no_llms_full,
+):
     """Test that llms.txt has no llms-full reference when explicitly disabled."""
-    _, build_dir, _ = sphinx_build_no_llms_full
+    _, build_dir, _ = readonly_sphinx_build_no_llms_full
 
     content = (build_dir / "llms.txt").read_text(encoding="utf-8")
     assert "llms-full.txt" not in content
@@ -2248,9 +2254,9 @@ def test_llms_txt_does_not_reference_stale_full_artifact(
 # ---------------------------------------------------------------------------
 
 
-def test_html_meta_description_used_in_llms_txt(sphinx_build):
+def test_html_meta_description_used_in_llms_txt(readonly_sphinx_build):
     """Test that a page's html_meta description is used in llms.txt when defined."""
-    app, build_dir, _ = sphinx_build
+    app, build_dir, _ = readonly_sphinx_build
 
     expected = _get_html_meta_description(app, _HTML_META_PAGE)
     content = (build_dir / "llms.txt").read_text(encoding="utf-8")
@@ -2280,9 +2286,9 @@ def test_html_meta_description_without_nodes_meta(sphinx_build, monkeypatch, tmp
     assert generator.get_page_description(md_file) == expected
 
 
-def test_content_fallback_used_when_no_html_meta(sphinx_build):
+def test_content_fallback_used_when_no_html_meta(readonly_sphinx_build):
     """Test that pages without html_meta use content-based descriptions in llms.txt."""
-    app, build_dir, _ = sphinx_build
+    app, build_dir, _ = readonly_sphinx_build
 
     llms_txt_path = build_dir / "llms.txt"
     content = llms_txt_path.read_text(encoding="utf-8")
@@ -2506,9 +2512,9 @@ _APPLES_BODY_TEXT = "wonderful experience for both you and the pig"
 _NESTED_BODY_TEXT = "This is an example."
 
 
-def test_excluded_documents_not_in_llms_txt(sphinx_build_with_exclude):
+def test_excluded_documents_not_in_llms_txt(readonly_sphinx_build_with_exclude):
     """Documents matching llms_txt_exclude must not be listed in llms.txt."""
-    _, build_dir, _ = sphinx_build_with_exclude
+    _, build_dir, _ = readonly_sphinx_build_with_exclude
     llms_txt = build_dir / "llms.txt"
     assert_file_exists_with_content(llms_txt)
     content = llms_txt.read_text()
@@ -2519,9 +2525,9 @@ def test_excluded_documents_not_in_llms_txt(sphinx_build_with_exclude):
     assert "test" in content
 
 
-def test_excluded_documents_not_in_llms_full_txt(sphinx_build_with_exclude):
+def test_excluded_documents_not_in_llms_full_txt(readonly_sphinx_build_with_exclude):
     """Documents matching llms_txt_exclude must not be part of llms-full.txt."""
-    _, build_dir, _ = sphinx_build_with_exclude
+    _, build_dir, _ = readonly_sphinx_build_with_exclude
     llms_full = build_dir / "llms-full.txt"
     assert_file_exists_with_content(llms_full)
     content = llms_full.read_text()
@@ -2530,10 +2536,12 @@ def test_excluded_documents_not_in_llms_full_txt(sphinx_build_with_exclude):
     assert _NESTED_BODY_TEXT not in content
 
 
-def test_excluded_documents_still_have_markdown_files(sphinx_build_with_exclude):
+def test_excluded_documents_still_have_markdown_files(
+    readonly_sphinx_build_with_exclude,
+):
     """Documents matching llms_txt_exclude still get their individual
     markdown files."""
-    app, build_dir, _ = sphinx_build_with_exclude
+    app, build_dir, _ = readonly_sphinx_build_with_exclude
 
     if app.builder.name == "dirhtml":
         apples_md = build_dir / "apples" / "index.html.md"

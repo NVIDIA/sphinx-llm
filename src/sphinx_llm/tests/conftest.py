@@ -1,6 +1,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Shared test setup; behavior-specific inputs and assertions stay in test modules."""
+"""Shared test setup; behavior-specific inputs and assertions stay in test modules.
+
+Fixtures named ``readonly_*`` share one completed build per configuration within a
+test module. Consumers may inspect the app and artifacts, but must not mutate the
+app, environment, sources or output, rebuild, or attach observers. Use the
+function-scoped ``sphinx_build`` or a build factory for those scenarios; copy the
+integration sources before editing them.
+
+The module-scoped factories below do not cache apps or builds. Every call
+constructs a new app; incremental tests can still explicitly reuse output paths.
+Example builds use fresh ``tmp_path_factory`` directories for output and doctrees,
+with cleanup and failure-artifact retention managed by pytest.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +32,7 @@ from sphinx.application import Sphinx
 from sphinx_llm.txt import MarkdownGenerator
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def docs_source_dir() -> Path:
     """Unthemed integration documentation corpus (treat as read-only)."""
     return Path(__file__).parent / "fixtures" / "integration_docs"
@@ -43,7 +55,7 @@ def make_sphinx_project(tmp_path):
     return make
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def make_sphinx_app():
     """Construct a Sphinx app; callers can connect observers before building.
 
@@ -70,7 +82,7 @@ def make_sphinx_app():
     return make
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def build_sphinx_app(make_sphinx_app):
     """Build in-process, retaining output/doctree paths for incremental calls."""
 
@@ -102,7 +114,7 @@ def build_sphinx_app(make_sphinx_app):
     return build
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def build_example_docs(docs_source_dir, tmp_path_factory, build_sphinx_app):
     """Build examples in a fixture-managed directory, fresh for each factory call."""
 
@@ -174,18 +186,28 @@ def openai_response():
     return make
 
 
-@pytest.fixture(
-    params=[
-        ("html", True),
-        ("dirhtml", True),
-        ("html", False),
-        ("dirhtml", False),
-    ]
-)
+_DEFAULT_BUILD_MODES = [
+    ("html", True),
+    ("dirhtml", True),
+    ("html", False),
+    ("dirhtml", False),
+]
+
+
+@pytest.fixture(params=_DEFAULT_BUILD_MODES)
 def sphinx_build(
     build_example_docs, request
 ) -> Generator[tuple[Sphinx, Path, Path], None, None]:
-    """Build Sphinx docs with different builder and parallel combinations."""
+    """Fresh function-scoped build for tests that mutate application state."""
+    builder, parallel = request.param
+    yield build_example_docs(builder, {"llms_txt_build_parallel": parallel})
+
+
+@pytest.fixture(scope="module", params=_DEFAULT_BUILD_MODES)
+def readonly_sphinx_build(
+    build_example_docs, request
+) -> Generator[tuple[Sphinx, Path, Path], None, None]:
+    """Read-only default output in each builder/parallel mode; never rebuild."""
     builder, parallel = request.param
     yield build_example_docs(builder, {"llms_txt_build_parallel": parallel})
 
@@ -297,24 +319,25 @@ def sphinx_build_with_http_base(
     )
 
 
-@pytest.fixture
-def sphinx_build_no_llms_full(
+@pytest.fixture(scope="module")
+def readonly_sphinx_build_no_llms_full(
     build_example_docs,
     request,
 ) -> Generator[tuple[Sphinx, Path, Path], None, None]:
-    """Build Sphinx docs with llms_txt_full_build set to False."""
+    """Read-only output with full generation disabled; never modify artifacts."""
     builder = request.param
     yield build_example_docs(builder, {"llms_txt_full_build": False})
 
 
 @pytest.fixture(
-    params=[("html", True), ("html", False), ("dirhtml", True), ("dirhtml", False)]
+    scope="module",
+    params=[("html", True), ("html", False), ("dirhtml", True), ("dirhtml", False)],
 )
-def sphinx_build_with_exclude(
+def readonly_sphinx_build_with_exclude(
     build_example_docs,
     request,
 ) -> Generator[tuple[Sphinx, Path, Path], None, None]:
-    """Build with exclusions while omitting unrelated unknown-node output."""
+    """Read-only excluded output, omitting unrelated unknown-node preservation."""
     builder, parallel = request.param
     yield build_example_docs(
         builder,
