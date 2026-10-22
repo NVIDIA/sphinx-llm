@@ -71,6 +71,14 @@ SITEMAP_TEXT_TRANSLATION = str.maketrans(
 )
 
 
+def _add_audience_tags(app: Sphinx) -> None:
+    """Let Sphinx's native ``only`` directive select the build's audience."""
+    if app.builder.name in {"html", "dirhtml"}:
+        app.tags.add("human")
+    elif app.builder.name == SphinxLlmMarkdownBuilder.name:
+        app.tags.add("agent")
+
+
 def _serialize_sitemap_text(value: str) -> str:
     """Return one-line text that is safe inside a generated file-list entry."""
     value = re.sub(r"[^\S\r\n]*(?:\r\n?|\n)+[^\S\r\n]*", " ", value).strip()
@@ -594,13 +602,14 @@ class MarkdownGenerator:
             ]
 
             # Forward custom tags, but let the Markdown builder set its own
-            # builder and format tags. Forwarding HTML's dynamic tags makes
-            # ``.. only:: not html`` false in the Markdown build.
+            # builder, format, and audience tags. Forwarding HTML's dynamic
+            # tags would select human-only content in the Markdown build.
             builder_tags = {
                 self.app.builder.name,
                 self.app.builder.format,
                 f"builder_{self.app.builder.name}",
                 f"format_{self.app.builder.format}",
+                "human",
             }
             for tag in self.app.tags:
                 if tag not in builder_tags:
@@ -1477,6 +1486,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     )
     app.add_config_value(PRESERVE_UNKNOWN_NODES_CONFIG, True, "env", types=(bool,))
     app.connect("config-inited", validate_suppress_unknown_node_warnings)
+    app.connect("builder-inited", _add_audience_tags)
     if "markdown_http_base" not in app.config.values:
         app.add_config_value("markdown_http_base", "", "env")
     generator = MarkdownGenerator(app)

@@ -130,6 +130,44 @@ extension never guesses that an unselected file is stale or deletes it.
 > [!NOTE]
 > This extension only works with HTML builders (like `html` and `dirhtml`).
 
+#### Audience-specific content
+
+With `sphinx_llm.txt` in your `extensions`, use Sphinx's built-in
+[`only` directive](https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html#directive-only)
+to tailor content to readers:
+
+```rst
+.. only:: human
+
+   Use the navigation menu to explore this documentation.
+
+.. only:: agent
+
+   Follow these instructions when using this project in an agent workflow.
+```
+
+The extension automatically adds these audience tags:
+
+<!-- markdownlint-disable MD013 -->
+| Tag | Builds where it is set |
+| --- | --- |
+| `human` | The `html` and `dirhtml` builders. |
+| `agent` | Sphinx LLM's `llms-markdown` builder, used to generate per-page Markdown, custom `llms.txt` source content, and the optional `llms-full.txt`. |
+<!-- markdownlint-enable MD013 -->
+
+These tags do not replace Sphinx's existing builder/format tags. `html` still
+matches HTML output and `markdown` still matches both Sphinx LLM Markdown and
+standalone `sphinx-build -b markdown` output. Standalone Markdown builds do not
+automatically set `human` or `agent`; use `only:: markdown` if content should
+appear in all Markdown output, or `only:: markdown and not agent` for standalone
+Markdown only. Other builders do not automatically set either audience tag.
+
+Normal Sphinx boolean expressions and nesting work, such as
+`only:: agent and not internal` and `only:: human or agent`. Custom tags set with
+`-t` are forwarded to the Markdown sub-build, but the HTML build's `human` tag
+is not. As with other Sphinx tags, authors can explicitly set audience tags
+themselves.
+
 #### HTML discovery metadata
 
 Each source-backed HTML page advertises both its canonical Markdown
@@ -162,7 +200,7 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 <!-- markdownlint-disable MD013 -->
 | **Name** | **Description** | **Type** | **Default** |
 | --- | --- | --- | --- |
-| `llms_txt_enabled` | Enable or disable all llms.txt artefact generation. Set to `False` to skip the entire extension without removing it from `conf.py`. Use `sphinx-build -D llms_txt_enabled=0` to skip on a per-build basis. | `bool` | `True` |
+| `llms_txt_enabled` | Enable or disable all llms.txt artefact generation without removing the extension from `conf.py`; audience tags remain available. Use `sphinx-build -D llms_txt_enabled=0` to skip generation on a per-build basis. | `bool` | `True` |
 | `llms_txt_nested_enabled` | Generate scoped nested `llms.txt` files and discover the most-specific index. Set to `False` for root-only generation and discovery. | `bool` | `True` |
 | `llms_txt_description` | Override the project description set in `llms.txt` | `str` | Uses the project description from `pyproject.toml` by default |
 | `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
