@@ -28,8 +28,9 @@ sphinx-build -b html path/to/your/docs path/to/your/build/html
 You'll find Markdown pages and an llms.txt index alongside your HTML, without
 configuring a model or API key.
 
-For more information, check out the
-[first build tutorial](https://sphinx-llm.readthedocs.io/en/latest/txt/tutorial.html).
+For more information, check out
+[Getting Started](https://sphinx-llm.readthedocs.io/en/latest/getting-started.html)
+or the [first build tutorial](https://sphinx-llm.readthedocs.io/en/latest/txt/tutorial.html).
 
 ## Publish LLM-friendly documentation
 

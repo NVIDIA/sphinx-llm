@@ -9,6 +9,7 @@ independently, so you can start with the one you need.
    :maxdepth: 2
    :hidden:
 
+   getting-started
    txt/index
    docref/index
    maintainers/index
@@ -18,11 +19,9 @@ independently, so you can start with the one you need.
 * :doc:`docref/index` adds **linked page summaries** to your documentation.
   You can write the summaries yourself or choose a model to generate them.
 
-Install the package with ``pip install sphinx-llm``, then follow the
-:doc:`TXT tutorial <txt/tutorial>` or
-:doc:`docref tutorial <docref/tutorial>`. Both start with an example you can
-build without a provider. If you later want generated summaries, you'll need
-the ``sphinx-llm[gen]`` extra and an explicitly configured model.
+If you're new to the project, start with :doc:`getting-started` for
+installation and help choosing an extension. Each extension has a tutorial
+you can build without a provider.
 
 Working on sphinx-llm?
 ----------------------
