@@ -1,28 +1,37 @@
 sphinx_llm.txt
 ==============
 
-Publish documentation that agents can retrieve as Markdown while keeping your
-normal HTML site. The extension creates ``llms.txt``, one or more Markdown
-representations of each page, and optionally ``llms-full.txt``.
-It supports Sphinx's ``html`` and ``dirhtml`` builders and source formats
-such as reStructuredText and MyST.
+Your HTML site is useful for people browsing the documentation. With
+``sphinx_llm.txt``, you can publish Markdown versions of the same pages
+for agents to retrieve, along with an ``llms.txt`` index to help them
+find the right page.
 
-Install ``sphinx-llm`` and add to ``conf.py``:
+Install ``sphinx-llm``, then add the extension to your ``conf.py``:
 
 .. code-block:: python
 
    extensions = ["sphinx_llm.txt"]
 
-Build with ``sphinx-build -b html source build/html``. For ``source/guide.rst``,
-the default output includes ``build/html/guide.html``,
-``guide.html.md``, and ``guide.md``. The index points to one canonical
-Markdown representation, not both. HTML pages advertise it with discovery links.
+You can now build your site as usual:
 
-Use :doc:`how-to/audience-content` to tailor conditional content for human
-readers and agent workflows without maintaining separate source trees.
+.. code-block:: console
 
-No model is required. Descriptions come from authored page metadata or page
-content unless you explicitly enable generation.
+   sphinx-build -b html source build/html
+
+For a page such as ``source/guide.rst``, you'll get ``guide.html``,
+``guide.html.md`` and ``guide.md`` in the HTML output directory.
+The index links to one preferred Markdown URL, so it doesn't list the same page
+twice. Your HTML pages also include links that advertise their Markdown versions.
+
+You don't need a model for this workflow. Page descriptions come from your
+metadata or page content unless you choose to generate them.
+You can also :doc:`tailor content for each audience <how-to/audience-content>`
+or publish a single full-text download. The extension supports the
+``html`` and ``dirhtml`` builders, with Sphinx sources such as
+reStructuredText and MyST.
+
+Start with the tutorial to build a small site, or pick a guide for a change
+you'd like to make to your existing project.
 
 .. toctree::
    :maxdepth: 1

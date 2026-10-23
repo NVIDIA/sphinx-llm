@@ -1,23 +1,26 @@
 Configuration
 =============
 
-Enable ``sphinx_llm.docref`` in Sphinx's ``extensions``.
-It loads the summary settings itself; TXT is not required.
+Once you've enabled ``sphinx_llm.docref`` in ``extensions``,
+you can configure shared summary generation and the appearance of reference
+boxes. Docref loads the summary settings itself; you don't need TXT.
 
 Summary settings
 ----------------
 
-The authoritative :ref:`shared-summary-settings` reference lists all
-summary option names, types, defaults, environment overrides and precedence.
+Use the :ref:`shared-summary-settings` reference for summary option
+names, types, defaults, environment overrides and precedence.
 The ``llms_txt_summary_*`` names apply to docref too.
-Directive ``:model:`` selects a model for that automatic reference
-after shared model resolution; it does not turn generation on.
+
+A directive's ``:model:`` option selects a model for that automatic
+reference after shared model resolution. It doesn't turn generation on.
 
 Style settings
 --------------
 
-Set in ``conf.py`` or with Sphinx ``-D``. There are no dedicated
-environment overrides for styling.
+You can set site-wide styles in ``conf.py`` or with Sphinx's
+``-D`` option. Styling doesn't have dedicated environment overrides.
+For per-reference changes and a CSS example, see :doc:`how-to/styles`.
 
 .. list-table::
    :header-rows: 1

@@ -1,8 +1,9 @@
 How-to guides
 =============
 
-Use these recipes after the :doc:`../tutorial`.
-Each recipe changes your project's ``conf.py`` unless stated otherwise.
+Once you've :doc:`built your first site <../tutorial>`, you can use these
+guides to adjust what you publish. Each guide focuses on one task and shows
+what to check after changing your configuration.
 
 .. toctree::
    :maxdepth: 1

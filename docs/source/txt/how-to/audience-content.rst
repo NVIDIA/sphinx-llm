@@ -1,10 +1,13 @@
 Tailor content to humans and agents
 ===================================
 
-With ``sphinx_llm.txt`` enabled, use Sphinx's built-in
+People browsing your site may need navigation advice, while an agent may
+need instructions for fetching a page. You can write both in one source file
+and use Sphinx's
 `only directive <https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html#directive-only>`_
-to give readers instructions appropriate to the output they are consuming.
-For example, place these directives in a source page:
+to select the appropriate text.
+
+With ``sphinx_llm.txt`` enabled, add this to a page:
 
 .. code-block:: rst
 
@@ -16,10 +19,10 @@ For example, place these directives in a source page:
 
       Fetch the Markdown page for machine-readable project context.
 
-Build HTML or dirhtml and inspect that page in both HTML and generated Markdown.
-The first paragraph appears only in HTML; the second appears only in the
-extension's Markdown output. This page uses the same directives below, so you
-can inspect the behavior in this site's rendered outputs too.
+Build with HTML or dirhtml, then open that page in both HTML and generated
+Markdown. You'll see the first paragraph in HTML and the second in Markdown.
+This page includes the same live example below, so you can compare its two
+outputs without creating a project first.
 
 .. only:: human
 
@@ -55,7 +58,9 @@ The tags are provided by TXT; docref alone does not add audience selection.
 Combine conditions and custom tags
 ----------------------------------
 
-Native boolean expressions and nesting work. For example:
+You can combine audience conditions with your own tags or nest them inside
+other conditions. For example, you might keep internal instructions out of
+the public agent-facing text:
 
 .. code-block:: rst
 
@@ -84,10 +89,11 @@ tags or unrelated custom tags.
 Publishing and summary considerations
 -------------------------------------
 
-Use audience conditions for presentation, not access control. When you publish
-both HTML and Markdown, both audiences' content is publicly retrievable.
-Other extension consumers can inspect doctrees before conditional content is
-filtered: docref summary generation uses target doctree text, while TXT
-summary generation uses final Markdown. Page-level metadata can also be reused
-across outputs. Do not rely on ``only`` to keep confidential material out of
-provider input, generated descriptions, or a deployed site.
+Audience conditions change how you present content; they don't make it
+private. If you publish HTML and Markdown, someone can retrieve either version.
+
+There's also a distinction when generating summaries. Docref uses target
+doctree text, which can be read before conditional content is filtered, while
+TXT uses final Markdown. Page metadata can be reused across outputs too.
+Don't rely on ``only`` to keep confidential material out of provider
+input, generated descriptions or your published site.

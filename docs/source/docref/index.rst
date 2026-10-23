@@ -1,13 +1,18 @@
 sphinx_llm.docref
 =================
 
-Render a linked reference to another Sphinx page as a static admonition with
-a title, summary, and visit link. Use reviewed authored text without any model,
-or opt into generation when you need it. This extension works independently
-of TXT: you do not need to enable ``sphinx_llm.txt``.
+You can use ``sphinx_llm.docref`` to introduce another page with a
+title, a short summary and a link. The result is part of your built
+documentation, not an interactive chat service.
 
-Install ``sphinx-llm``, enable ``sphinx_llm.docref`` in ``conf.py``,
-and reference an existing document:
+Install ``sphinx-llm`` and enable the extension in ``conf.py``:
+
+.. code-block:: python
+
+   extensions = ["sphinx_llm.docref"]
+
+Then add a reference to an existing page. For example, if you have an
+``apples.rst`` page, you could write:
 
 .. code-block:: rst
 
@@ -15,20 +20,27 @@ and reference an existing document:
 
       Learn how to plant and prune your first apple tree.
 
-The rendered box is titled "See also: Apples", shows your paragraph, and
-links to the target with "Read more >>". An authored body is a permanent,
-reference-specific override; it is not silently replaced on later builds.
-A target page can instead provide its own metadata description.
-An empty directive uses that metadata, a valid generated cache entry, or
-content-derived fallback. Generation requires explicit opt-in.
+When you build, readers see a box titled "See also: Apples", your summary and
+a "Read more >>" link. The title comes from the target page, while the body
+lets you explain why that page is useful in this particular context.
+
+You can also reuse a description from the target page's metadata. If you leave
+the directive empty, docref looks for that description, then a valid generated
+summary, and finally a short content-based fallback. Your authored text won't
+be silently replaced by a later model response.
 
 .. only:: html
 
-   Here is a live, authored reference rendered by this site:
+   Here's an authored reference rendered by this site:
 
    .. docref:: tutorial
 
       Build a two-page project with reviewed summaries and inspect its provenance.
+
+You don't need TXT, a model or an API key to use authored references.
+If you want a model to write summaries, you can enable that separately.
+The tutorial starts with authored text so you can see the result before
+deciding whether you need generation.
 
 .. toctree::
    :maxdepth: 1

@@ -1,7 +1,8 @@
 Style reference boxes
 =====================
 
-Choose site-wide wording and link classes in ``conf.py``:
+You can change how docref introduces a page and how it labels the visit link.
+To use the same wording across your site, add these settings to ``conf.py``:
 
 .. code-block:: python
 
@@ -9,7 +10,8 @@ Choose site-wide wording and link classes in ``conf.py``:
    llms_txt_docref_style_visit_link_text = "Visit page"
    llms_txt_docref_style_visit_link_class = "docref-link prominent"
 
-For one box, set the corresponding directive options:
+After rebuilding, each box uses the new prefix and link text. For a single
+reference, you can set the matching directive options instead:
 
 .. code-block:: rst
 
@@ -20,8 +22,9 @@ For one box, set the corresponding directive options:
 
       Learn to grow apples.
 
-Separate CSS classes with whitespace. Add your stylesheet through Sphinx's
-``html_css_files`` and ``html_static_path`` configuration; for example:
+The classes belong to the paragraph around the link, rather than the anchor
+itself. For example, this CSS makes links in a ``docref-link``
+paragraph bold:
 
 .. code-block:: css
 
@@ -29,7 +32,11 @@ Separate CSS classes with whitespace. Add your stylesheet through Sphinx's
        font-weight: bold;
    }
 
-The class is on the paragraph wrapping the link, not on the anchor.
-An empty option removes its prefix, link text, or wrapper classes; the target
-title still appears. See :doc:`../configuration` for canonical defaults
-and migration from deprecated option names.
+Add the stylesheet using Sphinx's ``html_css_files`` and
+``html_static_path``. You can separate multiple classes with whitespace.
+
+To omit a prefix or class, set that option to an empty string.
+An empty link-text option leaves a link without visible text, so choose that
+only if you intend it. The target title still appears.
+See :doc:`../configuration` for the defaults and migration from deprecated
+styling names.

@@ -1,58 +1,77 @@
 How it works
 ============
 
+Docref separates collecting references from choosing their summaries.
+That lets it honor your authored text first and share automatic work between
+references to the same page.
+
 Collection and authored overrides
 ---------------------------------
 
-Parsing a docref creates a pending node and a request in the Sphinx environment,
-not a provider call. Each request records its consuming document and target.
-Dependencies on target source files trigger consumer rewrites when targets
-change. Environment purge and merge support incremental and parallel readers.
+When Sphinx parses a docref, it records a request and leaves a pending node
+in the doctree. It doesn't contact a provider at that point. Each request
+identifies the target page and the page that consumes the reference.
+
+The reference also depends on its target's source file. If the target changes,
+Sphinx can rewrite the consuming page. Purging and merging request data keeps
+that state consistent across incremental builds and parallel readers.
 
 At ``env-updated``, docref selects authored bodies and target metadata
-before grouping automatic requests by target and effective generation settings.
-Identical requests generate at most once in that environment update. At
-``doctree-resolved``, pending nodes become ordinary admonitions and links.
-Source files are never rewritten with generated prose.
+before considering automatic requests. It groups those requests by target and
+effective generation settings, so identical requests generate at most once
+in that environment update.
+
+At ``doctree-resolved``, the pending nodes become ordinary admonitions
+and links. Generated prose stays in the build's state and output; it isn't
+written back into your source files.
 
 Persistent cache and invalidation
 ---------------------------------
 
-Docref stores requests and effective state in the Sphinx environment and
-generated records in the same versioned JSON cache file used by TXT.
-Docref keys have a ``docref:`` prefix; TXT uses docnames. Sharing a file
-does not mean the two consumers reuse the same generated record: docref
-summarizes target doctree text, while TXT summarizes final Markdown.
+Requests and selected summaries live in the Sphinx environment.
+Generated records are also saved in the versioned JSON cache used by TXT.
+Docref's keys start with ``docref:``, while TXT uses document names.
 
-Both hash the complete input, even though only a bounded prefix is sent.
-Fingerprints include endpoint, provider, model, prompt version, reasoning
-effort, input limit, timeout and insecure-auth choice. Docref also groups by
-effective settings including credential-variable name; that name affects its
-cache identity, while the API-key value never does. TXT's fingerprint does
-not include the credential-variable name. The cache path and enabled switch
-do not identify the summary content.
+They share a cache file, not necessarily a generated result. Docref summarizes
+the target's doctree text, while TXT summarizes final Markdown. Those inputs
+can differ, so the two consumers keep separate records.
 
-Content changes outside the transmitted prefix still invalidate the record.
-A valid docref cache entry can be rendered with generation disabled;
-TXT skips its summary cache when generation is disabled. Persistent writes are
-atomic. Bad or incompatible cache files are ignored with warnings. Docref
-prunes obsolete docref records as requests disappear.
-See :doc:`how-to/cache-ci` for restore and offline workflows.
+Both hash the complete input even though they send only a bounded prefix.
+Their fingerprints include the endpoint, provider, model, prompt version,
+reasoning effort, input limit, timeout and insecure-auth choice.
+Docref also groups requests by effective settings, including the
+credential-variable name, so that name affects its cache identity.
+TXT's fingerprint doesn't include it. The API-key value never identifies
+a summary, and neither the cache path nor the enabled switch identifies
+its content.
+
+A change beyond the transmitted prefix still invalidates that page's record.
+When generation is off, docref can render a valid cached summary, but TXT
+skips its summary cache and uses its content fallback.
+
+Cache writes are atomic. An unreadable or incompatible file is ignored with
+a warning, and docref prunes obsolete docref records when the corresponding
+requests disappear. See :doc:`how-to/cache-ci` for a practical restore
+and offline-build workflow.
 
 Provider data flow and provenance
 ---------------------------------
 
-For an enabled cache miss, target doctree text is truncated to the configured
-character limit and sent as a user message with a one-sentence summary
-instruction, plus a system prompt. The OpenAI-compatible client makes a Chat
-Completions request with temperature zero and reasoning effort ``none``.
-The provider receives that content, selected model and any credential sent
-by the client; the normal offline authored path makes no such request.
+For an enabled cache miss, docref takes the target's doctree text and truncates
+it to the configured character limit. The client sends that text as a user
+message with a one-sentence summary instruction and a system prompt.
+It uses an OpenAI-compatible Chat Completions request with temperature zero
+and reasoning effort ``none``.
 
-The returned text is stored with target, fingerprint, provider, model,
-prompt version/fingerprint, and generation settings in the docref cache.
-The output report records effective summaries and consumers, including authored
-origins, but omits endpoint and credential details. Caches and reports still
-contain documentation-derived text and must be handled accordingly.
-Review generated wording: deterministic request settings cannot guarantee
-correctness or identical output across provider changes.
+The provider receives the content, selected model and any credential sent by
+the client. The normal authored-summary workflow doesn't make that request.
+
+The cache stores the returned text along with the target, fingerprint,
+provider, model, prompt version and fingerprint, and generation settings.
+The output report describes the effective summaries and their consumers,
+including authored origins, but leaves out endpoint and credential details.
+
+Both files still contain text derived from your documentation, so consider
+that content when storing or publishing them. You should also review
+generated wording: fixed request settings don't guarantee correctness or
+identical output after a provider changes.

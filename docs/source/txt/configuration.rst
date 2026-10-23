@@ -1,9 +1,10 @@
 Configuration
 =============
 
-Set these options in ``conf.py``, or use Sphinx's ``-D name=value``
-overrides. This is the authoritative settings reference; recipes explain
-interactions without redefining the defaults.
+You can set these options in ``conf.py`` or override them for one build
+with Sphinx's ``-D name=value`` option. The tables below define each
+setting's behavior and default. If you're choosing a workflow rather than
+looking up a value, start with the :doc:`how-to guides <how-to/index>`.
 
 TXT settings
 ------------
@@ -78,9 +79,9 @@ See :doc:`output-reference` before migrating.
 Shared summary settings
 -----------------------
 
-These settings apply to **both TXT and docref**, despite the
-``llms_txt_summary_*`` prefix. Enabling TXT is not a prerequisite for
-docref. Each extension loads the shared configuration itself.
+Both TXT and docref use these settings, even though their names begin with
+``llms_txt_summary_*``. You don't need to enable TXT to use them with
+docref: each extension loads the shared configuration itself.
 
 .. list-table::
    :header-rows: 1
@@ -130,8 +131,9 @@ docref. Each extension loads the shared configuration itself.
 Environment overrides
 ~~~~~~~~~~~~~~~~~~~~~
 
-Each shared summary setting has an environment override with the same final
-suffix:
+You can also configure summaries through the environment, which is useful
+when local and CI builds use different providers. Each shared setting has
+the environment variable shown below:
 
 .. list-table::
    :header-rows: 1
@@ -171,6 +173,6 @@ explicit summary model settings, not ``OPENAI_MODEL``. An empty base URL
 leaves endpoint selection to the OpenAI client, whose own environment defaults
 can apply (including ``OPENAI_BASE_URL``).
 
-Provider setup, transport safeguards and confidential-content implications are
-in :doc:`../docref/how-to/providers`; caching details are in
-:doc:`../docref/explanation`.
+For a worked provider configuration and its data-handling implications, see
+:doc:`../docref/how-to/providers`. If you're planning repeated or offline
+builds, :doc:`../docref/explanation` explains what the cache identifies.

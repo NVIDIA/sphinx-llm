@@ -1,11 +1,14 @@
 Output reference
 ================
 
+Use this reference to check the files and URLs you should see after a build.
+For help choosing a layout, see :doc:`how-to/suffix-urls`.
+
 Published Markdown paths
 ------------------------
 
-All paths below are relative to the HTML output directory. For a regular
-``page.rst`` document:
+The paths below are relative to your HTML output directory. A regular
+``page.rst`` document produces the following Markdown files:
 
 .. list-table::
    :header-rows: 1
@@ -67,7 +70,8 @@ for tag rules and :doc:`../docref/explanation` for summary data flow.
 Index contents
 --------------
 
-The generated root ``llms.txt`` contains:
+The generated root ``llms.txt`` introduces your project and lists the
+included pages. Its structure is:
 
 * A project H1 and blockquoted project description.
 * Copyright text when configured.
@@ -111,7 +115,8 @@ representation and receive neither link.
 File ownership
 --------------
 
-Selected Markdown paths are overwritten on rebuild. Other existing files are
-left alone, including unselected artifacts from earlier modes.
-The temporary ``_markdown_build`` directory is removed after merging.
-Publish the whole output tree, not just HTML files.
+The extension overwrites the Markdown paths selected for the current build
+and leaves other existing files alone, including artifacts from earlier modes.
+It removes the temporary ``_markdown_build`` directory after merging.
+When you deploy, publish the whole output tree so the Markdown and index URLs
+remain available alongside HTML.

@@ -3,14 +3,14 @@
 Alternatives
 ============
 
-There are other projects that solve this problem; that is the wonderful nature
-of open source software. These comparisons were put together with the best of
-intentions and involvement from maintainers of the projects compared, but are
-subjective. If information is incorrect or incomplete, please open a pull
-request. The goal is to help you choose for your needs.
+You may only need a small index, or you may want rendered Markdown pages
+and optional summaries as well. This comparison can help you decide between
+`sphinx-llm <https://github.com/NVIDIA/sphinx-llm>`_ and
+`sphinx-llms-txt <https://github.com/jdillard/sphinx-llms-txt/>`_.
 
-Compare `sphinx-llm <https://github.com/NVIDIA/sphinx-llm>`_ with
-`sphinx-llms-txt <https://github.com/jdillard/sphinx-llms-txt/>`_:
+The comparison was prepared with input from the projects' maintainers, but
+some judgments are subjective. If something is wrong or incomplete, please
+open a pull request so we can keep it useful.
 
 .. list-table::
    :header-rows: 1
@@ -41,4 +41,5 @@ Compare `sphinx-llm <https://github.com/NVIDIA/sphinx-llm>`_ with
      - The Markdown builder does not support every directive.
      - Source files are not processed, so directives such as automodule are not expanded.
 
-See :doc:`../txt/explanation` for sphinx-llm's design and tradeoffs.
+If you'd like to understand why sphinx-llm takes this approach,
+:doc:`../txt/explanation` connects the build process to those tradeoffs.

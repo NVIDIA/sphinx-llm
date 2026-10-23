@@ -1,18 +1,23 @@
 Exclude pages from indexes
 ==========================
 
-Keep generated API pages out of the indexes and optional full text:
+You may want to publish generated API pages without listing every one in
+``llms.txt``. Add their document names to the exclusion patterns in
+your ``conf.py``:
 
 .. code-block:: python
 
    llms_txt_exclude = ["reference/generated/**", "drafts/*"]
 
-Patterns match extensionless Sphinx document names relative to the source root,
-such as ``reference/generated/client``, not filesystem paths or regular
-expressions. Use ``**`` across directories and ``*`` within one directory.
+These patterns match Sphinx document names such as
+``reference/generated/client``, without a source extension.
+They aren't regular expressions or filesystem paths. Use ``*`` to match
+within one directory and ``**`` to match across directories.
 
-Rebuild and check the root and nested ``llms.txt`` lists. Per-page Markdown
-and HTML are still published for excluded documents. This is an indexing
-choice, not an access-control or confidential-content filter. To remove a
-document from the build entirely, use Sphinx's own ``exclude_patterns``
-and remove any references to it.
+After rebuilding, check the root and nested ``llms.txt`` files.
+The matching pages won't appear in those lists or in ``llms-full.txt``.
+Their HTML and individual Markdown files are still available.
+
+Excluding a page from an index doesn't make it private. If you don't want a
+document in the published output at all, use Sphinx's ``exclude_patterns``
+and remove references to that document from your other pages.

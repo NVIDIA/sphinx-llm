@@ -1,6 +1,9 @@
 Directive reference
 ===================
 
+Use ``docref`` to render a summary and link to a Sphinx document.
+For a first working project, follow the :doc:`tutorial`.
+
 Syntax and target
 -----------------
 
@@ -13,11 +16,13 @@ Syntax and target
 
       Optional authored summary with **inline markup**.
 
-The single required argument is an extensionless Sphinx document name.
-It is resolved relative to the consuming document; a leading slash addresses
-the source root. It is not a URL or a section reference.
-The title comes from the target document. A non-empty body is parsed as RST
-and retained as authored content.
+The directive takes one required argument: a Sphinx document name without
+its source extension. The target resolves relative to the consuming document;
+a leading slash addresses the source root. URLs and section references
+aren't accepted.
+
+The title comes from the target document. If you provide a non-empty body,
+docref parses it as RST and keeps it as authored content.
 
 Options
 -------
@@ -62,11 +67,17 @@ the body and hash for the current automatic workflow.
 Styling precedence
 ------------------
 
-For each property: canonical directive option, legacy directive option,
-explicit canonical configuration, explicit legacy configuration, then canonical
-default. Thus a legacy directive option still overrides a global canonical
-setting. Canonical wins over legacy at the same scope, even if empty.
-Legacy use warns. Style defaults live in :doc:`configuration`.
+For each property, docref checks these values in order:
+
+1. Canonical directive option.
+2. Legacy directive option.
+3. Explicit canonical configuration.
+4. Explicit legacy configuration.
+5. Canonical default.
+
+A legacy directive option therefore still overrides a global canonical setting.
+At the same scope, the canonical form wins even when it's empty.
+Legacy use produces a warning. The defaults are in :doc:`configuration`.
 
 Build report
 ------------
@@ -90,10 +101,12 @@ the output directory. Its format version is ``1``:
      ]
    }
 
-Origins are ``directive``, ``html_meta``, ``generated``, or
-``fallback``. Generated entries additionally contain
-``fingerprint``, ``provider``, and ``model``.
-Equivalent effective records are grouped with all consuming locations.
-The report excludes endpoints, credential-variable names and key values.
-It contains summary text and source locations, so consider that content when
-publishing it. It is an output artifact, not the persistent generation cache.
+The origin is ``directive``, ``html_meta``, ``generated``
+or ``fallback``. Generated entries also contain ``fingerprint``,
+``provider`` and ``model``. Equivalent effective records are
+grouped together with all their consuming locations.
+
+The report leaves out endpoints, credential-variable names and key values.
+It still contains summary text and source locations, which you should consider
+before publishing it. It records the output of this build; it isn't the
+persistent generation cache.

@@ -1,15 +1,17 @@
 Author or generate descriptions
 ===============================
 
-Prefer an authored description for important pages. In reStructuredText:
+Each entry in ``llms.txt`` has a short description to help a reader
+choose a page. You can write that description yourself using page metadata.
+For a reStructuredText page, add:
 
 .. code-block:: rst
 
    .. meta::
       :description: Install Orchard and plant your first trees.
 
-For MyST projects with ``myst_parser`` enabled, put this frontmatter at
-the top of a page:
+If you're writing MyST with ``myst_parser`` enabled, put the description
+in frontmatter at the top of the page instead:
 
 .. code-block:: yaml
 
@@ -18,20 +20,30 @@ the top of a page:
      description: Install Orchard and plant your first trees.
    ---
 
-Build and inspect the page's entry in ``llms.txt``. Non-empty authored
-metadata wins without a provider request. Some versions of the Markdown builder
-warn about the metadata node even though TXT can read its description from the
-HTML doctree. Inspect the Markdown; if the only unsupported content is that
-metadata, add ``"meta"`` to ``llms_txt_suppress_unknown_node_warnings``.
-See :doc:`troubleshooting` for the preservation/suppression controls.
+Rebuild and find that page's entry in ``llms.txt``. It should use the
+description you've written. A non-empty metadata description takes priority,
+so the extension won't make a provider request for that page.
 
-Otherwise, with generation off, TXT
-extracts a short first meaningful paragraph from the generated Markdown.
+Some Markdown-builder versions warn about the metadata node even though TXT
+can read the description from the HTML doctree. If you see that warning,
+inspect the Markdown first. When the metadata is the only unsupported content,
+you can add ``"meta"`` to
+``llms_txt_suppress_unknown_node_warnings``. The
+:doc:`troubleshooting guide <troubleshooting>` explains how warning
+suppression differs from preserving content.
 
-For generated descriptions, follow :doc:`../../docref/how-to/providers`
-to configure an OpenAI-compatible endpoint, install the generation extra and
-enable summaries. The same settings apply to TXT even without docref installed.
-Only included pages lacking authored metadata need generated descriptions.
-TXT sends a bounded prefix of final rendered Markdown, not raw RST.
-See :ref:`shared-summary-settings` and
-:doc:`../../docref/how-to/cache-ci` before enabling this in CI.
+Generate descriptions for other pages
+-------------------------------------
+
+Without metadata or generation, TXT uses a short part of the first meaningful
+paragraph in the rendered Markdown. If you'd like a model to write these
+descriptions, follow the :doc:`provider guide <../../docref/how-to/providers>`
+to install the generation extra and configure an endpoint.
+
+Those settings also work when you only enable TXT; docref isn't required.
+Generation applies to included pages that don't have authored metadata.
+TXT sends a bounded prefix of the final Markdown, rather than raw RST.
+
+Before enabling this in CI, read the :ref:`shared-summary-settings` and
+:doc:`cache guide <../../docref/how-to/cache-ci>` so you know which content
+will be sent and when a description will be regenerated.

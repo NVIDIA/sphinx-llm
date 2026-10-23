@@ -1,63 +1,80 @@
 How it works
 ============
 
+The TXT extension uses Sphinx to render your pages twice: once for people
+browsing HTML, and once for consumers that want Markdown. Keeping both builds
+in Sphinx means your cross-references and other supported directives can be
+resolved before the outputs are combined.
+
 A second build, then a merge
 ----------------------------
 
-At builder initialization, TXT starts a separate Sphinx Markdown build for
-html or dirhtml. By default it overlaps the HTML build; sequential mode starts
-after HTML finishes and can reuse the primary doctree directory.
-The subprocess reloads the same configuration, receives command-line overrides
-and unrelated custom tags, and sets its own Markdown builder tags. Audience
-selection happens at builder initialization: only the dedicated
-``llms-markdown`` builder selects agent, and every other builder selects human.
-The tags are complementary, so conflicting CLI or configuration tags cannot
-force human content into the agent sub-build. Cached condition evaluations
-from configuration loading are invalidated after normalization; Sphinx's native
-boolean-expression evaluation still applies. See :doc:`how-to/audience-content`
-for authoring examples. Extensions in
-``conf.py`` therefore need to work in both builds.
+When you start an HTML or dirhtml build, TXT starts a separate Markdown build.
+The two normally run at the same time. If you choose sequential mode, the
+Markdown build starts after HTML finishes and can reuse the primary doctrees.
 
-The Markdown builder records link targets. During merging, TXT resolves them
-to published layouts, copies per-page outputs, optionally concatenates full
-text, and writes root and directory-scoped indexes. It detects output
-collisions rather than silently choosing a document. A non-HTML primary builder
-does not run this workflow.
+The subprocess loads your configuration again and receives your command-line
+overrides and unrelated custom tags. It selects its own builder and audience
+tags, though, so it doesn't inherit HTML's human audience. Your extensions
+therefore need to work in both builds.
+
+Only the dedicated ``llms-markdown`` builder selects ``agent``;
+every other builder selects ``human``. These tags are complementary,
+even if you supplied conflicting tags on the command line or in
+``conf.py``. The extension also clears cached condition results after
+normalizing the tags, so conditions evaluated during configuration loading
+don't keep an outdated result. Sphinx still evaluates the boolean expressions
+itself. You can see examples in :doc:`how-to/audience-content`.
+
+During the Markdown build, the builder records link targets. TXT then resolves
+those links to the published layouts, copies the pages into your HTML output
+directory and writes the indexes and optional full text. If two documents
+would claim the same output path, it reports a collision instead of silently
+overwriting one. This generation workflow doesn't run for a non-HTML primary
+builder.
 
 One document, several URLs
 --------------------------
 
-Append and replace describe transformations of an HTML URL, not different page
-contents. In dirhtml, a page can be addressed with or without a trailing slash;
-these forms lead to distinct Markdown paths. A canonical representation makes
-retrieval predictable without duplicating index entries. Alternative outputs
-retain layout-appropriate links, while full text links to canonical pages.
+An append or replace layout changes how a Markdown URL relates to an HTML URL,
+not which document it represents. With dirhtml, the HTML page can be addressed
+with or without a trailing slash, which gives the append layout more than
+one possible path.
 
-Nested indexes follow published directory boundaries. An agent can start with
-a subsection and retain a route to the complete index. HTML discovery chooses
-the nearest covering index, independent of the HTML theme. Toctree ordering
-is not an access policy.
+We choose one canonical Markdown representation so the indexes don't list a
+page twice. Each additional physical output still has links appropriate to
+its own layout. Full text uses canonical page links because a concatenated
+file doesn't have a single per-page layout.
+
+Nested indexes follow published directories. That lets a consumer begin with
+a subsection and then follow a link back to the complete index. HTML discovery
+uses the nearest covering index, regardless of your theme. Changing the
+toctree changes listing order, but doesn't restrict access to a page.
 
 Descriptions and standards tradeoffs
 ------------------------------------
 
-An authored description is editorial metadata, not generated output. Without
-one, TXT can use a generated summary or a short Markdown-content fallback.
-Provider work is optional and separate from publishing machine-readable docs.
+An authored description lets you decide how a page is introduced. If you
+haven't written one, TXT can use a generated summary or an extract from the
+Markdown. Generating descriptions is a separate choice from publishing
+Markdown; you don't need an account or model for ordinary builds.
 
-The `llms.txt v2 proposal <https://llmstxt.org/>`_ favors an index and
-retrievable Markdown pages. sphinx-llm supports both layouts for compatibility
-with clients. ``llms-full.txt`` is an optional sphinx-llm convenience,
-not a required v2 artifact. Publishing these files does not guarantee crawler
-adoption, search ranking, or a model's use of your content.
+The `llms.txt v2 proposal <https://llmstxt.org/>`_ favors a small index
+and retrievable Markdown pages. We support both append and replace layouts
+to accommodate consumers with different URL conventions.
+``llms-full.txt`` is an optional convenience, not a required v2
+artifact. Publishing these files doesn't guarantee that a crawler or model
+will use them, or improve your search ranking.
 
 Limitations
 -----------
 
-The renderer does not implement every third-party node or directive.
-Preserving unknown source avoids silently losing all context, but cannot make
-it equivalent to an HTML widget. Inspect important generated pages.
-Large full-text files may exceed a consumer's context window.
-Index exclusion does not prevent access to a generated page.
-Generated descriptions can be incorrect and require review.
-See :doc:`how-to/troubleshooting` for operational checks.
+A Markdown renderer can't reproduce every third-party directive or HTML widget.
+Preserving an unknown node's source can retain useful context, but you should
+still inspect important generated pages.
+
+A full-text download may be too large for a consumer's context window, and an
+index exclusion won't stop someone retrieving an individual page.
+Generated descriptions can also be wrong, so review wording that matters to
+your readers. The :doc:`troubleshooting guide <how-to/troubleshooting>`
+covers the build and publishing checks you can make.
