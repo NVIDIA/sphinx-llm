@@ -8,7 +8,7 @@ copyright = "2026, NVIDIA Corporation"
 
 extensions = ["sphinx_llm.txt"]
 html_theme = "nvidia_sphinx_theme"
-html_theme_options = {"public_docs_features": True}
+html_theme_options = {"public_docs_features": False}
 
 # Dogfood LLM-friendly output without requiring a provider or network access.
 llms_txt_summary_enabled = False
