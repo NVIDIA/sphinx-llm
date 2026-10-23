@@ -7,6 +7,7 @@ Each recipe changes your project's ``conf.py`` unless stated otherwise.
 .. toctree::
    :maxdepth: 1
 
+   audience-content
    suffix-urls
    exclude-pages
    indexes

@@ -18,6 +18,9 @@ the default output includes ``build/html/guide.html``,
 ``guide.html.md``, and ``guide.md``. The index points to one canonical
 Markdown representation, not both. HTML pages advertise it with discovery links.
 
+Use :doc:`how-to/audience-content` to tailor conditional content for human
+readers and agent workflows without maintaining separate source trees.
+
 No model is required. Descriptions come from authored page metadata or page
 content unless you explicitly enable generation.
 

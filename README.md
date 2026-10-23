@@ -32,6 +32,14 @@ For more information, check out the
 [output reference](https://sphinx-llm.readthedocs.io/en/latest/txt/output-reference.html)
 and [task guides](https://sphinx-llm.readthedocs.io/en/latest/txt/how-to/index.html).
 
+## Tailor content to its audience
+
+Use Sphinx's native conditional content to show human-facing navigation advice
+or agent-facing workflow instructions in the appropriate output.
+
+For more information, check out the
+[audience-specific content guide](https://sphinx-llm.readthedocs.io/en/latest/txt/how-to/audience-content.html).
+
 ## Render linked page summaries
 
 **sphinx_llm.docref** renders a target page's title, a summary and a link as

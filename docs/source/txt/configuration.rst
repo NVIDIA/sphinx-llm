@@ -17,7 +17,7 @@ TXT settings
      - Type
      - Default
    * - ``llms_txt_enabled``
-     - Enable or disable all llms.txt artefact generation. Set to ``False`` to skip the entire extension without removing it from ``conf.py``. Use ``sphinx-build -D llms_txt_enabled=0`` to skip on a per-build basis.
+     - Enable or disable all llms.txt artifact generation without removing the extension from ``conf.py``; audience tags remain available. Use ``sphinx-build -D llms_txt_enabled=0`` to skip generation on a per-build basis.
      - ``bool``
      - ``True``
    * - ``llms_txt_nested_enabled``

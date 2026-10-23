@@ -40,7 +40,9 @@ The unthemed sample/test corpus lives separately from the primary site:
 Tests build this corpus into temporary directories and exercise HTML and
 directory-style output, sequential and parallel Markdown builds, and
 compatibility settings. Keep behavioral test content in the fixture corpus
-rather than adding test pages to the user-facing site.
+rather than adding test-only pages to the user-facing site. Prefer fixture
+examples and assertions against built output to inlining documentation source
+in tests; retain scenario-specific configuration and assertions in each test.
 
 Before submitting
 -----------------
@@ -57,4 +59,9 @@ See the repository's `AGENTS.md <https://github.com/NVIDIA/sphinx-llm/blob/main/
 for architecture and detailed development conventions.
 Contributors not employed by NVIDIA must sign off commits with
 ``git commit -s`` (Developer Certificate of Origin).
+For pull requests, follow the repository's
+`making-a-pr skill <https://github.com/NVIDIA/sphinx-llm/blob/main/.agents/skills/making-a-pr/SKILL.md>`_:
+demonstrate functionality changes in the primary docs, link to relevant
+Read the Docs previews, and include preview screenshots for visual changes.
+This complements fixture-based automated tests rather than replacing them.
 Maintainers can follow :doc:`releasing`.

@@ -54,6 +54,16 @@ their only path. Indexes, full text, canonical Markdown links, and HTML discover
 agree on this choice. Each alternative physical Markdown output rewrites its
 internal links to that output's layout.
 
+Audience of generated content
+-----------------------------
+
+Per-page Markdown, rendered custom root-index source content, and optional full
+text use the agent audience. HTML and dirhtml use the human audience.
+Automatically generated index descriptions may come from page metadata or
+content-derived/generated summaries; an audience condition is not a privacy
+filter for metadata or provider inputs. See :doc:`how-to/audience-content`
+for tag rules and :doc:`../docref/explanation` for summary data flow.
+
 Index contents
 --------------
 

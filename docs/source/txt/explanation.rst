@@ -8,7 +8,14 @@ At builder initialization, TXT starts a separate Sphinx Markdown build for
 html or dirhtml. By default it overlaps the HTML build; sequential mode starts
 after HTML finishes and can reuse the primary doctree directory.
 The subprocess reloads the same configuration, receives command-line overrides
-and custom tags, and sets its own Markdown builder tags. Extensions in
+and unrelated custom tags, and sets its own Markdown builder tags. Audience
+selection happens at builder initialization: only the dedicated
+``llms-markdown`` builder selects agent, and every other builder selects human.
+The tags are complementary, so conflicting CLI or configuration tags cannot
+force human content into the agent sub-build. Cached condition evaluations
+from configuration loading are invalidated after normalization; Sphinx's native
+boolean-expression evaluation still applies. See :doc:`how-to/audience-content`
+for authoring examples. Extensions in
 ``conf.py`` therefore need to work in both builds.
 
 The Markdown builder records link targets. During merging, TXT resolves them
