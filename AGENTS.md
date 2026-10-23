@@ -116,7 +116,10 @@ and `dirhtml` builders with parallel and sequential markdown building.
 When adding or changing tests, reuse or extend shared fixtures in
 `src/sphinx_llm/tests/conftest.py` before duplicating setup. Share project/build
 mechanics, provider stubs, and cleanup where the duplication removed outweighs
-the added indirection; keep scenario-specific inputs and assertions in each test.
+the added indirection; keep scenario-specific configuration and assertions in each
+test. For documentation build coverage, prefer adding examples to the fixture
+docs in `src/sphinx_llm/tests/fixtures/integration_docs/` and asserting against
+their built output over inlining documentation source within tests.
 Prefer lightweight fixtures for unit tests and real builds for integration tests.
 
 ## Documentation Guidelines
