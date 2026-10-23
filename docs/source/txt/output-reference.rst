@@ -1,0 +1,107 @@
+Output reference
+================
+
+Published Markdown paths
+------------------------
+
+All paths below are relative to the HTML output directory. For a regular
+``page.rst`` document:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Builder / HTML
+     - append
+     - replace
+     - auto
+   * - html: ``page.html``
+     - ``page.html.md``
+     - ``page.md``
+     - Both
+   * - dirhtml: ``page/index.html`` (URL ``page/``)
+     - ``page/index.html.md`` and ``page.md``
+     - ``page/index.md``
+     - All three
+
+For root ``index.rst``, both builders publish ``index.html.md``
+in append mode, ``index.md`` in replace mode, and both in auto mode.
+There is no extra no-slash path for the root.
+
+For ``guide/index.rst``:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Builder / HTML
+     - append
+     - replace
+   * - html: ``guide/index.html``
+     - ``guide/index.html.md``
+     - ``guide/index.md``
+   * - dirhtml: ``guide/index.html`` (URL ``guide/``)
+     - ``guide/index.html.md`` and ``guide.md``
+     - ``guide/index.md``
+
+Auto publishes the union. ``both`` is an exact alias for auto.
+Legacy ``file-suffix`` publishes only the ``.html.md`` path for
+either builder. Legacy ``url-suffix`` publishes that same path for
+html; for dirhtml it publishes only ``page.md`` (or ``guide.md``
+for the nested index, ``index.md`` at root).
+
+Append and auto select the ``.html.md`` path as canonical; replace
+selects the path replacing ``.html``. Compatibility modes select
+their only path. Indexes, full text, canonical Markdown links, and HTML discovery
+agree on this choice. Each alternative physical Markdown output rewrites its
+internal links to that output's layout.
+
+Index contents
+--------------
+
+The generated root ``llms.txt`` contains:
+
+* A project H1 and blockquoted project description.
+* Copyright text when configured.
+* A Pages H2 with Markdown links to included documents and short descriptions.
+  Documents follow the global toctree order, then orphan document names.
+* An Optional section linking ``llms-full.txt`` only when generated.
+
+Nested ``llms.txt`` files contain the same project context, a
+"Pages in this subsection" list for the directory and descendants, and an
+Optional link to the top-level index. Every ancestor directory implied by
+included published HTML paths gets a scoped index. Directories containing no
+included descendants do not get one.
+
+Full text contains one included canonical document at a time, prefixed with
+an H1 naming its output path. Root is first, followed by lexicographic output
+paths. This differs from the index's toctree order. Exclusions affect indexes
+and full text, not per-page Markdown.
+
+Links are relative to each index by default. ``markdown_http_base``
+makes index destinations absolute. Titles and descriptions are serialized as
+single-line Markdown-safe text; descriptions have markup stripped.
+A custom root override replaces root contents, not nested indexes.
+
+HTML discovery
+--------------
+
+Every source-backed HTML page receives head links such as:
+
+.. code-block:: html
+
+   <link rel="alternate" type="text/markdown" href="page.html.md">
+   <link rel="describedby" href="llms.txt">
+
+For ``guide/page/`` in dirhtml, the alternate is ``index.html.md``
+in append/auto, ``index.md`` in replace, or ``../page.md`` in
+legacy url-suffix. Links are relative to the published HTML URL, including
+below a site prefix. Describedby selects the deepest generated covering index;
+root-only mode selects root. Search and general-index pages have no Markdown
+representation and receive neither link.
+
+File ownership
+--------------
+
+Selected Markdown paths are overwritten on rebuild. Other existing files are
+left alone, including unselected artifacts from earlier modes.
+The temporary ``_markdown_build`` directory is removed after merging.
+Publish the whole output tree, not just HTML files.
