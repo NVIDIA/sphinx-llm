@@ -105,6 +105,7 @@ def test_generated_outputs_select_their_own_audience(
     "explicit_tags", [(), ("human",), ("agent",), ("human", "agent")]
 )
 @pytest.mark.parametrize("tag_source", ["cli", "conf"])
+@pytest.mark.parametrize("evaluate_in_conf", [False, True])
 def test_standalone_builds_select_only_their_own_audience(
     make_sphinx_project,
     make_sphinx_app,
@@ -113,12 +114,20 @@ def test_standalone_builds_select_only_their_own_audience(
     audience,
     explicit_tags,
     tag_source,
+    evaluate_in_conf,
 ) -> None:
     """Only the dedicated LLM builder automatically selects agent content."""
     config = 'extensions = ["sphinx_markdown_builder", "sphinx_llm.txt"]\n'
     if tag_source == "conf":
         config += "".join(
             f"tags.add({tag!r})\n" for tag in (*explicit_tags, "custom_tag")
+        )
+    if evaluate_in_conf:
+        # Cache complete expressions before builder initialization; clearing only
+        # the bare audience names would leave compound expressions stale.
+        conditions = [condition for condition, _, _ in CONDITIONS]
+        config += (
+            f"for condition in {conditions!r}:\n    tags.eval_condition(condition)\n"
         )
     source = make_sphinx_project(
         config=config,
@@ -158,8 +167,14 @@ def test_human_tag_does_not_depend_on_artifact_generation(
 @pytest.mark.parametrize("parallel", [False, True])
 @pytest.mark.parametrize("tag_source", ["cli", "conf"])
 @pytest.mark.parametrize("explicit_tags", [("human",), ("agent",), ("human", "agent")])
+@pytest.mark.parametrize("evaluate_in_conf", [False, True])
 def test_explicit_audience_tags_are_normalized(
-    make_sphinx_project, builder: str, parallel: bool, tag_source: str, explicit_tags
+    make_sphinx_project,
+    builder: str,
+    parallel: bool,
+    tag_source: str,
+    explicit_tags,
+    evaluate_in_conf,
 ) -> None:
     """Explicit audience tags cannot contradict the actual output audience."""
     config = (
@@ -171,6 +186,11 @@ def test_explicit_audience_tags_are_normalized(
     if tag_source == "conf":
         config += "".join(
             f"tags.add({tag!r})\n" for tag in (*explicit_tags, "custom_tag")
+        )
+    if evaluate_in_conf:
+        config += (
+            'for condition in ("human", "agent", "human and agent", "custom_tag"):\n'
+            "    tags.eval_condition(condition)\n"
         )
     source = make_sphinx_project(
         config=config,

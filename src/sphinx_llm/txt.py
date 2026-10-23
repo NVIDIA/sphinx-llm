@@ -78,6 +78,11 @@ def _add_audience_tags(app: Sphinx) -> None:
     # CLI/conf.py tags so exactly one audience is selected for every builder.
     app.tags.remove("human" if is_agent else "agent")
     app.tags.add("agent" if is_agent else "human")
+    # Sphinx 9.1 caches evaluated conditions without invalidating them on tag
+    # changes. Discard results computed by conf.py before normalization. Older
+    # Sphinx versions have no condition cache. Keep the Tags object itself so
+    # builders and extensions holding references see the same normalized tags.
+    getattr(app.tags, "_condition_cache", {}).clear()
 
 
 def _serialize_sitemap_text(value: str) -> str:
