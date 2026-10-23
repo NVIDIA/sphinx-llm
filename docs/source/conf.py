@@ -6,10 +6,15 @@ project = "sphinx-llm"
 author = "NVIDIA Corporation"
 copyright = "2026, NVIDIA Corporation"
 
-extensions = ["sphinx_llm.txt"]
+extensions = ["sphinx_llm.txt", "sphinx_llm.docref"]
 html_theme = "nvidia_sphinx_theme"
-# TODO: Enable once the docs move to a docs.nvidia.com base URL.
-html_theme_options = {"public_docs_features": False}
+# TODO: Enable public_docs_features once the docs move to a docs.nvidia.com base URL.
+html_theme_options = {
+    "public_docs_features": False,
+    "show_nav_level": 2,
+    "collapse_navigation": False,
+    "navigation_depth": 3,
+}
 
 # Dogfood LLM-friendly output without requiring a provider or network access.
 llms_txt_summary_enabled = False

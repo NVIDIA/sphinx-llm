@@ -124,6 +124,9 @@ Prefer lightweight fixtures for unit tests and real builds for integration tests
 
 ## Documentation Guidelines
 
+When writing or editing documentation, including README, read and follow the
+[maintainer writing style guide](docs/source/maintainers/writing-style.rst).
+
 Treat the configuration options table as the canonical documentation for each
 setting's name, purpose, type, default value, and basic behavior, including
 enable/disable behavior when applicable.

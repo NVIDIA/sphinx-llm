@@ -1,478 +1,90 @@
 # sphinx-llm
 
-The `sphinx-llm` package includes a collection of
-[Sphinx](https://www.sphinx-doc.org/) extensions for working with LLMs.
+You can use [Sphinx](https://www.sphinx-doc.org/) to write documentation for
+people and publish Markdown for agents from the same source. sphinx-llm adds
+that output and can also introduce pages with linked summaries. You can use
+either extension on its own.
 
-There are two categories of tools in this package:
+## Install and start
 
-- **Enabling LLMs and agents to consume your docs** - Produces additional build
-  output for consumption by LLMs and agents. This is useful when you want your
-  project to be well indexed and represented in LLMs when users ask about
-  projects in your domain.
-- **Leveraging LLMs to generate content dynamically during the Sphinx build** -
-  Uses LLMs to generate content as part of the build process. This is useful
-  for generating static content that gets baked into the documentation. It is
-  not intended to provide an interactive chat service in your documentation.
-
-## Installation
+Install the package in your documentation environment:
 
 ```console
 pip install sphinx-llm
-
-# For extensions that use LLMs to generate text
-pip install sphinx-llm[gen]
 ```
 
-## Extensions
-
-### llms.txt Support
-
-The `sphinx_llm.txt` extension automatically generates markdown files for
-consumption by LLMs following the [llms.txt](https://llmstxt.org/) standard
-alongside HTML files during the Sphinx build process.
-
-The [llms.txt](https://llmstxt.org/) v2 standard describes a small Markdown
-index that agents can search before fetching the relevant LLM-friendly pages.
-This extension generates that `llms.txt` index and a Markdown version of each
-page. It can also generate `llms-full.txt` as an opt-in sphinx-llm convenience,
-but that concatenated file is optional in the llms.txt v2 standard. Each page
-can publish Markdown by appending `.md` to its HTML URL or by replacing the
-final `.html` extension with `.md`.
-
-To use the extension add it to your `conf.py`:
+Add the TXT extension to your Sphinx `conf.py`:
 
 ```python
-# conf.py
-# ...
-
-extensions = [
-    "sphinx_llm.txt",
-]
+extensions = ["sphinx_llm.txt"]
 ```
 
-When you build your documentation with `sphinx-build` (or `make html`), the
-extension will:
-
-1. Build your documentation as usual
-2. Automatically run an additional build with the
-   [markdown builder](https://pypi.org/project/sphinx-markdown-builder/)
-3. Merge the build outputs together
-   - Markdown paths follow the configured append or replace layout
-4. Generate an index file for all the markdown files named `llms.txt`
-5. Optionally concatenate all generated markdown into a single `llms-full.txt`
-   file when `llms_txt_full_build = True`
-
-For example, in the default `auto` mode, if your `html` builder generates:
-
-- `_build/html/index.html`
-- `_build/html/apples.html`
-
-The extension will also create:
-
-- `_build/html/llms.txt`
-- `_build/html/index.html.md`
-- `_build/html/index.md`
-- `_build/html/apples.html.md`
-- `_build/html/apples.md`
-
-llms.txt v2 names the two standard layouts after how they transform the HTML
-URL:
-
-- **append** adds `.md`. For the `html` builder, `page.html` becomes
-  `page.html.md`. A `dirhtml` page is available both with and without a trailing
-  slash, so append publishes both `page/index.html.md` and `page.md`.
-- **replace** replaces `.html` with `.md`: `page.html` becomes `page.md`, while
-  a `dirhtml` URL such as `page/` becomes `page/index.md`.
-
-The default `auto` mode publishes both append and replace outputs. For a
-`dirhtml` build it creates:
-
-- `_build/dirhtml/llms.txt`
-- `_build/dirhtml/index.html.md`
-- `_build/dirhtml/index.md`
-- `_build/dirhtml/apples.md`
-- `_build/dirhtml/apples/index.html.md`
-- `_build/dirhtml/apples/index.md`
-
-You can control which format(s) are generated using the `llms_txt_suffix_mode`
-configuration option:
-
-- `"append"`: Publishes the append output. For `dirhtml`, it publishes both
-  `page.md` and `page/index.html.md`.
-- `"replace"`: Publishes `page.md` for `html` or `page/index.md` for `dirhtml`.
-- `"auto"` (default): Publishes the union of append and replace outputs.
-
-Existing values remain supported for compatibility:
-
-- `"both"` is an exact alias for `"auto"`.
-- `"file-suffix"` keeps its previous single output: `page.html.md` for `html`
-  or `page/index.html.md` for `dirhtml`.
-- `"url-suffix"` keeps its previous single output: `page.html.md` for `html`
-  or the no-trailing-slash `page.md` form for `dirhtml`.
-
-The two `dirhtml` forms `guide/page.md` and `guide/page/index.md` are different.
-The first appends `.md` to the URL without a trailing slash. The second replaces
-the `index.html` implied by the trailing slash. A nested index document follows
-the same rule: append publishes `guide.md` and `guide/index.html.md`, while
-replace publishes `guide/index.md`.
-
-Each document has one canonical representation. Append and auto select the
-`.html.md` output. Replace selects the `.md` output that replaces `.html`.
-The compatibility modes select their only output. `llms.txt`, `llms-full.txt`,
-generated Markdown links, and HTML discovery metadata all use this same target,
-so extra physical outputs never create duplicate entries. Links inside each
-physical output use that output's layout.
-
-Generated paths selected by the configured mode are reserved for sphinx-llm and
-are overwritten during a build. Other existing files are left unchanged; the
-extension never guesses that an unselected file is stale or deletes it.
-
-> [!NOTE]
-> This extension only works with HTML builders (like `html` and `dirhtml`).
-
-#### Audience-specific content
-
-With `sphinx_llm.txt` in your `extensions`, use Sphinx's built-in
-[`only` directive](https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html#directive-only)
-to tailor content to readers:
-
-```rst
-.. only:: human
-
-   Use the navigation menu to explore this documentation.
-
-.. only:: agent
-
-   Follow these instructions when using this project in an agent workflow.
-```
-
-The extension sets exactly one audience tag for each build:
-
-<!-- markdownlint-disable MD013 -->
-| Tag | Builds where it is set |
-| --- | --- |
-| `human` | Every other builder, including `html`, `dirhtml`, standalone `markdown`, and `text`. Equivalent to `not agent`. |
-| `agent` | Sphinx LLM's `llms-markdown` builder, used to generate per-page Markdown, custom `llms.txt` source content, and the optional `llms-full.txt`. |
-<!-- markdownlint-enable MD013 -->
-
-These tags do not replace Sphinx's existing builder/format tags. `html` still
-matches HTML output and `markdown` still matches both Sphinx LLM Markdown and
-standalone `sphinx-build -b markdown` output. Standalone Markdown is `human`;
-use `only:: markdown` for all Markdown output, or
-`only:: markdown and human` for standalone Markdown only.
-
-Normal Sphinx boolean expressions and nesting work, such as
-`only:: agent and not internal` and `only:: human or agent`. The audience tags
-are complementary: `human and agent` is always false, and `human or agent` is
-always true. At builder initialization, the extension normalizes explicit
-`-t human`, `-t agent`, and `conf.py` audience tags to match the actual builder;
-they cannot override its audience. This also applies when artifact generation
-is disabled. Unrelated custom tags set with `-t` or in `conf.py` are preserved
-and forwarded to the Markdown sub-build. Native builder/format tags are unchanged.
-
-#### HTML discovery metadata
-
-Each source-backed HTML page advertises both its canonical Markdown
-representation and the `llms.txt` file that describes it. The extension adds
-these elements to the HTML document's head:
-
-```html
-<link rel="alternate" type="text/markdown" href="page.html.md">
-<link rel="describedby" href="llms.txt">
-```
-
-The alternate link follows the same canonical output selected for `llms.txt`.
-For example, an `html` page at `guide/page.html` links to `page.html.md` in
-append mode or `page.md` in replace mode. A `dirhtml` page at `guide/page/`
-links to `index.html.md` in append or auto mode and `index.md` in replace mode.
-The `url-suffix` compatibility mode links to `../page.md`.
-
-Both links are relative to the published HTML URL, so they continue to work
-when the output is hosted below a site subpath. The `describedby` link selects
-the most-specific generated `llms.txt` covering that page. Set
-`llms_txt_nested_enabled = False` to disable nested `llms.txt` pages and
-make every page link to the root `llms.txt`. Auxiliary HTML pages
-without a Markdown representation, such as the search and general-index pages,
-do not receive discovery links.
-
-#### Configuration
-
-Supported `conf.py` configuration options for `sphinx_llm.txt`.
-
-<!-- markdownlint-disable MD013 -->
-| **Name** | **Description** | **Type** | **Default** |
-| --- | --- | --- | --- |
-| `llms_txt_enabled` | Enable or disable all llms.txt artefact generation without removing the extension from `conf.py`; audience tags remain available. Use `sphinx-build -D llms_txt_enabled=0` to skip generation on a per-build basis. | `bool` | `True` |
-| `llms_txt_nested_enabled` | Generate scoped nested `llms.txt` files and discover the most-specific index. Set to `False` for root-only generation and discovery. | `bool` | `True` |
-| `llms_txt_description` | Override the project description set in `llms.txt` | `str` | Uses the project description from `pyproject.toml` by default |
-| `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
-| `llms_txt_markdown_docinfo` | Include Sphinx project metadata, including the configured version, in generated Markdown. Set to `True` to opt in. | `bool` | `False` |
-| `llms_txt_suffix_mode` | Markdown output mode. `"append"` publishes `.html.md` and, for non-root `dirhtml` pages, the no-trailing-slash `.md` form. `"replace"` replaces `.html` with `.md`. `"auto"` publishes both and makes append canonical. Compatibility values remain supported: `"both"` equals `"auto"`; `"file-suffix"` publishes only `.html.md`; `"url-suffix"` publishes only the previous `dirhtml` no-trailing-slash form and behaves like `"file-suffix"` for `html`. | `str` | `"auto"` |
-| `llms_txt_full_build` | Generate the optional, non-standard `llms-full.txt` convenience file and list it in generated `llms.txt` output. Set to `True` to opt in. | `bool` | `False` |
-| `llms_txt_exclude` | A list of Sphinx wildcard patterns matched against document names (not regular expressions or source paths) to exclude from `llms.txt` and `llms-full.txt`. `*` does not cross `/`, while `**` does; for example, `"reference/generated/**"`. The individual markdown files for excluded documents are still generated. | `list[str]` | `[]` |
-| `llms_txt_override_source` | Advanced option that overrides the automatically generated `llms.txt` sitemap with the rendered contents of a custom Sphinx source document. Specify a docname or source path relative to the source directory, such as `"llms-txt"` or `"llms-txt.rst"`. | `str` | `""` |
-| `llms_txt_suppress_unknown_node_warnings` | Suppress Markdown-builder warnings for all unknown node types (`True`) or for an exact, case-sensitive sequence of node class names such as `["caption", "desc_inline"]`. This does not change whether unknown nodes are preserved. | `bool \| Sequence[str]` | `False` |
-| `llms_txt_preserve_unknown_nodes` | Include unknown nodes' source text in Markdown as inline code or fenced reStructuredText blocks instead of dropping them. Warnings remain enabled unless separately suppressed. | `bool` | `True` |
-| `llms_txt_summary_enabled` | Generate one-sentence page descriptions with an OpenAI-compatible provider. | `bool` | `False` |
-| `llms_txt_summary_provider` | Summary provider. The initial implementation supports `"openai-compatible"`. | `str` | `"openai-compatible"` |
-| `llms_txt_summary_model` | Model used for generated page descriptions. Required when generation is enabled. | `str` | `""` |
-| `llms_txt_summary_base_url` | Base URL of the OpenAI-compatible endpoint. An empty value uses the OpenAI client default. | `str` | `""` |
-| `llms_txt_summary_api_key_env` | Name of the environment variable containing the API key. Set to `""` only for an endpoint that deliberately requires no authentication. | `str` | `"OPENAI_API_KEY"` |
-| `llms_txt_summary_allow_insecure_auth` | Allow an API key to be sent to a non-loopback endpoint over plain HTTP. Use only for a trusted network where HTTPS is unavailable. | `bool` | `False` |
-| `llms_txt_summary_max_input_chars` | Maximum Markdown characters sent to the provider. The complete page is still hashed for cache invalidation. | `int` | `12000` |
-| `llms_txt_summary_timeout` | Provider request timeout in seconds. | `int` | `60` |
-| `llms_txt_summary_cache_path` | JSON cache path. Relative paths use the Sphinx configuration directory; an empty value stores the cache under `app.doctreedir`. | `str` | `""` |
-<!-- markdownlint-enable MD013 -->
-
-Each page's entry in `llms.txt` includes a short description. If a page defines
-an `html_meta` description, that non-empty author-provided value always wins and
-no provider request is made. In reStructuredText, use:
-
-```rst
-.. meta::
-   :description: An author-provided page description.
-```
-
-In MyST Markdown, use frontmatter:
-
-```yaml
----
-html_meta:
-  description: An author-provided page description.
----
-```
-
-When no authored description exists, enabled summary generation uses a cached
-or newly generated description. When generation is disabled, which is the
-default, the extension retains the existing first-paragraph fallback and makes
-no provider requests.
-
-#### Generated page summaries
-
-> [!WARNING]
-> Enabling page summaries sends rendered documentation content to the configured
-> provider. Review that provider's privacy and data-retention terms before using
-> this feature with confidential documentation.
-
-Install the optional generation dependencies and explicitly enable summaries:
+Then build your site as usual:
 
 ```console
-pip install sphinx-llm[gen]
-export SPHINX_LLM_SUMMARY_ENABLED=1
-export SPHINX_LLM_SUMMARY_MODEL=your-model
-export SPHINX_LLM_SUMMARY_BASE_URL=https://llm.example.com/v1
-export OPENAI_API_KEY=your-api-key
-sphinx-build docs/source docs/build/html
+sphinx-build -b html path/to/your/docs path/to/your/build/html
 ```
 
-The summary options can be configured in `conf.py` or supplied through
-environment variables. Environment variables are useful when local and CI
-builds need different providers or models, or when you do not want to commit
-those settings to `conf.py`. The available variables are
-`SPHINX_LLM_SUMMARY_ENABLED`, `SPHINX_LLM_SUMMARY_PROVIDER`,
-`SPHINX_LLM_SUMMARY_MODEL`, `SPHINX_LLM_SUMMARY_BASE_URL`,
-`SPHINX_LLM_SUMMARY_API_KEY_ENV`,
-`SPHINX_LLM_SUMMARY_ALLOW_INSECURE_AUTH`,
-`SPHINX_LLM_SUMMARY_MAX_INPUT_CHARS`, `SPHINX_LLM_SUMMARY_TIMEOUT`, and
-`SPHINX_LLM_SUMMARY_CACHE_PATH`. Values resolve in this order: a
-`sphinx-build -D` override, an environment variable, `conf.py`, then the
-built-in default.
-Installing the optional dependencies or detecting a local CLI does not enable
-summaries; set `llms_txt_summary_enabled` explicitly.
+You'll find Markdown pages and an llms.txt index alongside your HTML, without
+configuring a model or API key.
 
-`SPHINX_LLM_SUMMARY_API_KEY_ENV` is optional. Set it only to read the key from a
-different environment variable, for example
-`SPHINX_LLM_SUMMARY_API_KEY_ENV=NVIDIA_API_KEY`; it names the variable and does
-not contain the key itself.
+For more information, check out
+[Getting Started](https://sphinx-llm.readthedocs.io/en/latest/getting-started.html)
+or the [first build tutorial](https://sphinx-llm.readthedocs.io/en/latest/txt/tutorial.html).
 
-The API key itself is read only from the named environment variable; it is not
-a Sphinx configuration value and is excluded from logs, the cache, and cache
-fingerprints. The selected credential is sent to the configured endpoint, so
-set `SPHINX_LLM_SUMMARY_API_KEY_ENV` when a non-OpenAI provider uses a different
-key. For an explicitly unauthenticated endpoint, set
-`llms_txt_summary_api_key_env = ""`; this does not fall back to `OPENAI_API_KEY`.
-Configured keys are rejected for non-loopback plain-HTTP endpoints; use HTTPS,
-or a loopback URL such as `http://localhost:8000/v1` for local development. If
-neither is possible on a trusted network, set
-`llms_txt_summary_allow_insecure_auth = True` in `conf.py` or
-`SPHINX_LLM_SUMMARY_ALLOW_INSECURE_AUTH=1` in the environment. This sends the
-API key without transport encryption and should not be used on untrusted
-networks.
+## Publish LLM-friendly documentation
 
-The versioned JSON cache is stored in the doctree directory by default and is
-written atomically. Cache entries hash the complete generated Markdown plus the
-provider, endpoint, model, prompt version, input limit, timeout, insecure-auth
-setting, and credential environment-variable name. Only the configured Markdown
-prefix is sent to the provider, but a change anywhere in a page invalidates that
-page alone. Restore
-the doctree directory or configured cache path in CI to reuse summaries across
-jobs.
+With **sphinx_llm.txt**, you can let agents retrieve one page at a time or
+offer a full-text download. You can choose a Markdown URL layout, exclude
+pages from indexes and use nested indexes to introduce parts of a larger site.
 
-#### Custom `llms.txt` override
+For more information, check out the
+[output reference](https://sphinx-llm.readthedocs.io/en/latest/txt/output-reference.html)
+and [task guides](https://sphinx-llm.readthedocs.io/en/latest/txt/how-to/index.html).
 
-> [!IMPORTANT]
-> This is an advanced option for users who need full control over `llms.txt`.
-> Most projects should use the automatically generated sitemap.
+## Tailor content to its audience
 
-To write `llms.txt` manually while retaining Sphinx features such as cross
-references, create a source document and configure it in `conf.py`:
+Your readers may need navigation advice, while an agent needs instructions
+for fetching a page. You can write both in one source and let the TXT
+extension select the text for each output.
 
-```python
-llms_txt_override_source = "llms-txt.rst"
-```
+For more information, check out the
+[audience-specific content guide](https://sphinx-llm.readthedocs.io/en/latest/txt/how-to/audience-content.html).
 
-The document is rendered with the other Markdown pages, then its rendered
-contents replace the automatically generated `llms.txt` sitemap. All per-page
-Markdown files are still generated normally, while the optional `llms-full.txt`
-remains controlled independently by `llms_txt_full_build` and is disabled by
-default. The custom source document
-may be included in a toctree or marked with `:orphan:`.
+## Render linked page summaries
 
-### Docref
+With **sphinx_llm.docref**, you can introduce another page with a title,
+summary and link. Write a summary for one reference or reuse the target
+page's description, then adjust the box's wording and style to fit your site.
+You don't need TXT or a model for authored references.
 
-The `sphinx_llm.docref` extension adds a directive that summarises and links
-to another page. It uses the same `llms_txt_summary_*` settings, environment
-variables, provider safeguards, and versioned JSON cache described in
-[Generated page summaries](#generated-page-summaries). Generation is disabled
-by default.
+For more information, check out the
+[authored-reference tutorial](https://sphinx-llm.readthedocs.io/en/latest/docref/tutorial.html)
+and [directive reference](https://sphinx-llm.readthedocs.io/en/latest/docref/directive-reference.html).
 
-Enable the extension in `conf.py`:
+## Generate descriptions with a model
 
-```python
-extensions = [
-    "sphinx_llm.docref",
-]
-```
+If you'd rather have a model write summaries, both extensions can use an
+OpenAI-compatible provider and cache its results. Docref also writes a report
+showing where each rendered summary came from. Generation needs the
+`sphinx-llm[gen]` extra and explicit configuration; installing it doesn't
+start provider requests.
 
-An empty directive opts into automatic generation:
+For more information, check out the
+[provider guide](https://sphinx-llm.readthedocs.io/en/latest/docref/how-to/providers.html)
+and [shared settings reference](https://sphinx-llm.readthedocs.io/en/latest/txt/configuration.html#shared-summary-settings).
 
-```rst
-.. docref:: apples
-```
+## Work on sphinx-llm
 
-A non-empty body is a permanent, reference-specific manual override:
+You'll find local setup, our documentation writing guide and release
+instructions in the Maintainers section.
 
-```rst
-.. docref:: apples
+For more information, check out the
+[Maintainers guide](https://sphinx-llm.readthedocs.io/en/latest/maintainers/index.html),
+[contributor setup](https://sphinx-llm.readthedocs.io/en/latest/project/contributing.html)
+and [release instructions](https://sphinx-llm.readthedocs.io/en/latest/project/releasing.html).
 
-   A reviewed explanation of why the apples page is relevant here.
-```
-
-A page can also set its own description using page-level `html_meta` when you
-want this content to be static.
-
-Summary generation follows this order of precedence:
-
-1. Non-empty directive body
-2. Target page `html_meta` description
-3. Valid generated summary from the shared page-summary cache
-4. Content-derived fallback when generation is disabled or a target is missing
-
-The optional directive `:model:` setting overrides
-`llms_txt_summary_model` for one automatic reference. Identical references
-to the same target and effective settings generate at most once. Requests and
-effective rendering state live in the Sphinx environment, while generated
-records are also persisted through `llms_txt_summary_cache_path` so clean
-builds and `llms.txt` summary generation use one inspectable cache.
-
-Each successful build writes `sphinx-llm-summaries.json` to the output
-directory. It lists each effective summary, its origin, target, consuming
-source locations, and generated-summary metadata without endpoints, API-key
-environment-variable names, or credentials.
-
-#### Docref styling
-
-By default, a `docref` title is prefixed with `See also:`, and its link uses
-the text `Read more >>` and the CSS class `visit-link`. Configure these global
-defaults in `conf.py`:
-
-```python
-llms_txt_docref_style_title_prefix = "Related:"
-llms_txt_docref_style_visit_link_text = "Visit page"
-llms_txt_docref_style_visit_link_class = "docref-link prominent"
-```
-
-Override any setting for one directive with `:style-title-prefix:`,
-`:style-visit-link-text:`, and `:style-visit-link-class:`. Directive options
-take precedence over the matching `conf.py` setting:
-
-```rst
-.. docref:: apples
-   :style-title-prefix: More about
-   :style-visit-link-text: Read the guide
-   :style-visit-link-class: docref-link compact
-```
-
-Set an option or configuration value to an empty string to render no title
-prefix, link text, or CSS class. Separate multiple CSS classes with whitespace.
-
-The original `:title-prefix:`, `:visit-link-text:`, and `:visit-link-class:`
-directive options, and the corresponding `llms_txt_docref_title_prefix`,
-`llms_txt_docref_visit_link_text`, and `llms_txt_docref_visit_link_class`
-configuration values, remain available as deprecated aliases. When a canonical
-and legacy form are both set for the same value, the canonical styling form
-wins.
-
-## Building the docs
-
-Build the primary documentation site with Python 3.10 or newer. Normal builds
-generate LLM-friendly output without calling a model.
-
-```console
-uv run --dev --group docs sphinx-autobuild docs/source docs/build/html
-```
-
-The integration-test corpus lives separately in
-`src/sphinx_llm/tests/fixtures/integration_docs/`. Build it without the site theme:
-
-```console
-uv run --dev sphinx-build -W src/sphinx_llm/tests/fixtures/integration_docs docs/build/fixtures
-```
-
-## Alternatives
-
-There are other projects that solve this same problem, that's the wonderful
-nature of open source software. This section compares the various approaches
-each project has taken.
-
-These comparisons have been put together with the best of intentions and
-involvement from the maintainers of all projects compared here, but we
-acknowledge they are highly subjective. If you spot any information on this
-page that you believe to be incorrect or incomplete please don't hesitate to
-open a Pull Request. The goal here is to provide you with all the information
-you need to make the right choice for your needs.
-
-<!-- markdownlint-disable MD013 -->
-| **Dimension**                           | [sphinx-llm](https://github.com/NVIDIA/sphinx-llm)                                                                                                                                          | [sphinx-llms-txt](https://github.com/jdillard/sphinx-llms-txt/)                                |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------| ---------------------------------------------------------------------------------------------- |
-| **Purpose**                             | llms.txt v2 index and individual Markdown pages, with an optional non-standard `llms-full.txt` convenience and LLM summarization capabilities.                                              | Simple `llms.txt` and `llms-full.txt` files creation.                                          |
-| **Individual pages**                    | Outputs a Markdown-rendered version for each page.                                                                                                                                          | Source of each page is available at a Sphinx-specific `_sources` URL.                          |
-| **Supported docs input formats**        | Works with any Sphinx source format including RST, MyST, etc.                                                                                                                               | Works with any Sphinx source format including RST, MyST, etc.                                  |
-| **Supported `llms.txt` output formats** | Markdown; the opt-in `llms-full.txt` convenience is also Markdown.                                                                                                                          | `llm.txt` is markdown; `llms-full.txt` and pages pass through source format.                   |
-| **Additional features**                 | Generated page summaries and an opt-in concatenated `llms-full.txt` convenience.                                                                                                            | Allows manual configuration of `llms-full.txt` content.                                        |
-| **Build-time behavior**                 | Minimal build time impact; a separate build of the markdown is run in parallel, then the two build outputs are merged.                                                                      | Minimal build time impact; post build runs a converter/aggregator of `_sources`.               |
-| **Limitations**                         | Not all directives are supported by the markdown builder.                                                                                                                                   | Source documentation files are not processed, so directives like `automodule` aren't expanded. |
-<!-- markdownlint-enable MD013 -->
-
-## Making a release
-
-Releases are automated via GitHub Actions and any maintainers with write
-access to the repository can create one in just a couple of steps. To create
-a new release:
-
-1. From `main`, create an annotated stable [EffVer](https://effver.org) tag
-   with a `v` prefix (for example, `v0.0.0`; prerelease tags do not publish a
-   release):
-
-   ```console
-   git tag -a v0.0.0 -m 'Version v0.0.0'
-   ```
-
-2. Push the tag to the upstream repository:
-
-   ```console
-   git push https://github.com/NVIDIA/sphinx-llm main --tags
-   ```
-
-The GitHub Actions workflow will automatically build the package and publish
-it to PyPI using trusted publishing.
+You can browse the [documentation](https://sphinx-llm.readthedocs.io/en/latest/),
+[compare alternatives](https://sphinx-llm.readthedocs.io/en/latest/project/alternatives.html)
+or [report an issue](https://github.com/NVIDIA/sphinx-llm/issues).
+The project is licensed under [Apache-2.0](LICENSE).

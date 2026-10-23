@@ -1,59 +1,33 @@
 sphinx-llm
 ==========
 
-Sphinx extensions for working with LLMs in your documentation.
+You can use sphinx-llm to make your Sphinx documentation easier for agents to
+read, or to add linked summaries to your pages. The two extensions work
+independently, so you can start with the one you need.
 
-Two extension families
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+
+   getting-started
+   txt/index
+   docref/index
+   maintainers/index
+
+* :doc:`txt/index` adds an **llms.txt index and Markdown pages** alongside
+  your HTML. You don't need a model or API key.
+* :doc:`docref/index` adds **linked page summaries** to your documentation.
+  You can write the summaries yourself or choose a model to generate them.
+
+If you're new to the project, start with :doc:`getting-started` for
+installation and help choosing an extension. Each extension has a tutorial
+you can build without a provider.
+
+Working on sphinx-llm?
 ----------------------
 
-* **Make documentation consumable by LLMs and agents** with ``sphinx_llm.txt``.
-  Generate an ``llms.txt`` index and per-page Markdown alongside your HTML.
-* **Generate content during documentation builds** with ``sphinx_llm.docref``.
-  Render references and page summaries as static documentation content, using
-  authored descriptions or an explicitly configured model.
-
-Quick start
------------
-
-Install the package in your documentation environment:
-
-.. code-block:: console
-
-   pip install sphinx-llm
-
-Add the extension to your existing Sphinx ``conf.py``:
-
-.. code-block:: python
-
-   extensions = [
-       "sphinx_llm.txt",
-   ]
-
-Build your documentation:
-
-.. code-block:: console
-
-   sphinx-build -b html path/to/your/docs path/to/your/build/html
-
-The output includes HTML, an ``llms.txt`` index, and Markdown versions of your
-pages. No model or API key is needed for this workflow. To generate summaries
-with a model, install ``sphinx-llm[gen]`` and follow the configuration instructions
-in the README.
-
-Build this project's documentation
-----------------------------------
-
-From a checkout of the repository, install the documentation dependencies and
-build the site (Python 3.10 or newer):
-
-.. code-block:: console
-
-   uv sync --group docs
-   uv run --group docs sphinx-build -b html docs/source docs/build/html
-
-Learn more
-----------
-
-* `README: extension usage and configuration <https://github.com/NVIDIA/sphinx-llm#readme>`_
-* `Source repository <https://github.com/NVIDIA/sphinx-llm>`_
-* `Issue tracker <https://github.com/NVIDIA/sphinx-llm/issues>`_
+You'll find setup instructions, our writing guide and release instructions in
+:doc:`maintainers/index`. You can also browse the
+`source repository <https://github.com/NVIDIA/sphinx-llm>`_,
+`report an issue <https://github.com/NVIDIA/sphinx-llm/issues>`_,
+or :doc:`compare alternatives <project/alternatives>`.
