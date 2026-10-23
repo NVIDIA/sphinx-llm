@@ -12,20 +12,24 @@ import pytest
 
 # Expected audiences: HTML, Sphinx LLM Markdown, standalone Markdown, other.
 CONDITIONS = [
-    ("human", "HumanAudienceMarker", {"html"}),
+    ("human", "HumanAudienceMarker", {"html", "markdown", "other"}),
     ("agent", "AgentAudienceMarker", {"agent"}),
     ("html", "NativeHtmlMarker", {"html"}),
     ("markdown", "NativeMarkdownMarker", {"agent", "markdown"}),
     ("format_html", "HtmlFormatMarker", {"html"}),
     ("format_markdown", "MarkdownFormatMarker", {"agent", "markdown"}),
-    ("not human", "NotHumanMarker", {"agent", "markdown", "other"}),
+    ("not human", "NotHumanMarker", {"agent"}),
     ("not agent", "NotAgentMarker", {"html", "markdown", "other"}),
     ("human and html", "HumanHtmlMarker", {"html"}),
     ("agent and markdown", "AgentMarkdownMarker", {"agent"}),
     ("markdown and not agent", "StandaloneMarkdownMarker", {"markdown"}),
-    ("human or agent", "EitherAudienceMarker", {"html", "agent"}),
+    ("human or agent", "EitherAudienceMarker", {"html", "agent", "markdown", "other"}),
     ("human and agent", "BothAudiencesMarker", set()),
-    ("(human or agent) and custom_tag", "CustomAudienceMarker", {"html", "agent"}),
+    (
+        "(human or agent) and custom_tag",
+        "CustomAudienceMarker",
+        {"html", "agent", "markdown", "other"},
+    ),
     ("agent and missing_tag", "MissingCustomMarker", set()),
 ]
 SOURCE = "Audience selection\n==================\n\n" + "\n".join(
@@ -94,23 +98,45 @@ def test_generated_outputs_select_their_own_audience(
         ("markdown", ["custom_tag", "sphinx_llm_markdown"], "markdown"),
         ("llms-markdown", ["custom_tag", "sphinx_llm_markdown"], "agent"),
         ("text", ["custom_tag"], "other"),
+        ("man", ["custom_tag"], "other"),
     ],
 )
+@pytest.mark.parametrize(
+    "explicit_tags", [(), ("human",), ("agent",), ("human", "agent")]
+)
+@pytest.mark.parametrize("tag_source", ["cli", "conf"])
 def test_standalone_builds_select_only_their_own_audience(
-    make_sphinx_project, make_sphinx_app, builder, tags, audience
+    make_sphinx_project,
+    make_sphinx_app,
+    builder,
+    tags,
+    audience,
+    explicit_tags,
+    tag_source,
 ) -> None:
     """Only the dedicated LLM builder automatically selects agent content."""
+    config = 'extensions = ["sphinx_markdown_builder", "sphinx_llm.txt"]\n'
+    if tag_source == "conf":
+        config += "".join(
+            f"tags.add({tag!r})\n" for tag in (*explicit_tags, "custom_tag")
+        )
     source = make_sphinx_project(
-        config='extensions = ["sphinx_markdown_builder", "sphinx_llm.txt"]\n',
+        config=config,
         documents={"index.rst": SOURCE},
     )
-    app = make_sphinx_app(srcdir=source, buildername=builder, tags=tags)
+    app = make_sphinx_app(
+        srcdir=source,
+        buildername=builder,
+        tags=[*tags, *explicit_tags] if tag_source == "cli" else tags,
+    )
     app.build()
     assert app.statuscode == 0, app._warning.getvalue()
-    suffix = ".txt" if builder == "text" else ".md"
-    _assert_audience(
-        (Path(app.outdir) / f"index{suffix}").read_text(), audience, builder
-    )
+    if builder == "man":
+        content = next(Path(app.outdir).glob("*.1")).read_text()
+    else:
+        suffix = ".txt" if builder == "text" else ".md"
+        content = (Path(app.outdir) / f"index{suffix}").read_text()
+    _assert_audience(content, audience, builder)
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
@@ -131,10 +157,11 @@ def test_human_tag_does_not_depend_on_artifact_generation(
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
 @pytest.mark.parametrize("parallel", [False, True])
 @pytest.mark.parametrize("tag_source", ["cli", "conf"])
-def test_explicit_human_tag_is_forwarded(
-    make_sphinx_project, builder: str, parallel: bool, tag_source: str
+@pytest.mark.parametrize("explicit_tags", [("human",), ("agent",), ("human", "agent")])
+def test_explicit_audience_tags_are_normalized(
+    make_sphinx_project, builder: str, parallel: bool, tag_source: str, explicit_tags
 ) -> None:
-    """Preserve author-supplied human tags from either CLI or configuration."""
+    """Explicit audience tags cannot contradict the actual output audience."""
     config = (
         'extensions = ["sphinx_llm.txt"]\n'
         f"llms_txt_build_parallel = {parallel!r}\n"
@@ -142,22 +169,24 @@ def test_explicit_human_tag_is_forwarded(
         'llms_txt_override_source = "index"\n'
     )
     if tag_source == "conf":
-        # Set it only in the parent so reloading conf.py in the child cannot
-        # hide a broken forwarding loop by independently adding it again.
-        config += 'if not tags.has("sphinx_llm_markdown"):\n    tags.add("human")\n'
+        config += "".join(
+            f"tags.add({tag!r})\n" for tag in (*explicit_tags, "custom_tag")
+        )
     source = make_sphinx_project(
         config=config,
         documents={
             "index.rst": "Explicit audience\n=================\n\n"
             ".. only:: human\n\n   ExplicitHumanMarker\n\n"
             ".. only:: agent\n\n   ExplicitAgentMarker\n\n"
-            ".. only:: human and agent\n\n   CombinedAudienceMarker\n"
+            ".. only:: human and agent\n\n   CombinedAudienceMarker\n\n"
+            ".. only:: custom_tag\n\n   PreservedCustomMarker\n"
         },
     )
     output = source.parent / "build"
     command = [sys.executable, "-m", "sphinx", "-W", "-b", builder]
     if tag_source == "cli":
-        command += ["-t", "human"]
+        for tag in (*explicit_tags, "custom_tag"):
+            command += ["-t", tag]
     result = subprocess.run(
         [*command, str(source), str(output)], capture_output=True, text=True
     )
@@ -166,8 +195,10 @@ def test_explicit_human_tag_is_forwarded(
     assert "ExplicitHumanMarker" in html
     assert "ExplicitAgentMarker" not in html
     assert "CombinedAudienceMarker" not in html
+    assert "PreservedCustomMarker" in html
     for name in ("index.html.md", "index.md", "llms-full.txt", "llms.txt"):
         markdown = (output / name).read_text()
-        assert "ExplicitHumanMarker" in markdown, (tag_source, name)
+        assert "ExplicitHumanMarker" not in markdown, (tag_source, name)
         assert "ExplicitAgentMarker" in markdown
-        assert "CombinedAudienceMarker" in markdown
+        assert "CombinedAudienceMarker" not in markdown
+        assert "PreservedCustomMarker" in markdown

@@ -146,28 +146,29 @@ to tailor content to readers:
    Follow these instructions when using this project in an agent workflow.
 ```
 
-The extension automatically adds these audience tags:
+The extension sets exactly one audience tag for each build:
 
 <!-- markdownlint-disable MD013 -->
 | Tag | Builds where it is set |
 | --- | --- |
-| `human` | The `html` and `dirhtml` builders. |
+| `human` | Every other builder, including `html`, `dirhtml`, standalone `markdown`, and `text`. Equivalent to `not agent`. |
 | `agent` | Sphinx LLM's `llms-markdown` builder, used to generate per-page Markdown, custom `llms.txt` source content, and the optional `llms-full.txt`. |
 <!-- markdownlint-enable MD013 -->
 
 These tags do not replace Sphinx's existing builder/format tags. `html` still
 matches HTML output and `markdown` still matches both Sphinx LLM Markdown and
-standalone `sphinx-build -b markdown` output. Standalone Markdown builds do not
-automatically set `human` or `agent`; use `only:: markdown` if content should
-appear in all Markdown output, or `only:: markdown and not agent` for standalone
-Markdown only. Other builders do not automatically set either audience tag.
+standalone `sphinx-build -b markdown` output. Standalone Markdown is `human`;
+use `only:: markdown` for all Markdown output, or
+`only:: markdown and human` for standalone Markdown only.
 
 Normal Sphinx boolean expressions and nesting work, such as
-`only:: agent and not internal` and `only:: human or agent`. Custom tags set with
-`-t` are forwarded to the Markdown sub-build, including an explicitly supplied
-`-t human`. Tags added in `conf.py` with `tags.add("human")` are also preserved.
-Only the automatically added HTML audience tag is excluded from forwarding.
-As with other Sphinx tags, authors can explicitly set audience tags themselves.
+`only:: agent and not internal` and `only:: human or agent`. The audience tags
+are complementary: `human and agent` is always false, and `human or agent` is
+always true. At builder initialization, the extension normalizes explicit
+`-t human`, `-t agent`, and `conf.py` audience tags to match the actual builder;
+they cannot override its audience. This also applies when artifact generation
+is disabled. Unrelated custom tags set with `-t` or in `conf.py` are preserved
+and forwarded to the Markdown sub-build. Native builder/format tags are unchanged.
 
 #### HTML discovery metadata
 

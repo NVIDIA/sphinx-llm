@@ -73,17 +73,11 @@ SITEMAP_TEXT_TRANSLATION = str.maketrans(
 
 def _add_audience_tags(app: Sphinx) -> None:
     """Let Sphinx's native ``only`` directive select the build's audience."""
-    automatic_tags = set()
-    if app.builder.name in {"html", "dirhtml"}:
-        audience = "human"
-    elif app.builder.name == SphinxLlmMarkdownBuilder.name:
-        audience = "agent"
-    else:
-        audience = None
-    if audience is not None and not app.tags.has(audience):
-        app.tags.add(audience)
-        automatic_tags.add(audience)
-    app._sphinx_llm_automatic_audience_tags = automatic_tags
+    is_agent = app.builder.name == SphinxLlmMarkdownBuilder.name
+    # Audience tags describe the output, not author-supplied overrides. Normalize
+    # CLI/conf.py tags so exactly one audience is selected for every builder.
+    app.tags.remove("human" if is_agent else "agent")
+    app.tags.add("agent" if is_agent else "human")
 
 
 def _serialize_sitemap_text(value: str) -> str:
@@ -617,11 +611,8 @@ class MarkdownGenerator:
                 f"builder_{self.app.builder.name}",
                 f"format_{self.app.builder.format}",
             }
-            automatic_audience_tags = getattr(
-                self.app, "_sphinx_llm_automatic_audience_tags", set()
-            )
             for tag in self.app.tags:
-                if tag not in builder_tags and tag not in automatic_audience_tags:
+                if tag not in builder_tags and tag not in {"human", "agent"}:
                     sphinx_build_cmd += ["-t", tag]
 
             # Preserve command-line configuration overrides from the primary
