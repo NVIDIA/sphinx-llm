@@ -1,9 +1,6 @@
 ---
 name: making-a-pr
-description: >-
-  Use when creating or updating a sphinx-llm pull request. Provides the PR body
-  format, documentation-example requirements, Read the Docs preview links,
-  and screenshots for visual changes.
+description: Use when creating or updating a sphinx-llm pull request.
 ---
 
 # Making a PR
@@ -21,20 +18,22 @@ description: >-
    Build the documentation to check the example.
    **Done when:** the documentation demonstrates the changed behavior and the
    build succeeds, or a build blocker is explicitly recorded.
-3. Find the PR's Read the Docs preview through its checks or build details.
-   Verify the preview matches the current changes and link directly to each
-   relevant example page or section, including generated artifacts when those
-   are what changed. For visual changes, open the preview, capture screenshots
-   of the affected pages, and embed them in the PR with descriptive captions.
-   Include before-and-after views when they help explain the difference.
-   **Done when:** reviewers have verified live example links and, for visual
-   changes, screenshots from the preview build.
+3. After the PR exists, infer its Read the Docs preview links from the PR
+   number, the project's preview URL pattern, and the changed documentation
+   paths. Add these links in a follow-up edit to the PR body, pointing directly
+   to relevant example pages or sections, including generated artifacts when
+   those are what changed. Once the preview is built, verify the links and
+   that the content matches the current changes. For visual changes, capture
+   screenshots of the affected preview pages and embed them in the PR with
+   descriptive captions. Include before-and-after views when useful.
+   **Done when:** the contributor has added and verified the live example
+   links and, for visual changes, embedded screenshots from the preview build.
 
-If the preview needs a PR to exist first, create the PR with the available
-evidence, then update its body once the preview is built. If the preview fails
-or is unavailable, state the blocker and what remains to verify; keep those
-items outstanding. Use actual build URLs and screenshots, not guessed URLs
-or local-build screenshots presented as preview evidence.
+Create the PR with the available evidence, then add the inferred preview links
+once its number is known. Mark the links as awaiting verification while the
+build is pending. If the preview fails or is unavailable, state the blocker
+and what remains to verify; keep those items outstanding. Use screenshots
+from the preview build and distinguish inferred links from verified ones.
 
 ## Write and verify the PR
 
