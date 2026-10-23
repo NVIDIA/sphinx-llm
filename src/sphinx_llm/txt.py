@@ -71,6 +71,20 @@ SITEMAP_TEXT_TRANSLATION = str.maketrans(
 )
 
 
+def _add_audience_tags(app: Sphinx) -> None:
+    """Let Sphinx's native ``only`` directive select the build's audience."""
+    is_agent = app.builder.name == SphinxLlmMarkdownBuilder.name
+    # Audience tags describe the output, not author-supplied overrides. Normalize
+    # CLI/conf.py tags so exactly one audience is selected for every builder.
+    app.tags.remove("human" if is_agent else "agent")
+    app.tags.add("agent" if is_agent else "human")
+    # Sphinx 9.1 caches evaluated conditions without invalidating them on tag
+    # changes. Discard results computed by conf.py before normalization. Older
+    # Sphinx versions have no condition cache. Keep the Tags object itself so
+    # builders and extensions holding references see the same normalized tags.
+    getattr(app.tags, "_condition_cache", {}).clear()
+
+
 def _serialize_sitemap_text(value: str) -> str:
     """Return one-line text that is safe inside a generated file-list entry."""
     value = re.sub(r"[^\S\r\n]*(?:\r\n?|\n)+[^\S\r\n]*", " ", value).strip()
@@ -594,8 +608,8 @@ class MarkdownGenerator:
             ]
 
             # Forward custom tags, but let the Markdown builder set its own
-            # builder and format tags. Forwarding HTML's dynamic tags makes
-            # ``.. only:: not html`` false in the Markdown build.
+            # builder, format, and audience tags. Forwarding HTML's dynamic
+            # tags would select human-only content in the Markdown build.
             builder_tags = {
                 self.app.builder.name,
                 self.app.builder.format,
@@ -603,7 +617,7 @@ class MarkdownGenerator:
                 f"format_{self.app.builder.format}",
             }
             for tag in self.app.tags:
-                if tag not in builder_tags:
+                if tag not in builder_tags and tag not in {"human", "agent"}:
                     sphinx_build_cmd += ["-t", tag]
 
             # Preserve command-line configuration overrides from the primary
@@ -1477,6 +1491,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     )
     app.add_config_value(PRESERVE_UNKNOWN_NODES_CONFIG, True, "env", types=(bool,))
     app.connect("config-inited", validate_suppress_unknown_node_warnings)
+    app.connect("builder-inited", _add_audience_tags)
     if "markdown_http_base" not in app.config.values:
         app.add_config_value("markdown_http_base", "", "env")
     generator = MarkdownGenerator(app)

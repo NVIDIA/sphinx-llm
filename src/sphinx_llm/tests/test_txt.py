@@ -369,15 +369,19 @@ def test_rst_files_have_corresponding_output_files(readonly_sphinx_build):
 
 
 @pytest.mark.parametrize(
-    "marker",
+    ("marker", "html_only"),
     [
-        "This paragraph appears only in the Markdown page.",
-        "This paragraph is excluded from the HTML page.",
+        ("This paragraph appears only in the Markdown page.", False),
+        ("This paragraph is excluded from the HTML page.", False),
+        ("Use the navigation menu to browse this documentation.", True),
+        ("Fetch the Markdown page for machine-readable project context.", False),
     ],
-    ids=["markdown", "not-html"],
+    ids=["markdown", "not-html", "human", "agent"],
 )
-def test_markdown_only_content_is_excluded_from_html(readonly_sphinx_build, marker):
-    """Both Markdown conditions include content in Markdown, not HTML."""
+def test_example_conditional_content_selects_its_output(
+    readonly_sphinx_build, marker, html_only
+):
+    """Rendered fixture guidance selects HTML or LLM Markdown, never both."""
     app, build_dir, _ = readonly_sphinx_build
     html_path = (
         build_dir / "test.html"
@@ -386,8 +390,8 @@ def test_markdown_only_content_is_excluded_from_html(readonly_sphinx_build, mark
     )
     markdown_path = html_path.with_suffix(".html.md")
 
-    assert marker in markdown_path.read_text(encoding="utf-8")
-    assert marker not in html_path.read_text(encoding="utf-8")
+    assert (marker in html_path.read_text(encoding="utf-8")) == html_only
+    assert (marker in markdown_path.read_text(encoding="utf-8")) != html_only
 
 
 def test_example_unsupported_directive_is_preserved_by_default(
