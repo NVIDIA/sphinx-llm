@@ -894,7 +894,9 @@ class MarkdownGenerator:
             return self.app.config.llms_txt_description
 
         try:
-            meta_description = metadata(project_title).get("Description")
+            # pyproject.toml's description is the Summary field. The Description
+            # field is the long description, usually the whole README.
+            meta_description = metadata(project_title).get("Summary")
             if meta_description:
                 return meta_description
         except PackageNotFoundError:

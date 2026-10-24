@@ -17,6 +17,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Fixed the default `llms.txt` project description to use the package summary
+  (the `description` in `pyproject.toml`) instead of the long description,
+  which copied the whole README into every generated index.
 - Fixed the HTML build taking quadratic time in the number of documents with
   nested `llms.txt` indexes, which were recomputed for every page (#179).
 - Surfaced unknown-node warnings from the spawned Markdown build in the primary
