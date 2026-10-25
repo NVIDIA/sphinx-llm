@@ -642,11 +642,9 @@ class MarkdownGenerator:
                 f"markdown_docinfo={'1' if getattr(self, 'markdown_docinfo', False) else '0'}",
             ]
 
-            # When building sequentially we can reuse the doctree directory from the primary build
-            # but in parallel builds these may clobber each other so we need to use a separate one
-            if not self.parallel:
-                sphinx_build_cmd.append("-d")
-                sphinx_build_cmd.append(str(self.app.doctreedir))
+            # Markdown needs its own doctrees even in sequential mode: extensions can
+            # transform documents differently for HTML and Markdown.
+            sphinx_build_cmd += ["-d", str(self.md_build_dir / ".doctrees")]
 
             logger.info(
                 f"Spawning additional sphinx subprocess to build markdown files for llms.txt: {' '.join(sphinx_build_cmd)}"

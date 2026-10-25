@@ -6,6 +6,7 @@ Tests for the sphinx_llm.txt module.
 
 from __future__ import annotations
 
+import pickle
 import posixpath
 import re
 import shutil
@@ -334,14 +335,16 @@ def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
             generator.build_markdown_files()
 
     command = popen.call_args.args[0]
-    assert command[-8:] == [
-        "-D",
+    overrides = [
+        command[index + 1]
+        for index, argument in enumerate(command[:-1])
+        if argument == "-D"
+    ]
+
+    assert overrides == [
         "probe_true=1",
-        "-D",
         "probe_false=0",
-        "-D",
         "extensions=sphinx_llm.txt",
-        "-D",
         "markdown_docinfo=0",
     ]
 
@@ -954,6 +957,66 @@ def test_selected_markdown_output_paths_are_extension_owned(
     generated = (output_dir / "guide/page.md").read_text(encoding="utf-8")
     assert generated != sentinel
     assert "# Generated page" in generated
+
+@pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
+def test_markdown_doctrees_are_separate(
+    make_sphinx_app, tmp_path: Path, parallel: bool
+):
+    """Each builder applies its own transformations without changing HTML's cache."""
+    source_dir = tmp_path / "source"
+    output_dir = tmp_path / "output"
+    doctree_dir = tmp_path / "html-doctrees"
+    source_dir.mkdir()
+
+    (source_dir / "conf.py").write_text(
+        'extensions = ["sphinx_llm.txt"]\n'
+        'project = "Doctree isolation"\n'
+        'root_doc = "index"\n'
+        'llms_txt_suffix_mode = "append"\n'
+        f"llms_txt_build_parallel = {parallel!r}\n"
+        "from docutils import nodes\n"
+        "def add_builder_marker(app, doctree):\n"
+        "    marker = (\n"
+        "        'MARKDOWN_ONLY_MARKER'\n"
+        "        if app.tags.has('sphinx_llm_markdown')\n"
+        "        else 'HTML_ONLY_MARKER'\n"
+        "    )\n"
+        "    doctree += nodes.paragraph(text=marker)\n"
+        "def setup(app):\n"
+        "    app.connect('doctree-read', add_builder_marker)\n",
+        encoding="utf-8",
+    )
+    (source_dir / "index.rst").write_text(
+        "Cache isolation\n===============\n\nExample documentation.\n",
+        encoding="utf-8",
+    )
+
+    app = make_sphinx_app(
+        srcdir=str(source_dir),
+        confdir=str(source_dir),
+        outdir=str(output_dir),
+        doctreedir=str(doctree_dir),
+        buildername="html",
+        freshenv=True,
+    )
+    app.build()
+
+    assert app.statuscode == 0
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    markdown = (output_dir / "index.html.md").read_text(encoding="utf-8")
+
+    assert "HTML_ONLY_MARKER" in html
+    assert "MARKDOWN_ONLY_MARKER" not in html
+    assert "MARKDOWN_ONLY_MARKER" in markdown
+    assert "HTML_ONLY_MARKER" not in markdown
+
+    # Read the cache from disk: the Markdown subprocess must not overwrite it.
+    with (doctree_dir / "index.doctree").open("rb") as stream:
+        cached_html = pickle.load(stream)
+
+    assert "HTML_ONLY_MARKER" in cached_html.astext()
+    assert "MARKDOWN_ONLY_MARKER" not in cached_html.astext()
 
 
 @pytest.mark.parametrize(
