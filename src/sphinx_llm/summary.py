@@ -173,6 +173,9 @@ def setup(app):
     app.add_config_value("llms_txt_summary_model", "", "env")
     app.add_config_value("llms_txt_summary_base_url", "", "env")
     app.add_config_value("llms_txt_summary_api_key_env", DEFAULT_API_KEY_ENV, "env")
+    app.add_config_value(
+        "llms_txt_summary_reasoning_effort", DEFAULT_REASONING_EFFORT, "env"
+    )
     app.add_config_value("llms_txt_summary_allow_insecure_auth", False, "env")
     app.add_config_value("llms_txt_summary_max_input_chars", 12_000, "env")
     app.add_config_value("llms_txt_summary_timeout", 60, "env")
