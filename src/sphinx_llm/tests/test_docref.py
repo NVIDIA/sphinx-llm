@@ -778,6 +778,7 @@ def test_generate_summary_forwards_shared_limits_and_security(monkeypatch):
         max_input_chars=5,
         timeout=12,
         cache_path="",
+        reasoning_effort="high",
     )
     calls = []
 
@@ -795,7 +796,7 @@ def test_generate_summary_forwards_shared_limits_and_security(monkeypatch):
             {
                 "base_url": "https://example.invalid/v1",
                 "api_key_env": "",
-                "reasoning_effort": "none",
+                "reasoning_effort": "high",
                 "timeout": 12,
                 "use_environment_defaults": False,
                 "allow_insecure_auth": True,
