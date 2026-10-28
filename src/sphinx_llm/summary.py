@@ -8,6 +8,7 @@ import os
 from typing import Optional
 from urllib.parse import urlparse
 
+from openai.types import ReasoningEffort
 from sphinx.errors import ExtensionError
 
 from .version import __version__
@@ -96,7 +97,7 @@ def summarize_text(
     *,
     base_url: str = "",
     api_key_env: str = DEFAULT_API_KEY_ENV,
-    reasoning_effort: Optional[str] = None,
+    reasoning_effort: ReasoningEffort = None,
     timeout: Optional[float] = None,
     use_environment_defaults: bool = True,
     allow_insecure_auth: bool = False,
