@@ -1180,7 +1180,7 @@ class MarkdownGenerator:
         reasoning_effort = str(
             self._configured_summary_value(
                 "llms_txt_summary_reasoning_effort",
-                DEFAULT_REASONING_EFFORT_ENV,
+                "SPHINX_LLM_SUMMARY_REASONING_EFFORT",
                 DEFAULT_REASONING_EFFORT,
             )
         ).strip()
