@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 from sphinx.errors import ExtensionError
 
-from sphinx_llm.summary import SYSTEM_PROMPT, summarize_text
+from sphinx_llm.summary import DEFAULT_REASONING_EFFORT, SYSTEM_PROMPT, summarize_text
 
 
 def test_summarize_text_uses_openai_compatible_endpoint(openai_response, monkeypatch):
@@ -102,6 +102,8 @@ def test_summarize_text_uses_environment_configuration(openai_response, monkeypa
     assert mock_openai.return_value.chat.completions.create.call_args.kwargs[
         "extra_body"
     ] == {"reasoning_effort": "low"}
+    # sanity check that the test is meaningful.
+    assert "low" != DEFAULT_REASONING_EFFORT
 
 
 def test_summarize_text_can_omit_reasoning_effort(openai_response, monkeypatch):
