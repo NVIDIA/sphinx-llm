@@ -47,7 +47,11 @@ from .markdown_builder import (
     SphinxLlmMarkdownBuilder,
     validate_suppress_unknown_node_warnings,
 )
-from .summary import DEFAULT_API_KEY_ENV
+from .summary import (
+    DEFAULT_API_KEY_ENV,
+    DEFAULT_REASONING_EFFORT,
+    DEFAULT_REASONING_EFFORT_ENV,
+)
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -1173,6 +1177,13 @@ class MarkdownGenerator:
                 DEFAULT_API_KEY_ENV,
             )
         ).strip()
+        reasoning_effort = str(
+            self._configured_summary_value(
+                "llms_txt_summary_reasoning_effort",
+                DEFAULT_REASONING_EFFORT_ENV,
+                DEFAULT_REASONING_EFFORT,
+            )
+        ).strip()
         allow_insecure_auth_env = "SPHINX_LLM_SUMMARY_ALLOW_INSECURE_AUTH"
         allow_insecure_auth = self._parse_summary_bool(
             self._configured_summary_value(
@@ -1211,6 +1222,7 @@ class MarkdownGenerator:
             max_input_chars=max_input_chars,
             timeout=timeout,
             cache_path=cache_path,
+            reasoning_effort=reasoning_effort,
         )
 
     @property
@@ -1287,7 +1299,7 @@ class MarkdownGenerator:
         markdown: str,
         options: SummaryOptions,
         prompt_version: int,
-        reasoning_effort: str,
+        reasoning_effort: ReasoningEffort,
     ) -> str:
         """Hash complete Markdown and all non-secret generation parameters."""
         settings = {
@@ -1315,7 +1327,6 @@ class MarkdownGenerator:
         # These helpers do not import the optional OpenAI dependency. Importing
         # them only after opt-in keeps normal builds isolated from provider code.
         from .summary import (
-            DEFAULT_REASONING_EFFORT,
             SUMMARY_PROMPT_VERSION,
             InsecureEndpointError,
             MalformedSummaryResponseError,
@@ -1327,7 +1338,7 @@ class MarkdownGenerator:
             markdown,
             options,
             SUMMARY_PROMPT_VERSION,
-            DEFAULT_REASONING_EFFORT,
+            options.reasoning_effort,
         )
         cache = self._load_summary_cache()
         record = cache.get(docname)
@@ -1364,7 +1375,7 @@ class MarkdownGenerator:
                     options.model,
                     base_url=options.base_url,
                     api_key_env=options.api_key_env,
-                    reasoning_effort=DEFAULT_REASONING_EFFORT,
+                    reasoning_effort=options.reasoning_effort,
                     timeout=options.timeout,
                     use_environment_defaults=False,
                     allow_insecure_auth=options.allow_insecure_auth,
