@@ -15,6 +15,7 @@ from httpx import Request
 from openai import APIConnectionError
 from sphinx.errors import ExtensionError
 
+from sphinx_llm.summary import DEFAULT_REASONING_EFFORT
 from sphinx_llm.tests.helpers import HTML_META_PAGE as _HTML_META_PAGE
 from sphinx_llm.tests.helpers import (
     get_html_meta_description as _get_html_meta_description,
@@ -33,6 +34,7 @@ def test_summary_configuration_precedence(summary_generator, monkeypatch, tmp_pa
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_MODEL", "env-model")
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_TIMEOUT", "30")
     monkeypatch.setenv("SPHINX_LLM_SUMMARY_ALLOW_INSECURE_AUTH", "true")
+    monkeypatch.setenv("SPHINX_LLM_SUMMARY_REASONING_EFFORT", "high")
 
     options = generator._get_summary_options()
     assert options.model == "env-model"
@@ -43,10 +45,12 @@ def test_summary_configuration_precedence(summary_generator, monkeypatch, tmp_pa
         "llms_txt_summary_model": "cli-model",
         "llms_txt_summary_timeout": "40",
         "llms_txt_summary_allow_insecure_auth": "false",
+        "llms_txt_summary_reasoning_effort": "high",
     }
     generator.app.config.llms_txt_summary_model = "cli-model"
     generator.app.config.llms_txt_summary_timeout = 40
     generator.app.config.llms_txt_summary_allow_insecure_auth = False
+    generator.app.config.llms_txt_summary_reasoning_effort = "high"
     options = generator._get_summary_options()
     assert options.model == "cli-model"
     assert options.timeout == 40
@@ -77,6 +81,7 @@ def test_sphinx_command_line_override_and_built_in_defaults(
     assert options.max_input_chars == 12_000
     assert options.timeout == 60
     assert options.cache_path == ""
+    assert options.reasoning_effort == DEFAULT_REASONING_EFFORT
 
 
 @pytest.mark.parametrize(
@@ -400,6 +405,7 @@ def test_all_environment_options(summary_generator, monkeypatch, tmp_path):
         "SPHINX_LLM_SUMMARY_MAX_INPUT_CHARS": "345",
         "SPHINX_LLM_SUMMARY_TIMEOUT": "12",
         "SPHINX_LLM_SUMMARY_CACHE_PATH": "env-cache.json",
+        "SPHINX_LLM_SUMMARY_REASONING_EFFORT": "high",
     }
     for name, value in values.items():
         monkeypatch.setenv(name, value)
@@ -414,6 +420,7 @@ def test_all_environment_options(summary_generator, monkeypatch, tmp_path):
     assert options.max_input_chars == 345
     assert options.timeout == 12
     assert options.cache_path == "env-cache.json"
+    assert options.reasoning_effort == "high"
 
 
 def test_default_disabled_path_does_not_import_provider_dependency(
@@ -434,12 +441,12 @@ def test_page_summary_disables_ambient_openai_defaults(
     """Dedicated options never inherit shared OPENAI_* environment settings."""
     monkeypatch.setenv("TEST_API_KEY", "secret")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://ambient.example/v1")
-    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "high")
+    monkeypatch.setenv("SPHINX_LLM_SUMMARY_REASONING_EFFORT", "high")
     generator, markdown_file = summary_generator(tmp_path, llms_txt_summary_base_url="")
     with patch("sphinx_llm.summary.summarize_text", return_value="Summary.") as call:
         assert generator.get_page_description(markdown_file) == "Summary."
     assert call.call_args.kwargs["base_url"] == ""
-    assert call.call_args.kwargs["reasoning_effort"] == "none"
+    assert call.call_args.kwargs["reasoning_effort"] == "high"
     assert call.call_args.kwargs["use_environment_defaults"] is False
 
 
