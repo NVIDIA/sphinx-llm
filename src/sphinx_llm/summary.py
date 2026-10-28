@@ -54,7 +54,7 @@ def summary_fingerprint(
     *,
     base_url: str = "",
     api_key_env: str = DEFAULT_API_KEY_ENV,
-    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+    reasoning_effort: ReasoningEffort = DEFAULT_REASONING_EFFORT,
 ) -> str:
     """Return a stable cache key for text and every generation setting."""
     return hashlib.sha256(
