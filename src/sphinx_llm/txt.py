@@ -25,10 +25,11 @@ from dataclasses import dataclass
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, metadata
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal, TypeAlias
+from typing import Any
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import docutils.nodes
+from openai.types import ReasoningEffort
 from sphinx.application import Sphinx
 from sphinx.environment import BuildEnvironment
 from sphinx.errors import ExtensionError
@@ -247,11 +248,6 @@ def get_llms_txt_index_path(
     return _most_specific_index_path(_published_html_path(app, docname), index_paths)
 
 
-# According to: https://docs.llmapi.ai/features/reasoning
-# And previous behaviour.
-ReasoningEffort: TypeAlias = Literal["none", "minimal", "low", "medium", "high"]
-
-
 @dataclass(frozen=True)
 class SummaryOptions:
     """Effective configuration for llms.txt page-summary generation."""
@@ -265,7 +261,7 @@ class SummaryOptions:
     max_input_chars: int
     timeout: int
     cache_path: str
-    reasoning_effort: ReasoningEffort | None = None
+    reasoning_effort: ReasoningEffort = None
 
 
 class MarkdownLayout(str, Enum):
