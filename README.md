@@ -218,7 +218,7 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_summary_model` | Model used for generated page descriptions. Required when generation is enabled. | `str` | `""` |
 | `llms_txt_summary_base_url` | Base URL of the OpenAI-compatible endpoint. An empty value uses the OpenAI client default. | `str` | `""` |
 | `llms_txt_summary_api_key_env` | Name of the environment variable containing the API key. Set to `""` only for an endpoint that deliberately requires no authentication. | `str` | `"OPENAI_API_KEY"` |
-| `llms_txt_summary_reasoning_effort` | Reasoning level the model should use | `str` (available values described [at the openAI docs](https://developers.openai.com/api/docs/guides/reasoning)) | `"OPENAI_REASONING_EFFORT"` |
+| `llms_txt_summary_reasoning_effort` | Reasoning level the model should use | `str` (available values described [at the openAI docs](https://developers.openai.com/api/docs/guides/reasoning)). Can be taken from the env "OPENAI_REASONING_EFFORT". | `"none"` |
 | `llms_txt_summary_allow_insecure_auth` | Allow an API key to be sent to a non-loopback endpoint over plain HTTP. Use only for a trusted network where HTTPS is unavailable. | `bool` | `False` |
 | `llms_txt_summary_max_input_chars` | Maximum Markdown characters sent to the provider. The complete page is still hashed for cache invalidation. | `int` | `12000` |
 | `llms_txt_summary_timeout` | Provider request timeout in seconds. | `int` | `60` |
