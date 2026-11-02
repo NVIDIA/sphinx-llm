@@ -642,9 +642,12 @@ class MarkdownGenerator:
                 f"markdown_docinfo={'1' if getattr(self, 'markdown_docinfo', False) else '0'}",
             ]
 
-            # When building sequentially we can reuse the doctree directory from the primary build
-            # but in parallel builds these may clobber each other so we need to use a separate one
-            if not self.parallel:
+            # Sequential builds can reuse the primary doctrees unless disabled
+            # for builder-specific read transforms. Parallel builds must always
+            # use Sphinx's default cache under the temporary Markdown output.
+            if not self.parallel and getattr(
+                self.app.config, "llms_txt_reuse_doctrees", True
+            ):
                 sphinx_build_cmd.append("-d")
                 sphinx_build_cmd.append(str(self.app.doctreedir))
 
@@ -1479,6 +1482,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_enabled", True, "")
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
+    app.add_config_value("llms_txt_reuse_doctrees", True, "env")
     app.add_config_value("llms_txt_markdown_docinfo", False, "env")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", False, "env")

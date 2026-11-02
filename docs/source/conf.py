@@ -14,3 +14,7 @@ html_theme_options = {"public_docs_features": False}
 # Dogfood LLM-friendly output without requiring a provider or network access.
 llms_txt_summary_enabled = False
 llms_txt_description = "Sphinx extensions for LLM-friendly documentation and build-time content generation."
+
+# Exercise isolated sequential Markdown builds on the primary site.
+llms_txt_build_parallel = False
+llms_txt_reuse_doctrees = False
