@@ -17,6 +17,11 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Fixed the default `llms.txt` project description to use the package summary
+  (the `description` in `pyproject.toml`) instead of the long description,
+  which copied the whole README into every generated index.
+- Fixed the HTML build taking quadratic time in the number of documents with
+  nested `llms.txt` indexes, which were recomputed for every page (#179).
 - Surfaced unknown-node warnings from the spawned Markdown build in the primary
   documentation build, including under warnings-as-errors.
 - Forwarded the primary build's tags (`sphinx-build -t` option, including the
@@ -28,6 +33,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Generated Markdown can include Sphinx project metadata, including the
+  configured version, when `llms_txt_markdown_docinfo = True`. It is opt-in
+  until the Markdown builder supports structured frontmatter.
 - Made the non-standard `llms-full.txt` convenience file opt-in. Set
   `llms_txt_full_build = True` to generate it and list it in `llms.txt`.
 - Reworked the `docref` directive around Sphinx's environment lifecycle,

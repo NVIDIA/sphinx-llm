@@ -28,11 +28,20 @@ jobs:
           python-version: "3.12"
           enable-cache: false
 
-      - name: Build docs and parse llms.txt
+      - name: Build integration fixtures and parse llms.txt
         env:
           SPHINX_LLM_BUILD_DIR: ${{ runner.temp }}/sphinx-llm-html
         run: |
           uv run --frozen --dev sphinx-build -W \
+            src/sphinx_llm/tests/fixtures/integration_docs "$SPHINX_LLM_BUILD_DIR"
+          uv run --frozen --dev python -c \
+            'import os; from pathlib import Path; from llms_txt import parse_llms_file; parsed = parse_llms_file(Path(os.environ["SPHINX_LLM_BUILD_DIR"], "llms.txt").read_text(encoding="utf-8")); assert parsed.title'
+
+      - name: Build primary site and parse its llms.txt
+        env:
+          SPHINX_LLM_BUILD_DIR: ${{ runner.temp }}/sphinx-llm-site
+        run: |
+          uv run --frozen --group docs sphinx-build -W \
             docs/source "$SPHINX_LLM_BUILD_DIR"
           uv run --frozen --dev python -c \
             'import os; from pathlib import Path; from llms_txt import parse_llms_file; parsed = parse_llms_file(Path(os.environ["SPHINX_LLM_BUILD_DIR"], "llms.txt").read_text(encoding="utf-8")); assert parsed.title'

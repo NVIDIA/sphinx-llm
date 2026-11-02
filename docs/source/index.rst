@@ -1,44 +1,75 @@
-.. sphinx-llm documentation master file, created by
-   sphinx-quickstart on Thu Nov 28 09:52:02 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+sphinx-llm
+==========
 
-Welcome to sphinx-llm's documentation!
-======================================
+Sphinx extensions for working with LLMs in your documentation.
 
-.. Keep this toctree intentionally non-alphabetical so the test suite exercises
-   generated navigation ordering.
+Two extension families
+----------------------
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+* **Make documentation consumable by LLMs and agents** with ``sphinx_llm.txt``.
+  Generate an ``llms.txt`` index and per-page Markdown alongside your HTML.
+* **Generate content during documentation builds** with ``sphinx_llm.docref``.
+  Render references and page summaries as static documentation content, using
+  authored descriptions or an explicitly configured model.
 
-   test
-   apples
-   meta_example
-   nested/index
+Quick start
+-----------
 
+Install the package in your documentation environment:
 
-Doctree cache reuse
-===================
+.. code-block:: console
 
-Sequential Markdown builds (``llms_txt_build_parallel = False``) reuse the
-primary HTML build's doctree cache by default to avoid parsing sources twice.
-If an extension applies builder-specific transformations during
-``doctree-read``, disable reuse in ``conf.py``::
+   pip install sphinx-llm
 
-   llms_txt_reuse_doctrees = False
+Add the extension to your existing Sphinx ``conf.py``:
 
-``llms_txt_reuse_doctrees`` is a boolean option that defaults to ``True``.
-When disabled, Markdown uses a separate cache inside its temporary build
-directory, which is removed after the build. The primary build's cache is left
-unchanged, at the cost of parsing sources again. Parallel builds always use
-a separate cache, regardless of this setting. Generated page-summary caching
-is not controlled by this option.
+.. code-block:: python
 
-Indices and tables
-==================
+   extensions = [
+       "sphinx_llm.txt",
+   ]
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+Build your documentation:
+
+.. code-block:: console
+
+   sphinx-build -b html path/to/your/docs path/to/your/build/html
+
+The output includes HTML, an ``llms.txt`` index, and Markdown versions of your
+pages. No model or API key is needed for this workflow. To generate summaries
+with a model, install ``sphinx-llm[gen]`` and follow the configuration instructions
+in the README.
+
+Build this project's documentation
+----------------------------------
+
+From a checkout of the repository, install the documentation dependencies and
+build the site (Python 3.10 or newer):
+
+.. code-block:: console
+
+   uv sync --group docs
+   uv run --group docs sphinx-build -b html docs/source docs/build/html
+
+Learn more
+----------
+
+* `README: extension usage and configuration <https://github.com/NVIDIA/sphinx-llm#readme>`_
+* `Source repository <https://github.com/NVIDIA/sphinx-llm>`_
+* `Issue tracker <https://github.com/NVIDIA/sphinx-llm/issues>`_
+
+Sequential build example
+------------------------
+
+This site's build exercises isolated sequential Markdown generation using the
+following settings from its own configuration:
+
+.. literalinclude:: conf.py
+   :language: python
+   :start-at: llms_txt_build_parallel
+   :end-at: llms_txt_reuse_doctrees
+
+See the `configuration table
+<https://github.com/NVIDIA/sphinx-llm#configuration>`_ for the options' defaults
+and behavior. The generated `Markdown version <index.html.md>`_ is built from
+its own source read rather than the HTML doctree cache.

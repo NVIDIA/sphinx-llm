@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from html.parser import HTMLParser
 from typing import Any
 
 from markdown_it import MarkdownIt
@@ -98,6 +100,106 @@ _MARKDOWN_PARSER = MarkdownIt("commonmark")
 _MARKDOWN_PARSER.inline.ruler.at("link", _tracked_markdown_link)
 _MARKDOWN_PARSER.inline.ruler.at("image", _tracked_markdown_image)
 _MARKDOWN_PARSER.inline.ruler.at("autolink", _tracked_markdown_autolink)
+
+
+class _PlainTextHTMLParser(HTMLParser):
+    """Collect rendered inline text while preserving HTML line breaks."""
+
+    _SEPARATOR_TAGS = frozenset(
+        {
+            "address",
+            "article",
+            "aside",
+            "blockquote",
+            "br",
+            "dd",
+            "details",
+            "dialog",
+            "div",
+            "dl",
+            "dt",
+            "fieldset",
+            "figcaption",
+            "figure",
+            "footer",
+            "form",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "header",
+            "hgroup",
+            "hr",
+            "li",
+            "main",
+            "nav",
+            "ol",
+            "p",
+            "pre",
+            "section",
+            "summary",
+            "table",
+            "tbody",
+            "td",
+            "tfoot",
+            "th",
+            "thead",
+            "tr",
+            "ul",
+        }
+    )
+    _NON_RENDERED_TAGS = frozenset({"head", "script", "style", "template", "title"})
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._non_rendered_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in self._NON_RENDERED_TAGS:
+            self._non_rendered_depth += 1
+            return
+        if self._non_rendered_depth:
+            return
+        if tag in self._SEPARATOR_TAGS:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._NON_RENDERED_TAGS:
+            self._non_rendered_depth = max(0, self._non_rendered_depth - 1)
+            return
+        if self._non_rendered_depth:
+            return
+        if tag in self._SEPARATOR_TAGS:
+            self.parts.append(" ")
+
+    def handle_data(self, data: str) -> None:
+        if not self._non_rendered_depth:
+            self.parts.append(data)
+
+
+def markdown_to_plain_text(markdown: str) -> str:
+    """Render inline Markdown and return its visible text without markup."""
+    rendered = _MARKDOWN_PARSER.renderInline(markdown)
+    parser = _PlainTextHTMLParser()
+    parser.feed(rendered)
+    parser.close()
+    return " ".join("".join(parser.parts).split())
+
+
+def markdown_lines_to_plain_text(markdown_lines: Iterable[str]) -> list[str]:
+    """Render Markdown lines while preserving HTML state between them."""
+    parser = _PlainTextHTMLParser()
+    plain_text_lines = []
+    for markdown in markdown_lines:
+        rendered = _MARKDOWN_PARSER.renderInline(markdown)
+        start = len(parser.parts)
+        parser.feed(rendered)
+        plain_text_lines.append(" ".join("".join(parser.parts[start:]).split()))
+    parser.close()
+    return plain_text_lines
 
 
 def _markdown_context(
@@ -196,6 +298,17 @@ def _admonition_ranges(
     return ranges
 
 
+def _code_block_ranges(
+    tokens: list[Token], offsets: list[int]
+) -> list[tuple[int, int]]:
+    """Return source ranges occupied by fenced and indented code blocks."""
+    return [
+        (offsets[token.map[0]], offsets[token.map[1]])
+        for token in tokens
+        if token.type in {"fence", "code_block"} and token.map is not None
+    ]
+
+
 def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
     """Merge overlapping source deletion ranges."""
     merged: list[tuple[int, int]] = []
@@ -207,16 +320,19 @@ def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
     return merged
 
 
-def extract_prose(markdown: str) -> str:
+def extract_prose(markdown: str, *, ignore_code_blocks: bool = False) -> str:
     """Extract readable prose by removing presentation-only Markdown.
 
     Link and image destinations are removed using CommonMark parser ranges,
     while link labels and image alt text remain. Admonition headings emitted by
     ``sphinx-markdown-builder`` are removed without discarding their content.
-    Unrecognized and unrelated Markdown is left byte-for-byte unchanged.
+    Unrecognized and unrelated Markdown is left byte-for-byte unchanged unless
+    ``ignore_code_blocks`` is enabled.
     """
     references, definitions, tokens, offsets = _markdown_context(markdown)
     deletions = _admonition_ranges(markdown, tokens, offsets)
+    if ignore_code_blocks:
+        deletions.extend(_code_block_ranges(tokens, offsets))
     used_reference_labels: set[str] = set()
     for token in tokens:
         if token.type != "inline":

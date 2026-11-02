@@ -1,5 +1,0 @@
-Testing page
-============
-
-
-.. docref:: apples

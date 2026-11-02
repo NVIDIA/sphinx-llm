@@ -58,11 +58,11 @@ uv run pre-commit run --all-files
 ### Building Documentation
 
 ```bash
-# Build the example docs (recommended for development)
-uv run --dev sphinx-autobuild docs/source docs/build/html
+# Build the primary site (Python >=3.10)
+uv run --dev --group docs sphinx-autobuild docs/source docs/build/html
 
 # Build docs once
-uv run --dev sphinx-build docs/source docs/build/html
+uv run --group docs sphinx-build docs/source docs/build/html
 ```
 
 ## Architecture
@@ -104,11 +104,43 @@ uv run --dev sphinx-build docs/source docs/build/html
 ## Test Structure
 
 Tests live in `src/sphinx_llm/tests/` (not a separate `tests/` directory).
-Tests use pytest fixtures that build the example docs in `docs/source/` into
-temporary directories with different builders and parallel settings.
+Tests build `src/sphinx_llm/tests/fixtures/integration_docs/` into temporary
+directories with different builders and parallel settings. Keep that corpus and
+its unthemed configuration independent of the primary site in `docs/source/`.
+The opt-in `docs` dependency group is for the primary site, not compatibility
+tests; its theme has a higher Python/Sphinx floor than the library.
 
 Key test fixture: `sphinx_build` - parametrized fixture that tests both `html`
 and `dirhtml` builders with parallel and sequential markdown building.
+
+When adding or changing tests, reuse or extend shared fixtures in
+`src/sphinx_llm/tests/conftest.py` before duplicating setup. Share project/build
+mechanics, provider stubs, and cleanup where the duplication removed outweighs
+the added indirection; keep scenario-specific configuration and assertions in each
+test. For documentation build coverage, prefer adding examples to the fixture
+docs in `src/sphinx_llm/tests/fixtures/integration_docs/` and asserting against
+their built output over inlining documentation source within tests.
+Prefer lightweight fixtures for unit tests and real builds for integration tests.
+
+## Documentation Guidelines
+
+Treat the configuration options table as the canonical documentation for each
+setting's name, purpose, type, default value, and basic behavior, including
+enable/disable behavior when applicable.
+
+When adding or changing a configuration option:
+
+- Update its entry in the configuration table.
+- Keep the option's name, purpose, type, default value, and basic behavior in the
+  table as their single source of truth.
+- Add prose outside the table only when it provides distinct information that
+  does not fit concisely in the table, such as a workflow, an interaction between
+  multiple settings, migration guidance, or a substantial usage example.
+- When additional prose is necessary, refer readers to the configuration table
+  instead of restating the option's description or default value.
+
+Before submitting a documentation change, compare all newly added prose against
+the configuration table and remove duplicated explanations.
 
 ## Commit Requirements
 

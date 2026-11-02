@@ -30,15 +30,17 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 import docutils.nodes
 from sphinx.application import Sphinx
+from sphinx.environment import BuildEnvironment
 from sphinx.errors import ExtensionError
 from sphinx.util import logging
 from sphinx.util.matching import patmatch
 from sphinx.util.osutil import relative_uri
 
-from .extract_prose import extract_prose
+from .extract_prose import extract_prose, markdown_lines_to_plain_text
 from .markdown_builder import (
     LINK_TARGETS_FILENAME,
     LINK_TOKEN_PREFIX,
+    PRESERVE_UNKNOWN_NODES_CONFIG,
     SUPPRESS_UNKNOWN_NODE_WARNINGS_CONFIG,
     LinkTarget,
     SphinxLlmMarkdownBuilder,
@@ -67,6 +69,20 @@ SITEMAP_TEXT_TRANSLATION = str.maketrans(
         "_": "&#95;",
     }
 )
+
+
+def _add_audience_tags(app: Sphinx) -> None:
+    """Let Sphinx's native ``only`` directive select the build's audience."""
+    is_agent = app.builder.name == SphinxLlmMarkdownBuilder.name
+    # Audience tags describe the output, not author-supplied overrides. Normalize
+    # CLI/conf.py tags so exactly one audience is selected for every builder.
+    app.tags.remove("human" if is_agent else "agent")
+    app.tags.add("agent" if is_agent else "human")
+    # Sphinx 9.1 caches evaluated conditions without invalidating them on tag
+    # changes. Discard results computed by conf.py before normalization. Older
+    # Sphinx versions have no condition cache. Keep the Tags object itself so
+    # builders and extensions holding references see the same normalized tags.
+    getattr(app.tags, "_condition_cache", {}).clear()
 
 
 def _serialize_sitemap_text(value: str) -> str:
@@ -195,22 +211,39 @@ def _validated_exclude_patterns(app: Sphinx) -> list[str]:
     return patterns
 
 
-def get_llms_txt_index_path(app: Sphinx, docname: str) -> PurePosixPath:
-    """Return the most-specific generated ``llms.txt`` covering a document.
+def _get_llms_txt_index_paths(app: Sphinx) -> set[PurePosixPath]:
+    """Return all nested ``llms.txt`` indexes of the published documents.
 
-    The path is POSIX and relative to the HTML build root so discovery metadata
-    can render it relative to the current page. The root index is the fallback.
+    They depend on every published document, so callers that need them for
+    many documents should compute them once. They are only generated if
+    ``llms_txt_nested_enabled`` is set, which callers have to check.
     """
-    if not getattr(app.config, "llms_txt_nested_enabled", True):
-        return PurePosixPath("llms.txt")
-
     exclude_patterns = _validated_exclude_patterns(app)
     included_docnames = (
         candidate
         for candidate in app.env.found_docs
         if not any(patmatch(candidate, pattern) for pattern in exclude_patterns)
     )
-    index_paths = _nested_index_paths(app, included_docnames)
+    return _nested_index_paths(app, included_docnames)
+
+
+def get_llms_txt_index_path(
+    app: Sphinx,
+    docname: str,
+    index_paths: Iterable[PurePosixPath] | None = None,
+) -> PurePosixPath:
+    """Return the most-specific generated ``llms.txt`` covering a document.
+
+    The path is POSIX and relative to the HTML build root so discovery metadata
+    can render it relative to the current page. The root index is the fallback.
+    ``index_paths`` are the result of ``_get_llms_txt_index_paths``, which is
+    called if they are not given.
+    """
+    if not getattr(app.config, "llms_txt_nested_enabled", True):
+        return PurePosixPath("llms.txt")
+
+    if index_paths is None:
+        index_paths = _get_llms_txt_index_paths(app)
     return _most_specific_index_path(_published_html_path(app, docname), index_paths)
 
 
@@ -333,6 +366,9 @@ class MarkdownGenerator:
         self._summary_cache: dict[str, dict[str, str]] | None = None
         self._loaded_summary_cache_path: Path | None = None
         self._generated_llms_full_path: Path | None = None
+        # nested llms.txt indexes, computed once per build for the discovery
+        # metadata of all pages
+        self._llms_txt_index_paths: set[PurePosixPath] | None = None
 
     def setup(self):
         """Set up the extension."""
@@ -359,7 +395,13 @@ class MarkdownGenerator:
             ),
             quote=True,
         )
-        llms_txt_path = get_llms_txt_index_path(app, pagename)
+        if self._llms_txt_index_paths is None and getattr(
+            app.config, "llms_txt_nested_enabled", True
+        ):
+            self._llms_txt_index_paths = _get_llms_txt_index_paths(app)
+        llms_txt_path = get_llms_txt_index_path(
+            app, pagename, self._llms_txt_index_paths
+        )
         llms_txt_href = html.escape(
             relative_uri(page_uri, llms_txt_path.as_posix()), quote=True
         )
@@ -368,6 +410,10 @@ class MarkdownGenerator:
             f'href="{markdown_href}">'
             f'\n<link rel="describedby" href="{llms_txt_href}">'
         )
+
+    def _reset_llms_txt_index_paths(self, app: Sphinx, env: BuildEnvironment) -> None:
+        """Recompute the nested indexes once the documents of a build are known."""
+        self._llms_txt_index_paths = None
 
     def build_llms_txt(self, app: Sphinx):
         """Generate markdown files using sphinx_markdown_builder and concatenate them into llms.txt."""
@@ -380,6 +426,9 @@ class MarkdownGenerator:
         self.outdir = Path(app.builder.outdir)
         self.md_build_dir = self.outdir / "_markdown_build"
         self.parallel = getattr(self.app.config, "llms_txt_build_parallel", True)
+        self.markdown_docinfo = getattr(
+            self.app.config, "llms_txt_markdown_docinfo", False
+        )
         configured_suffix_mode = getattr(
             self.app.config, "llms_txt_suffix_mode", "auto"
         )
@@ -400,6 +449,7 @@ class MarkdownGenerator:
             )
             return
 
+        self.app.connect("env-updated", self._reset_llms_txt_index_paths)
         self.app.connect("html-page-context", self.add_discovery_metadata)
 
         # Start the markdown builder subproces in the background
@@ -557,14 +607,18 @@ class MarkdownGenerator:
                 str(self.md_build_dir),
             ]
 
-            # Propagate the tags of the primary build so that conditional
-            # content (e.g. ".. only::" directives) renders the same in the
-            # markdown output. This intentionally includes the dynamic tags
-            # derived from the primary builder (e.g. "html", "format_html"):
-            # the markdown output this way stays faithful to the HTML pages it
-            # complements.
+            # Forward custom tags, but let the Markdown builder set its own
+            # builder, format, and audience tags. Forwarding HTML's dynamic
+            # tags would select human-only content in the Markdown build.
+            builder_tags = {
+                self.app.builder.name,
+                self.app.builder.format,
+                f"builder_{self.app.builder.name}",
+                f"format_{self.app.builder.format}",
+            }
             for tag in self.app.tags:
-                sphinx_build_cmd += ["-t", tag]
+                if tag not in builder_tags and tag not in {"human", "agent"}:
+                    sphinx_build_cmd += ["-t", tag]
 
             # Preserve command-line configuration overrides from the primary
             # build. Without forwarding these, the markdown sub-build reloads
@@ -573,6 +627,20 @@ class MarkdownGenerator:
                 if isinstance(value, bool):
                     value = "1" if value else "0"
                 sphinx_build_cmd += ["-D", f"{name}={value}"]
+
+            # Sphinx consumes the extensions override before storing the other
+            # overrides. Forward the effective list explicitly so extensions
+            # enabled with -D are also available to the Markdown subprocess.
+            sphinx_build_cmd += [
+                "-D",
+                f"extensions={','.join(self.app.config.extensions)}",
+            ]
+
+            # Include project/version metadata only when explicitly enabled.
+            sphinx_build_cmd += [
+                "-D",
+                f"markdown_docinfo={'1' if getattr(self, 'markdown_docinfo', False) else '0'}",
+            ]
 
             # Sequential builds can reuse the primary doctrees unless disabled
             # for builder-specific read transforms. Parallel builds must always
@@ -829,7 +897,9 @@ class MarkdownGenerator:
             return self.app.config.llms_txt_description
 
         try:
-            meta_description = metadata(project_title).get("Description")
+            # pyproject.toml's description is the Summary field. The Description
+            # field is the long description, usually the whole README.
+            meta_description = metadata(project_title).get("Summary")
             if meta_description:
                 return meta_description
         except PackageNotFoundError:
@@ -1005,7 +1075,10 @@ class MarkdownGenerator:
         if docname:
             try:
                 doctree = self.app.env.get_doctree(docname)
-                for node in doctree.traverse(docutils.nodes.meta):
+                meta_type = getattr(
+                    docutils.nodes, "meta", lambda node: node.tagname == "meta"
+                )
+                for node in doctree.traverse(meta_type):
                     content = node.get("content")
                     if (
                         node.get("name") == "description"
@@ -1356,12 +1429,13 @@ class MarkdownGenerator:
         """
         try:
             with open(md_file, encoding="utf-8") as f:
-                content = extract_prose(f.read())
+                content = extract_prose(f.read(), ignore_code_blocks=True)
                 lines = content.split("\n")
+                plain_text_lines = markdown_lines_to_plain_text(lines)
                 anchor = re.compile(r"^<a\b[^>]*>\s*</a>$", re.IGNORECASE)
 
                 # Skip HTML comments and look for the first meaningful paragraph
-                for line in lines:
+                for line, plain_text in zip(lines, plain_text_lines):
                     line = line.strip()
                     # Skip empty lines, headings, anchors, and HTML comments
                     if (
@@ -1370,10 +1444,15 @@ class MarkdownGenerator:
                         and not line.startswith("<!--")
                         and not line.startswith("-->")
                         and not line.startswith("..")
+                        and not line.lower().startswith("<meta ")
                         and not anchor.match(line)
-                        and len(line) > 10
                     ):  # Ensure it's substantial content
-                        return line[:100] + "..." if len(line) > 100 else line
+                        if len(plain_text) > 10:
+                            return (
+                                plain_text[:100] + "..."
+                                if len(plain_text) > 100
+                                else plain_text
+                            )
 
                 # Fallback descriptions based on filename
                 base_name = md_file.stem.replace(".html", "")
@@ -1404,6 +1483,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("llms_txt_description", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
     app.add_config_value("llms_txt_reuse_doctrees", True, "env")
+    app.add_config_value("llms_txt_markdown_docinfo", False, "env")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", False, "env")
     app.add_config_value("llms_txt_nested_enabled", True, "env")
@@ -1415,7 +1495,9 @@ def setup(app: Sphinx) -> dict[str, Any]:
         "env",
         types=(bool, list, tuple),
     )
+    app.add_config_value(PRESERVE_UNKNOWN_NODES_CONFIG, True, "env", types=(bool,))
     app.connect("config-inited", validate_suppress_unknown_node_warnings)
+    app.connect("builder-inited", _add_audience_tags)
     if "markdown_http_base" not in app.config.values:
         app.add_config_value("markdown_http_base", "", "env")
     generator = MarkdownGenerator(app)

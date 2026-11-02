@@ -130,6 +130,46 @@ extension never guesses that an unselected file is stale or deletes it.
 > [!NOTE]
 > This extension only works with HTML builders (like `html` and `dirhtml`).
 
+#### Audience-specific content
+
+With `sphinx_llm.txt` in your `extensions`, use Sphinx's built-in
+[`only` directive](https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html#directive-only)
+to tailor content to readers:
+
+```rst
+.. only:: human
+
+   Use the navigation menu to explore this documentation.
+
+.. only:: agent
+
+   Follow these instructions when using this project in an agent workflow.
+```
+
+The extension sets exactly one audience tag for each build:
+
+<!-- markdownlint-disable MD013 -->
+| Tag | Builds where it is set |
+| --- | --- |
+| `human` | Every other builder, including `html`, `dirhtml`, standalone `markdown`, and `text`. Equivalent to `not agent`. |
+| `agent` | Sphinx LLM's `llms-markdown` builder, used to generate per-page Markdown, custom `llms.txt` source content, and the optional `llms-full.txt`. |
+<!-- markdownlint-enable MD013 -->
+
+These tags do not replace Sphinx's existing builder/format tags. `html` still
+matches HTML output and `markdown` still matches both Sphinx LLM Markdown and
+standalone `sphinx-build -b markdown` output. Standalone Markdown is `human`;
+use `only:: markdown` for all Markdown output, or
+`only:: markdown and human` for standalone Markdown only.
+
+Normal Sphinx boolean expressions and nesting work, such as
+`only:: agent and not internal` and `only:: human or agent`. The audience tags
+are complementary: `human and agent` is always false, and `human or agent` is
+always true. At builder initialization, the extension normalizes explicit
+`-t human`, `-t agent`, and `conf.py` audience tags to match the actual builder;
+they cannot override its audience. This also applies when artifact generation
+is disabled. Unrelated custom tags set with `-t` or in `conf.py` are preserved
+and forwarded to the Markdown sub-build. Native builder/format tags are unchanged.
+
 #### HTML discovery metadata
 
 Each source-backed HTML page advertises both its canonical Markdown
@@ -162,16 +202,18 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 <!-- markdownlint-disable MD013 -->
 | **Name** | **Description** | **Type** | **Default** |
 | --- | --- | --- | --- |
-| `llms_txt_enabled` | Enable or disable all llms.txt artefact generation. Set to `False` to skip the entire extension without removing it from `conf.py`. Use `sphinx-build -D llms_txt_enabled=0` to skip on a per-build basis. | `bool` | `True` |
+| `llms_txt_enabled` | Enable or disable all llms.txt artefact generation without removing the extension from `conf.py`; audience tags remain available. Use `sphinx-build -D llms_txt_enabled=0` to skip generation on a per-build basis. | `bool` | `True` |
 | `llms_txt_nested_enabled` | Generate scoped nested `llms.txt` files and discover the most-specific index. Set to `False` for root-only generation and discovery. | `bool` | `True` |
 | `llms_txt_description` | Override the project description set in `llms.txt` | `str` | Uses the project description from `pyproject.toml` by default |
 | `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
-| `llms_txt_reuse_doctrees` | Reuse the primary build's doctree cache for sequential Markdown builds. Set to `False` for builder-specific read transforms. Parallel builds always use a separate cache. | `bool` | `True` |
+| `llms_txt_reuse_doctrees` | Reuse the primary build's doctree cache for sequential Markdown builds. Set to `False` for builder-specific read transforms; Markdown then parses sources again in a separate temporary cache removed after the build, leaving the primary cache unchanged. Parallel builds always use a separate cache. Does not control generated page-summary caching. | `bool` | `True` |
+| `llms_txt_markdown_docinfo` | Include Sphinx project metadata, including the configured version, in generated Markdown. Set to `True` to opt in. | `bool` | `False` |
 | `llms_txt_suffix_mode` | Markdown output mode. `"append"` publishes `.html.md` and, for non-root `dirhtml` pages, the no-trailing-slash `.md` form. `"replace"` replaces `.html` with `.md`. `"auto"` publishes both and makes append canonical. Compatibility values remain supported: `"both"` equals `"auto"`; `"file-suffix"` publishes only `.html.md`; `"url-suffix"` publishes only the previous `dirhtml` no-trailing-slash form and behaves like `"file-suffix"` for `html`. | `str` | `"auto"` |
 | `llms_txt_full_build` | Generate the optional, non-standard `llms-full.txt` convenience file and list it in generated `llms.txt` output. Set to `True` to opt in. | `bool` | `False` |
 | `llms_txt_exclude` | A list of Sphinx wildcard patterns matched against document names (not regular expressions or source paths) to exclude from `llms.txt` and `llms-full.txt`. `*` does not cross `/`, while `**` does; for example, `"reference/generated/**"`. The individual markdown files for excluded documents are still generated. | `list[str]` | `[]` |
 | `llms_txt_override_source` | Advanced option that overrides the automatically generated `llms.txt` sitemap with the rendered contents of a custom Sphinx source document. Specify a docname or source path relative to the source directory, such as `"llms-txt"` or `"llms-txt.rst"`. | `str` | `""` |
-| `llms_txt_suppress_unknown_node_warnings` | Suppress Markdown-builder warnings for all unknown node types (`True`) or for an exact, case-sensitive sequence of node class names such as `["caption", "desc_inline"]`. This is a diagnostics-only escape hatch: matching node subtrees are still omitted from Markdown. | `bool \| Sequence[str]` | `False` |
+| `llms_txt_suppress_unknown_node_warnings` | Suppress Markdown-builder warnings for all unknown node types (`True`) or for an exact, case-sensitive sequence of node class names such as `["caption", "desc_inline"]`. This does not change whether unknown nodes are preserved. | `bool \| Sequence[str]` | `False` |
+| `llms_txt_preserve_unknown_nodes` | Include unknown nodes' source text in Markdown as inline code or fenced reStructuredText blocks instead of dropping them. Warnings remain enabled unless separately suppressed. | `bool` | `True` |
 | `llms_txt_summary_enabled` | Generate one-sentence page descriptions with an OpenAI-compatible provider. | `bool` | `False` |
 | `llms_txt_summary_provider` | Summary provider. The initial implementation supports `"openai-compatible"`. | `str` | `"openai-compatible"` |
 | `llms_txt_summary_model` | Model used for generated page descriptions. Required when generation is enabled. | `str` | `""` |
@@ -182,28 +224,6 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_summary_timeout` | Provider request timeout in seconds. | `int` | `60` |
 | `llms_txt_summary_cache_path` | JSON cache path. Relative paths use the Sphinx configuration directory; an empty value stores the cache under `app.doctreedir`. | `str` | `""` |
 <!-- markdownlint-enable MD013 -->
-
-Sequential builds (`llms_txt_build_parallel = False`) reuse the primary build's
-doctrees by default to avoid parsing the documentation twice. If an extension
-applies builder-specific transformations during `doctree-read`, disable reuse
-in `conf.py`:
-
-```python
-llms_txt_reuse_doctrees = False
-```
-
-Markdown then uses a separate doctree cache inside its temporary build directory,
-leaving the primary cache unchanged. The separate cache is removed with the
-temporary Markdown output after the build. This can increase build time.
-This option controls Sphinx doctrees, not the generated page-summary cache.
-
-`llms_txt_suppress_unknown_node_warnings` does not add support for unknown
-nodes. Suppressed nodes and all of their child content remain absent from the
-generated Markdown. If you would like support for new node types, please make
-your request upstream to
-[sphinx-markdown-builder](https://github.com/liran-funaro/sphinx-markdown-builder).
-Names are unqualified Python class names with exact, case-sensitive spelling and
-no surrounding whitespace. An empty sequence is equivalent to `False`.
 
 Each page's entry in `llms.txt` includes a short description. If a page defines
 an `html_meta` description, that non-empty author-provided value always wins and
@@ -396,10 +416,18 @@ wins.
 
 ## Building the docs
 
-Try it out yourself by building the example documentation.
+Build the primary documentation site with Python 3.10 or newer. Normal builds
+generate LLM-friendly output without calling a model.
 
 ```console
-uv run --dev sphinx-autobuild docs/source docs/build/html
+uv run --dev --group docs sphinx-autobuild docs/source docs/build/html
+```
+
+The integration-test corpus lives separately in
+`src/sphinx_llm/tests/fixtures/integration_docs/`. Build it without the site theme:
+
+```console
+uv run --dev sphinx-build -W src/sphinx_llm/tests/fixtures/integration_docs docs/build/fixtures
 ```
 
 ## Alternatives
