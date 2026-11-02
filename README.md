@@ -166,6 +166,7 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_nested_enabled` | Generate scoped nested `llms.txt` files and discover the most-specific index. Set to `False` for root-only generation and discovery. | `bool` | `True` |
 | `llms_txt_description` | Override the project description set in `llms.txt` | `str` | Uses the project description from `pyproject.toml` by default |
 | `llms_txt_build_parallel` | Build markdown files in parallel to the HTML files. | `bool` | `True` |
+| `llms_txt_reuse_doctrees` | Reuse the primary build's doctree cache for sequential Markdown builds. Set to `False` for builder-specific read transforms. Parallel builds always use a separate cache. | `bool` | `True` |
 | `llms_txt_suffix_mode` | Markdown output mode. `"append"` publishes `.html.md` and, for non-root `dirhtml` pages, the no-trailing-slash `.md` form. `"replace"` replaces `.html` with `.md`. `"auto"` publishes both and makes append canonical. Compatibility values remain supported: `"both"` equals `"auto"`; `"file-suffix"` publishes only `.html.md`; `"url-suffix"` publishes only the previous `dirhtml` no-trailing-slash form and behaves like `"file-suffix"` for `html`. | `str` | `"auto"` |
 | `llms_txt_full_build` | Generate the optional, non-standard `llms-full.txt` convenience file and list it in generated `llms.txt` output. Set to `True` to opt in. | `bool` | `False` |
 | `llms_txt_exclude` | A list of Sphinx wildcard patterns matched against document names (not regular expressions or source paths) to exclude from `llms.txt` and `llms-full.txt`. `*` does not cross `/`, while `**` does; for example, `"reference/generated/**"`. The individual markdown files for excluded documents are still generated. | `list[str]` | `[]` |
@@ -181,6 +182,20 @@ Supported `conf.py` configuration options for `sphinx_llm.txt`.
 | `llms_txt_summary_timeout` | Provider request timeout in seconds. | `int` | `60` |
 | `llms_txt_summary_cache_path` | JSON cache path. Relative paths use the Sphinx configuration directory; an empty value stores the cache under `app.doctreedir`. | `str` | `""` |
 <!-- markdownlint-enable MD013 -->
+
+Sequential builds (`llms_txt_build_parallel = False`) reuse the primary build's
+doctrees by default to avoid parsing the documentation twice. If an extension
+applies builder-specific transformations during `doctree-read`, disable reuse
+in `conf.py`:
+
+```python
+llms_txt_reuse_doctrees = False
+```
+
+Markdown then uses a separate doctree cache inside its temporary build directory,
+leaving the primary cache unchanged. The separate cache is removed with the
+temporary Markdown output after the build. This can increase build time.
+This option controls Sphinx doctrees, not the generated page-summary cache.
 
 `llms_txt_suppress_unknown_node_warnings` does not add support for unknown
 nodes. Suppressed nodes and all of their child content remain absent from the

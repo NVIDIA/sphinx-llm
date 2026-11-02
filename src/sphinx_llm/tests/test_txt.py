@@ -334,6 +334,99 @@ def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
     assert command[-4:] == ["-D", "probe_true=1", "-D", "probe_false=0"]
 
 
+@pytest.mark.parametrize("builder", ["html", "dirhtml"])
+@pytest.mark.parametrize("parallel", [True, False])
+def test_disabled_doctree_reuse_isolates_builder_specific_content(
+    tmp_path, builder, parallel
+):
+    """Markdown reads its own sources without changing the primary cache."""
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "conf.py").write_text(
+        "from docutils import nodes\n"
+        'extensions = ["sphinx_llm.txt"]\n'
+        'root_doc = "index"\n'
+        "def add_builder_content(app, doctree):\n"
+        '    marker = "MARKDOWN_ONLY" if app.tags.has("sphinx_llm_markdown") else "HTML_ONLY"\n'
+        "    doctree += nodes.paragraph(text=marker)\n"
+        "def setup(app):\n"
+        '    app.connect("doctree-read", add_builder_content)\n',
+        encoding="utf-8",
+    )
+    (source_dir / "index.rst").write_text("Index\n=====\n", encoding="utf-8")
+    output_dir = tmp_path / "output"
+    doctree_dir = tmp_path / "doctrees"
+    app = Sphinx(
+        srcdir=str(source_dir),
+        confdir=str(source_dir),
+        outdir=str(output_dir),
+        doctreedir=str(doctree_dir),
+        buildername=builder,
+        confoverrides={
+            "llms_txt_build_parallel": parallel,
+            "llms_txt_reuse_doctrees": False,
+        },
+        freshenv=True,
+    )
+    cached_files = {}
+
+    def snapshot_cache(app, exception):
+        assert exception is None
+        cached_files.update(
+            (path.name, path.read_bytes())
+            for path in doctree_dir.iterdir()
+            if path.is_file()
+        )
+
+    app.connect("build-finished", snapshot_cache, priority=99)
+    app.build()
+
+    html = (output_dir / "index.html").read_text(encoding="utf-8")
+    markdown = (output_dir / "index.html.md").read_text(encoding="utf-8")
+    assert "HTML_ONLY" in html
+    assert "MARKDOWN_ONLY" not in html
+    assert "MARKDOWN_ONLY" in markdown
+    assert "HTML_ONLY" not in markdown
+    assert "HTML_ONLY" in app.env.get_doctree("index").astext()
+    assert "MARKDOWN_ONLY" not in app.env.get_doctree("index").astext()
+    assert cached_files
+    assert cached_files == {
+        path.name: path.read_bytes() for path in doctree_dir.iterdir() if path.is_file()
+    }
+    assert not (output_dir / "_markdown_build").exists()
+
+
+@pytest.mark.parametrize("parallel", [True, False])
+@pytest.mark.parametrize("reuse", [None, True, False])
+def test_markdown_doctree_cache_selection(tmp_path, parallel, reuse):
+    """Only sequential builds with reuse enabled share the primary cache."""
+    config = SimpleNamespace(overrides={})
+    if reuse is not None:
+        config.llms_txt_reuse_doctrees = reuse
+    app = SimpleNamespace(
+        config=config,
+        confdir=tmp_path,
+        srcdir=tmp_path,
+        doctreedir=tmp_path / "doctrees",
+        tags=(),
+    )
+    generator = MarkdownGenerator(app)
+    generator.md_build_dir = tmp_path / "markdown"
+    generator.parallel = parallel
+    with (tmp_path / "markdown.log").open("w") as logfile:
+        with (
+            patch("sphinx_llm.txt.tempfile.NamedTemporaryFile", return_value=logfile),
+            patch("sphinx_llm.txt.subprocess.Popen") as popen,
+        ):
+            generator.build_markdown_files()
+    command = popen.call_args.args[0]
+    if not parallel and reuse is not False:
+        assert command[command.index("-d") + 1] == str(app.doctreedir)
+    else:
+        # Without -d, Sphinx puts doctrees under the Markdown output directory.
+        assert "-d" not in command
+
+
 def test_rst_files_have_corresponding_output_files(sphinx_build):
     """Test that all RST files have corresponding HTML and HTML.MD files in output."""
     app, build_dir, source_dir = sphinx_build
