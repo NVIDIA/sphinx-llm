@@ -815,14 +815,7 @@ class MarkdownGenerator:
         llms_txt_path = self.outdir / "llms-full.txt"
         with open(llms_txt_path, "w", encoding="utf-8") as llms_txt:
             # Sort files to ensure index.html.md comes first
-            sorted_files = sorted(
-                self.generated_markdown_files,
-                key=lambda path: (
-                    path.relative_to(self.outdir).as_posix()
-                    not in {"index.html.md", "index.md"},
-                    path.relative_to(self.outdir).as_posix(),
-                ),
-            )
+            sorted_files = self._sorted_sitemap_files(self.generated_markdown_files)
 
             for md_file in sorted_files:
                 docname = self._docname_by_output_file[md_file]
