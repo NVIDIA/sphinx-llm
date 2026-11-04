@@ -23,7 +23,7 @@ jobs:
         downstream-project:
           - repo: nolar/kopf
             install_command: "uv pip install --group docs -e ."
-            build_command: "sphinx-build docs/ docs/_build/ -b html"
+            build_command: "sphinx-build docs/ docs/_build/ -b html -D extensions=sphinx.ext.autodoc,sphinx_autodoc_typehints,sphinx.ext.todo,sphinx.ext.extlinks,sphinx.ext.linkcode,sphinx.ext.intersphinx,sphinx_copybutton,sphinxcontrib.googleanalytics,sphinx_llm.txt"
           - repo: kr8s-org/kr8s
             install_command: "uv sync --dev"
             build_command: "uv run --dev sphinx-build docs/ docs/_build/"
