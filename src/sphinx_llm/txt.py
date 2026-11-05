@@ -952,7 +952,7 @@ class MarkdownGenerator:
 
             for line in self.get_project_description().strip().split("\n"):
                 sitemap.write(f"> {line}\n")
-            sitemap.write("\n\n")
+            sitemap.write("\n")
 
             details = getattr(self.app.config, "llms_txt_details", "")
             if details.strip():

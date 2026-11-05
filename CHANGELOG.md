@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Fixed an extra blank line after the project description blockquote in
+  generated `llms.txt` indexes.
 - Fixed the default `llms.txt` project description to use the package summary
   (the `description` in `pyproject.toml`) instead of the long description,
   which copied the whole README into every generated index.
