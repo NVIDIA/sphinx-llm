@@ -127,6 +127,17 @@ Generated paths selected by the configured mode are reserved for sphinx-llm and
 are overwritten during a build. Other existing files are left unchanged; the
 extension never guesses that an unselected file is stale or deletes it.
 
+In generated Markdown, intersphinx links use the destination page's Markdown
+URL when that exact resource can be verified. The extension first checks an
+HTML page's `rel="alternate"` Markdown link, then checks the standard append
+and replace Markdown paths, including `dirhtml` paths. These checks work with
+Markdown published by any generator. Discovery uses bounded HTTP requests with
+a two-second timeout per request and caches each page during the Markdown
+build. At most five requests are made for a page with an invalid alternate
+link and three possible `dirhtml` paths. If the destination cannot be reached
+or no Markdown page is verified, the original HTML link remains. Ordinary HTML
+output is unaffected.
+
 > [!NOTE]
 > This extension only works with HTML builders (like `html` and `dirhtml`).
 
