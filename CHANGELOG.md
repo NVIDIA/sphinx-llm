@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Added `llms_txt_details` for unquoted introductory Markdown after the project
+  description blockquote in generated root and nested `llms.txt` indexes.
 - Added `llms_txt_suppress_unknown_node_warnings` for opt-in suppression of all
   or selected unknown-node diagnostics from generated Markdown while
   continuing to omit unsupported node subtrees.
