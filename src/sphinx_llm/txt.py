@@ -954,8 +954,8 @@ class MarkdownGenerator:
                 sitemap.write(f"> {line}\n")
             sitemap.write("\n")
 
-            details = getattr(self.app.config, "llms_txt_details", "")
-            if details.strip():
+            details = getattr(self.app.config, "llms_txt_details", "").strip()
+            if details:
                 sitemap.write(f"{details}\n\n")
 
             if hasattr(self.app.config, "copyright") and self.app.config.copyright:
