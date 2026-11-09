@@ -502,6 +502,34 @@ def test_example_unsupported_directive_is_preserved_by_default(
     )
 
 
+def test_llms_txt_details_preserve_section_spacing(readonly_sphinx_build):
+    """Details sit between the description and copyright with single blank lines."""
+    app, build_dir, _ = readonly_sphinx_build
+    expected = (
+        f"> {app.config.llms_txt_description}\n\n"
+        f"{app.config.llms_txt_details.strip()}\n\n"
+        f"{app.config.copyright}\n\n"
+        "## Pages"
+    )
+
+    for index in ("llms.txt", "nested/llms.txt"):
+        assert expected in (build_dir / index).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("details", ["", " \t\n \n"], ids=["empty", "whitespace"])
+def test_llms_txt_empty_details_are_omitted(build_example_docs, details: str):
+    """Empty details leave one blank line between the description and copyright."""
+    app, build_dir, _ = build_example_docs(
+        "html", {"llms_txt_build_parallel": False, "llms_txt_details": details}
+    )
+    expected = (
+        f"> {app.config.llms_txt_description}\n\n{app.config.copyright}\n\n## Pages"
+    )
+
+    for index in ("llms.txt", "nested/llms.txt"):
+        assert expected in (build_dir / index).read_text(encoding="utf-8")
+
+
 def test_llms_txt_sitemap_links_exist(readonly_sphinx_build):
     """Test that all markdown pages listed in the llms.txt sitemap actually exist."""
     _, build_dir, _ = readonly_sphinx_build

@@ -952,7 +952,11 @@ class MarkdownGenerator:
 
             for line in self.get_project_description().strip().split("\n"):
                 sitemap.write(f"> {line}\n")
-            sitemap.write("\n\n")
+            sitemap.write("\n")
+
+            details = getattr(self.app.config, "llms_txt_details", "").strip()
+            if details:
+                sitemap.write(f"{details}\n\n")
 
             if hasattr(self.app.config, "copyright") and self.app.config.copyright:
                 sitemap.write(f"{self.app.config.copyright}\n\n")
@@ -1474,6 +1478,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
         app.add_builder(SphinxLlmMarkdownBuilder)
     app.add_config_value("llms_txt_enabled", True, "")
     app.add_config_value("llms_txt_description", "", "env")
+    app.add_config_value("llms_txt_details", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
     app.add_config_value("llms_txt_reuse_doctrees", True, "env")
     app.add_config_value("llms_txt_markdown_docinfo", False, "env")
