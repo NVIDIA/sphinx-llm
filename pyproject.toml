@@ -76,6 +76,20 @@ sphinx_llm = ["src/sphinx_llm", "*/sphinx-llm/src/sphinx_llm"]
 [tool.coverage.report]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
 
+[tool.pytest.ini_options]
+filterwarnings = [
+  "error",
+  # myst-parser reads SphinxTransform.app, deprecated in Sphinx 9. No category so
+  # this still matches when RemovedInSphinx11Warning becomes a DeprecationWarning.
+  "ignore:'myst_parser\\.sphinx_ext\\.myst_refs\\.MystReferenceResolver\\.app' is deprecated::myst_parser\\.sphinx_ext\\.myst_refs",
+  # Sphinx forks for parallel reading; under pytest-xdist the worker already
+  # runs execnet threads, so Python >=3.12 warns about fork() with threads.
+  "ignore:This process .* is multi-threaded, use of fork\\(\\) may lead to deadlocks:DeprecationWarning:multiprocessing\\.popen_fork",
+  # Sphinx <7 uses stdlib APIs that Python 3.12 deprecates.
+  "ignore:'imghdr' is deprecated:DeprecationWarning:sphinx\\.util\\.images",
+  "ignore:datetime\\.datetime\\.utcfromtimestamp\\(\\) is deprecated:DeprecationWarning:sphinx\\.",
+]
+
 [tool.ruff]
 target-version = "py39"
 line-length = 88

@@ -4,6 +4,8 @@
 
 from sphinx.application import Sphinx
 
+from sphinx_llm.txt import _findall
+
 HTML_META_PAGE = "meta_example"
 
 
@@ -15,7 +17,7 @@ def get_html_meta_description(app: Sphinx, docname: str) -> str:
     valid when the source document is edited.
     """
     doctree = app.env.get_doctree(docname)
-    for node in doctree.traverse(lambda node: node.tagname == "meta"):
+    for node in _findall(doctree, lambda node: node.tagname == "meta"):
         if node.get("name") == "description" and node.get("content"):
             return node["content"]
     raise AssertionError(
