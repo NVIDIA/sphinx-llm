@@ -2680,15 +2680,21 @@ _NESTED_BODY_TEXT = "This is an example."
 
 def test_excluded_documents_not_in_llms_txt(readonly_sphinx_build_with_exclude):
     """Documents matching llms_txt_exclude must not be listed in llms.txt."""
-    _, build_dir, _ = readonly_sphinx_build_with_exclude
+    app, build_dir, _ = readonly_sphinx_build_with_exclude
     llms_txt = build_dir / "llms.txt"
     assert_file_exists_with_content(llms_txt)
-    content = llms_txt.read_text()
+    entries = _sitemap_entries(llms_txt)
 
-    assert _APPLES_BODY_TEXT not in content
-    assert _NESTED_BODY_TEXT not in content
+    if app.builder.name == "dirhtml":
+        excluded = {"apples/index.html.md", "nested/example/index.html.md"}
+        included = "test/index.html.md"
+    else:
+        excluded = {"apples.html.md", "nested/example.html.md"}
+        included = "test.html.md"
+
+    assert not excluded & set(entries.values())
     # Non-excluded documents are still listed
-    assert "test" in content
+    assert entries["Testing page"] == included
 
 
 def test_excluded_documents_not_in_llms_full_txt(readonly_sphinx_build_with_exclude):
