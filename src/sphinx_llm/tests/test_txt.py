@@ -2511,6 +2511,44 @@ def test_content_fallback_converts_inline_markdown_to_plain_text(
     assert MarkdownGenerator.extract_description_from_markdown(markdown) == expected
 
 
+FILENAME_FALLBACK_CASES = [
+    ("index.md", "Home", "Main documentation page"),
+    ("index.html.md", "Home", "Main documentation page"),
+    ("test.md", "Test", "Testing and example page"),
+    ("test.html.md", "Test", "Testing and example page"),
+    ("getting_started.md", "Getting Started", "Page content"),
+    ("getting_started.html.md", "Getting Started", "Page content"),
+]
+
+
+@pytest.mark.parametrize("filename,title,description", FILENAME_FALLBACK_CASES)
+def test_filename_fallbacks_without_heading_or_prose(
+    tmp_path: Path, make_markdown_generator, filename, title, description
+) -> None:
+    """Pages without a heading or usable prose fall back to their file name."""
+    markdown = tmp_path / filename
+    markdown.write_text("<!-- comment -->\n\nshort\n", encoding="utf-8")
+
+    generator = make_markdown_generator()
+    assert generator.extract_title_from_markdown(markdown) == title
+    assert MarkdownGenerator.extract_description_from_markdown(markdown) == description
+
+
+@pytest.mark.parametrize("unreadable", ["missing", "directory"])
+@pytest.mark.parametrize("filename,title,description", FILENAME_FALLBACK_CASES)
+def test_filename_fallbacks_for_unreadable_files(
+    tmp_path: Path, make_markdown_generator, unreadable, filename, title, description
+) -> None:
+    """Unreadable markdown paths fall back to their file name."""
+    markdown = tmp_path / filename
+    if unreadable == "directory":
+        markdown.mkdir()
+
+    generator = make_markdown_generator()
+    assert generator.extract_title_from_markdown(markdown) == title
+    assert MarkdownGenerator.extract_description_from_markdown(markdown) == description
+
+
 def test_get_docname_from_md_file(tmp_path, markdown_app):
     """Test that _get_docname_from_md_file returns correct Sphinx docnames."""
     app = markdown_app
