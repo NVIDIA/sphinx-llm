@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import html
 import posixpath
+import sys
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
@@ -14,6 +15,15 @@ import pytest
 from sphinx_llm.txt import (
     _serialize_sitemap_entry,
 )
+
+
+def _parse_llms_file(content: str):
+    """Parse with the reference llms-txt parser, required on Python 3.10+."""
+    if sys.version_info < (3, 10):
+        pytest.skip("llms-txt dev dependency requires Python >= 3.10")
+    from llms_txt import parse_llms_file
+
+    return parse_llms_file(content)
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
@@ -60,8 +70,7 @@ def test_generated_entries_round_trip_markdown_edges(
     assert len(page_lines) == 1
     assert "_under_" not in page_lines[0]
     assert page_lines[0].count("&#95;under&#95;") == 2
-    parse_llms_file = pytest.importorskip("llms_txt").parse_llms_file
-    parsed = parse_llms_file(content)
+    parsed = _parse_llms_file(content)
     pages_heading = "Pages in this subsection" if nested else "Pages"
     assert len(parsed.sections[pages_heading]) == 1
     entry = parsed.sections[pages_heading][0]
@@ -189,8 +198,7 @@ def test_generated_summary_strips_links_but_keeps_readable_text(
     index = tmp_path / "llms.txt"
     generator._write_sitemap(index, [artifact])
 
-    parse_llms_file = pytest.importorskip("llms_txt").parse_llms_file
-    entry = parse_llms_file(index.read_text(encoding="utf-8")).sections["Pages"][0]
+    entry = _parse_llms_file(index.read_text(encoding="utf-8")).sections["Pages"][0]
     assert html.unescape(entry.desc) == expected
     assert "python_api.html.md#callback-api" not in entry.desc
     assert "images/callback.png" not in entry.desc
@@ -212,8 +220,7 @@ def test_fallback_link_is_sanitized_before_sitemap_truncation(
     index = tmp_path / "llms.txt"
     generator._write_sitemap(index, [artifact])
 
-    parse_llms_file = pytest.importorskip("llms_txt").parse_llms_file
-    entry = parse_llms_file(index.read_text(encoding="utf-8")).sections["Pages"][0]
+    entry = _parse_llms_file(index.read_text(encoding="utf-8")).sections["Pages"][0]
     assert (
         html.unescape(entry.desc)
         == ("A" * 75 + " Readable label trailing prose")[:100] + "..."
