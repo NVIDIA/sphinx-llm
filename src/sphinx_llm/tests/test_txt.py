@@ -2221,18 +2221,9 @@ def test_unsupported_and_internal_builders_do_not_register_discovery(builder: st
     build_markdown_files.assert_not_called()
 
 
-def test_llms_full_txt_not_created_by_default(readonly_sphinx_build):
-    """Test that llms-full.txt is not created or referenced by default."""
-    _, build_dir, _ = readonly_sphinx_build
-
-    llms_full_txt_path = build_dir / "llms-full.txt"
-    assert not llms_full_txt_path.exists()
-    assert "llms-full.txt" not in (build_dir / "llms.txt").read_text(encoding="utf-8")
-
-
 def test_llms_full_setting_matrix(sphinx_build_llms_full_matrix):
     """Cover default, disabled, and enabled full output in every build mode."""
-    app, build_dir, _, full_setting = sphinx_build_llms_full_matrix
+    app, build_dir, source_dir, full_setting = sphinx_build_llms_full_matrix
     llms_txt = (build_dir / "llms.txt").read_text(encoding="utf-8")
     llms_full = build_dir / "llms-full.txt"
 
@@ -2241,6 +2232,15 @@ def test_llms_full_setting_matrix(sphinx_build_llms_full_matrix):
         assert "llms-full.txt" not in llms_txt
         assert_file_exists_with_content(build_dir / "llms.txt")
         assert_file_exists_with_content(build_dir / "index.html.md")
+        rst_files = list(source_dir.rglob("*.rst"))
+        assert len(rst_files) > 0, "No RST files found in source directory"
+        for rst_file in rst_files:
+            rel_path = rst_file.relative_to(source_dir)
+            if app.builder.name == "html" or rel_path.stem == "index":
+                md_path = build_dir / rel_path.with_suffix(".html.md")
+            else:
+                md_path = build_dir / rel_path.with_suffix("") / "index.html.md"
+            assert md_path.exists(), f"Markdown file not found: {md_path}"
         return
 
     assert_file_exists_with_content(llms_full)
@@ -2254,86 +2254,6 @@ def test_llms_full_setting_matrix(sphinx_build_llms_full_matrix):
     assert "For more comprehensive documentation" not in llms_txt
     if not http_base:
         assert (build_dir / expected_url).is_file()
-
-
-@pytest.mark.parametrize(
-    "readonly_sphinx_build_no_llms_full",
-    ["html", "dirhtml"],
-    indirect=True,
-)
-def test_llms_full_txt_not_created_when_disabled(readonly_sphinx_build_no_llms_full):
-    """Test that llms-full.txt is NOT created when llms_txt_full_build is False."""
-    _, build_dir, _ = readonly_sphinx_build_no_llms_full
-
-    llms_full_txt_path = build_dir / "llms-full.txt"
-    assert not llms_full_txt_path.exists(), (
-        "llms-full.txt should not be created when llms_txt_full_build is False"
-    )
-
-
-@pytest.mark.parametrize(
-    "readonly_sphinx_build_no_llms_full",
-    ["html", "dirhtml"],
-    indirect=True,
-)
-def test_llms_txt_sitemap_still_created_when_full_disabled(
-    readonly_sphinx_build_no_llms_full,
-):
-    """Test that llms.txt sitemap is still created when llms-full.txt is disabled."""
-    _, build_dir, _ = readonly_sphinx_build_no_llms_full
-
-    llms_txt_path = build_dir / "llms.txt"
-    assert llms_txt_path.exists(), (
-        "llms.txt should still be created when llms_txt_full_build is False"
-    )
-    assert llms_txt_path.stat().st_size > 0, "llms.txt should not be empty"
-
-
-@pytest.mark.parametrize(
-    "readonly_sphinx_build_no_llms_full",
-    ["html", "dirhtml"],
-    indirect=True,
-)
-def test_markdown_files_still_created_when_full_disabled(
-    readonly_sphinx_build_no_llms_full,
-):
-    """Test that per-page markdown files are still created when llms-full.txt is disabled."""
-    app, build_dir, source_dir = readonly_sphinx_build_no_llms_full
-
-    rst_files = list(source_dir.rglob("*.rst"))
-    assert len(rst_files) > 0, "No RST files found in source directory"
-
-    for rst_file in rst_files:
-        rel_path = rst_file.relative_to(source_dir)
-
-        if app.builder.name == "html":
-            md_path = build_dir / rel_path.with_suffix(".html.md")
-        elif rel_path.stem == "index":
-            if rel_path.parent == Path("."):
-                md_path = build_dir / "index.html.md"
-            else:
-                md_path = build_dir / rel_path.parent / "index.html.md"
-        else:
-            md_path = build_dir / rel_path.with_suffix("") / "index.html.md"
-
-        assert md_path.exists(), (
-            f"Markdown file should still be created when llms-full.txt is disabled: {md_path}"
-        )
-
-
-@pytest.mark.parametrize(
-    "readonly_sphinx_build_no_llms_full",
-    ["html", "dirhtml"],
-    indirect=True,
-)
-def test_llms_txt_does_not_link_to_llms_full_when_disabled(
-    readonly_sphinx_build_no_llms_full,
-):
-    """Test that llms.txt has no llms-full reference when explicitly disabled."""
-    _, build_dir, _ = readonly_sphinx_build_no_llms_full
-
-    content = (build_dir / "llms.txt").read_text(encoding="utf-8")
-    assert "llms-full.txt" not in content
 
 
 @pytest.mark.parametrize("nested_enabled", [False, True])

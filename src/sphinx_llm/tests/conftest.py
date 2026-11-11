@@ -319,16 +319,6 @@ def sphinx_build_with_http_base(
     )
 
 
-@pytest.fixture(scope="module")
-def readonly_sphinx_build_no_llms_full(
-    build_example_docs,
-    request,
-) -> Generator[tuple[Sphinx, Path, Path], None, None]:
-    """Read-only output with full generation disabled; never modify artifacts."""
-    builder = request.param
-    yield build_example_docs(builder, {"llms_txt_full_build": False})
-
-
 @pytest.fixture(
     scope="module",
     params=[("html", True), ("html", False), ("dirhtml", True), ("dirhtml", False)],
