@@ -243,18 +243,9 @@ def test_markdown_generator_setup(markdown_app):
     app = markdown_app
     generator = MarkdownGenerator(app)
 
-    connect_calls = []
-    original_connect = app.connect
-
-    def record_connect(event, callback):
-        connect_calls.append((event, callback))
-        return original_connect(event, callback)
-
-    app.connect = record_connect
     generator.setup()
 
-    events = [call[0] for call in connect_calls]
-    assert "builder-inited" in events
+    app.connect.assert_called_once_with("builder-inited", generator.build_llms_txt)
 
 
 def test_combine_builds_with_exception(markdown_app):
