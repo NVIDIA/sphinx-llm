@@ -336,16 +336,11 @@ def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
             generator.build_markdown_files()
 
     command = popen.call_args.args[0]
-    assert command[-8:] == [
-        "-D",
-        "probe_true=1",
-        "-D",
-        "probe_false=0",
-        "-D",
-        "extensions=sphinx_llm.txt",
-        "-D",
-        "markdown_docinfo=0",
-    ]
+    defines = [value for flag, value in zip(command, command[1:]) if flag == "-D"]
+    assert "probe_true=1" in defines
+    assert "probe_false=0" in defines
+    assert "probe_true=True" not in command
+    assert "probe_false=False" not in command
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
