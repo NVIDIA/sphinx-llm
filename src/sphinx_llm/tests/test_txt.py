@@ -343,6 +343,34 @@ def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
     assert "probe_false=False" not in command
 
 
+def test_build_markdown_files_logs_subprocess_launch_failure(tmp_path):
+    """A failed ``sphinx-build`` launch is logged instead of propagating."""
+    app = SimpleNamespace(
+        config=SimpleNamespace(overrides={}, extensions=["sphinx_llm.txt"]),
+        confdir=tmp_path / "conf",
+        srcdir=tmp_path / "source",
+        doctreedir=tmp_path / "doctrees",
+        builder=SimpleNamespace(name="html", format="html"),
+        tags=(),
+    )
+    generator = MarkdownGenerator(app)
+    generator.md_build_dir = tmp_path / "markdown"
+    generator.parallel = True
+
+    with (tmp_path / "markdown.log").open("w") as logfile:
+        with (
+            patch("sphinx_llm.txt.tempfile.NamedTemporaryFile", return_value=logfile),
+            patch("sphinx_llm.txt.subprocess.Popen", side_effect=OSError("boom")),
+            patch("sphinx_llm.txt.logger") as logger,
+        ):
+            generator.build_markdown_files()
+
+    logger.error.assert_called_once_with("Failed to run sphinx-build subprocess: boom")
+    assert logfile.closed
+    # combine_builds relies on this to skip combining a build that never ran.
+    assert generator.md_build_process is None
+
+
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
 @pytest.mark.parametrize("parallel", [True, False])
 def test_disabled_doctree_reuse_isolates_builder_specific_content(
