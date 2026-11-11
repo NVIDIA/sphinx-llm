@@ -2459,33 +2459,24 @@ def test_content_fallback_used_when_no_html_meta(readonly_sphinx_build):
     llms_txt_path = build_dir / "llms.txt"
     content = llms_txt_path.read_text(encoding="utf-8")
 
-    # The 'apples' page has no html_meta; its llms.txt description should match
-    # the content-based extraction.  We derive the local markdown file path from
-    # the URL already recorded in llms.txt.  The URL may be relative or absolute
-    # (when markdown_http_base is configured), so we normalise accordingly.
-    apples_lines = [line for line in content.splitlines() if "apples" in line.lower()]
+    # The 'apples' page has no html_meta, so its description is the first
+    # paragraph of its introduction truncated to 100 characters.
+    apples_lines = [
+        line
+        for line in content.splitlines()
+        if line.startswith("- [Feeding Apples to a Friendly Pig](")
+    ]
     assert apples_lines, "No llms.txt entry found for 'apples' page"
+    assert len(apples_lines) == 1, apples_lines
 
-    for line in apples_lines:
-        url_match = re.search(r"\]\(([^)]+)\)", line)
-        desc_match = re.search(r"\):\s*(.+)$", line)
-        assert url_match and desc_match and desc_match.group(1).strip(), (
-            f"Could not parse llms.txt entry for 'apples': {line!r}"
-        )
-        url = url_match.group(1)
-        if url.startswith(("http://", "https://")):
-            http_base = (getattr(app.config, "markdown_http_base", "") or "").rstrip(
-                "/"
-            )
-            rel_path = url[len(http_base) :].lstrip("/")
-        else:
-            rel_path = url
-        apples_md = build_dir / rel_path
-        expected = MarkdownGenerator.extract_description_from_markdown(apples_md)
-        assert desc_match.group(1).strip() == expected, (
-            f"Expected content-based description {expected!r}, "
-            f"got {desc_match.group(1).strip()!r}"
-        )
+    apples_url = (
+        "apples/index.html.md" if app.builder.name == "dirhtml" else "apples.html.md"
+    )
+    assert apples_lines[0] == (
+        f"- [Feeding Apples to a Friendly Pig]({apples_url}): "
+        "Feeding apples to a friendly pig can be a wonderful experience for both "
+        "you and the pig. Pigs are in..."
+    )
 
 
 @pytest.mark.parametrize(
