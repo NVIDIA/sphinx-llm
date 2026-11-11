@@ -2219,11 +2219,11 @@ def test_unsupported_and_internal_builders_do_not_register_discovery(builder: st
     app.config.llms_txt_suffix_mode = "auto"
     generator = MarkdownGenerator(app)
 
-    generator.build_llms_txt(app)
+    with patch.object(generator, "build_markdown_files") as build_markdown_files:
+        generator.build_llms_txt(app)
 
-    assert call("html-page-context", generator.add_discovery_metadata) not in (
-        app.connect.call_args_list
-    )
+    app.connect.assert_not_called()
+    build_markdown_files.assert_not_called()
 
 
 def test_llms_full_txt_not_created_by_default(readonly_sphinx_build):
