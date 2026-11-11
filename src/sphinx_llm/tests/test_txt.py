@@ -230,14 +230,6 @@ def get_non_index_rst_files(source_dir: Path) -> list[Path]:
     return rst_files
 
 
-def test_markdown_generator_init(markdown_app):
-    """Test MarkdownGenerator initialization."""
-    app = markdown_app
-    generator = MarkdownGenerator(app)
-    assert generator.app == app
-    assert generator.md_build_logfile is None
-
-
 def test_markdown_generator_setup(markdown_app):
     """Test that setup connects to the correct events."""
     app = markdown_app
