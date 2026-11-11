@@ -224,3 +224,21 @@ def test_summarize_text_rejects_malformed_or_empty_responses(monkeypatch, respon
         mock_openai.return_value.chat.completions.create.return_value = response
         with pytest.raises(ExtensionError, match="malformed or empty summary"):
             summarize_text("Page contents.", "test-model")
+
+
+@pytest.mark.parametrize(
+    ("timeout", "expected_options"),
+    [
+        (12.5, {"api_key": "not-used", "timeout": 12.5}),
+        (None, {"api_key": "not-used"}),
+    ],
+)
+def test_summarize_text_forwards_timeout_to_client(
+    clear_summary_environment, openai_response, timeout, expected_options
+):
+    """A configured timeout reaches the client; None leaves the SDK default."""
+    response = openai_response("Summary.")
+    with patch("openai.OpenAI") as mock_openai:
+        mock_openai.return_value.chat.completions.create.return_value = response
+        summarize_text("Page contents.", "test-model", timeout=timeout)
+    mock_openai.assert_called_once_with(**expected_options)
