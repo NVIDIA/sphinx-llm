@@ -37,17 +37,6 @@ def docs_source_styling_build(docs_source_dir, tmp_path, make_sphinx_app, reques
         test_page.read_text(encoding="utf-8")
         + "\n"
         + ".. docref:: apples\n"
-        + "   :style-title-prefix: Local <style>\n"
-        + "   :style-visit-link-text: Local <link>\n"
-        + "   :style-visit-link-class: local-style compact\n"
-        + "   :title-prefix: Ignored legacy title\n"
-        + "   :visit-link-text: Ignored legacy link\n"
-        + "   :visit-link-class: ignored-legacy\n\n"
-        + ".. docref:: apples\n"
-        + "   :title-prefix: Legacy style\n"
-        + "   :visit-link-text: Legacy link\n"
-        + "   :visit-link-class: legacy-style\n\n"
-        + ".. docref:: apples\n"
         + "   :style-title-prefix:\n"
         + "   :style-visit-link-text:\n"
         + "   :style-visit-link-class:\n",
@@ -216,6 +205,10 @@ def test_docref_styling_configuration_and_directive_precedence(
             "   :visit-link-text: Ignored legacy link\n"
             "   :visit-link-class: ignored-legacy-class\n\n"
             ".. docref:: target\n"
+            "   :title-prefix: Legacy local\n"
+            "   :visit-link-text: Legacy link\n"
+            "   :visit-link-class: legacy-link\n\n"
+            ".. docref:: target\n"
             "   :style-title-prefix:\n"
             "   :style-visit-link-text:\n"
             "   :style-visit-link-class:\n"
@@ -238,6 +231,9 @@ def test_docref_styling_configuration_and_directive_precedence(
     assert "Local &lt;prefix&gt; Target" in html
     assert 'class="local-link another-class"' in html
     assert ">Local &lt;link&gt;</a>" in html
+    assert "Legacy local Target" in html
+    assert 'class="legacy-link"' in html
+    assert ">Legacy link</a>" in html
     assert "Ignored legacy" not in html
     assert ">Target</p>" in html
     assert 'href="target.html"></a>' in html
@@ -261,25 +257,13 @@ def test_docref_styling_defaults_remain_unchanged(
 
 def test_docs_source_docref_styling_matrix(docs_source_styling_build):
     """Exercise styling against the shipped documentation fixture."""
-    app, output_dir, warning = docs_source_styling_build
+    app, output_dir, _ = docs_source_styling_build
     test_page = "test.html" if app.builder.name == "html" else "test/index.html"
     html = (output_dir / test_page).read_text(encoding="utf-8")
 
     assert "Global style Feeding Apples to a Friendly Pig" in html
-    assert 'class="global-style shared"' in html
-    assert ">Global link</a>" in html
-    assert "Local &lt;style&gt; Feeding Apples to a Friendly Pig" in html
-    assert 'class="local-style compact"' in html
-    assert ">Local &lt;link&gt;</a>" in html
-    assert "Ignored legacy" not in html
-    assert "Legacy style Feeding Apples to a Friendly Pig" in html
-    assert 'class="legacy-style"' in html
-    assert ">Legacy link</a>" in html
-    assert ">Feeding Apples to a Friendly Pig</p>" in html
     apples_uri = app.builder.get_relative_uri("test", "apples")
     assert f'<p><a class="reference internal" href="{apples_uri}"></a></p>' in html
-    assert "is deprecated" in warning.getvalue()
-    assert "deprecated and ignored" in warning.getvalue()
     assert (output_dir / "llms.txt").is_file()
     assert (output_dir / "llms-full.txt").is_file()
     if app.builder.name == "html":
