@@ -260,8 +260,27 @@ def test_markdown_generator_setup(markdown_app):
 def test_combine_builds_with_exception(markdown_app):
     """Test that combine_builds returns early on exception."""
     app = markdown_app
+    app.warningiserror = False
     generator = MarkdownGenerator(app)
+    outdir = Path(app.outdir)
+    generator.outdir = outdir
+    generator.suffix_mode = sphinx_llm.txt.normalize_suffix_mode("auto")
+    generator.markdown_docinfo = False
+    generator.md_build_dir = outdir / "_markdown_build"
+    generator.md_build_dir.mkdir()
+    (generator.md_build_dir / "index.md").write_text("# Index\n", encoding="utf-8")
+    (generator.md_build_dir / LINK_TARGETS_FILENAME).write_text("{}", encoding="utf-8")
+    logfile = outdir / "markdown_build.log"
+    logfile.write_text("", encoding="utf-8")
+    generator.md_build_logfile = SimpleNamespace(name=str(logfile))
+    generator.md_build_process = MagicMock(returncode=0)
+    generator.md_build_process.poll.return_value = 0
+
     generator.combine_builds(app, Exception("fail"))
+
+    assert not list(outdir.rglob("*.md"))
+    assert not (outdir / "llms.txt").exists()
+    assert not (outdir / "llms-full.txt").exists()
 
 
 def test_combine_builds_terminates_orphan_subprocess_on_exception(markdown_app):
