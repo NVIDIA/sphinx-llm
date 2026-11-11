@@ -542,3 +542,14 @@ def test_page_summaries_in_full_build_matrix(
     assert meta_line.endswith(f": {authored}")
     assert requests
     assert all(authored not in str(request) for request in requests)
+
+
+def test_page_summary_reports_missing_generation_dependencies(
+    summary_generator, monkeypatch, tmp_path
+):
+    """A missing openai package on a cache miss points users at the gen extra."""
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    monkeypatch.setitem(sys.modules, "openai", None)
+    generator, markdown_file = summary_generator(tmp_path)
+    with pytest.raises(ExtensionError, match=r"pip install sphinx-llm\[gen\]"):
+        generator.get_page_description(markdown_file)

@@ -2,13 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the shared OpenAI-compatible summary client."""
 
+import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from sphinx.errors import ExtensionError
 
-from sphinx_llm.summary import SYSTEM_PROMPT, summarize_text
+from sphinx_llm.summary import (
+    SYSTEM_PROMPT,
+    MissingGenerationDependenciesError,
+    summarize_text,
+)
 
 
 def test_summarize_text_uses_openai_compatible_endpoint(openai_response, monkeypatch):
@@ -242,3 +247,15 @@ def test_summarize_text_forwards_timeout_to_client(
         mock_openai.return_value.chat.completions.create.return_value = response
         summarize_text("Page contents.", "test-model", timeout=timeout)
     mock_openai.assert_called_once_with(**expected_options)
+
+
+def test_summarize_text_reports_missing_generation_dependencies(monkeypatch):
+    """Test that a missing openai package points users at the gen extra."""
+    monkeypatch.setitem(sys.modules, "openai", None)
+
+    with pytest.raises(
+        MissingGenerationDependenciesError, match=r"pip install sphinx-llm\[gen\]"
+    ) as excinfo:
+        summarize_text("Page contents.", "test-model")
+
+    assert isinstance(excinfo.value.__cause__, ImportError)
