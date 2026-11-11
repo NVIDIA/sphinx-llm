@@ -277,24 +277,6 @@ def test_selective_suppression_leaves_unmatched_primary_warnings(tmp_path, paral
     _assert_unknown_content_omitted(markdown)
 
 
-@pytest.mark.parametrize(
-    "value",
-    [False, [], ["Abbreviation"], ["abbreviation", "abbreviation"]],
-    ids=["false", "empty", "case-mismatch", "duplicates"],
-)
-def test_false_empty_mismatched_and_duplicate_names_use_exact_matching(tmp_path, value):
-    result, _ = _build(tmp_path, value=value)
-
-    output = _output(result)
-    assert result.returncode == 0
-    if isinstance(value, list) and "abbreviation" in value:
-        assert "unknown node type: <abbreviation:" not in output
-        assert output.count("unknown node type: <centered:") == 1
-        assert output.count("unknown node type: <custom_unknown:") == 1
-    else:
-        _assert_all_unknown_warnings(output)
-
-
 def test_tuple_can_suppress_all_exact_node_names(tmp_path):
     result, markdown = _build(
         tmp_path,
@@ -317,17 +299,23 @@ def test_suppression_changes_only_diagnostics_not_markdown(tmp_path):
     _assert_unknown_content_omitted(suppressed_markdown)
 
 
+UNKNOWN_NODE_NAMES = ("abbreviation", "centered", "custom_unknown")
+
+
 @pytest.mark.parametrize(
-    ("value", "expected_warning_count"),
+    "builder", ["html", "llms-markdown"], ids=["primary", "direct"]
+)
+@pytest.mark.parametrize(
+    ("value", "expected_warnings"),
     [
-        (Ellipsis, 3),
-        (False, 3),
-        (True, 0),
-        (["abbreviation"], 2),
-        (("abbreviation",), 2),
-        ([], 3),
-        (["Abbreviation"], 3),
-        (["abbreviation", "abbreviation"], 2),
+        (Ellipsis, UNKNOWN_NODE_NAMES),
+        (False, UNKNOWN_NODE_NAMES),
+        (True, ()),
+        (["abbreviation"], ("centered", "custom_unknown")),
+        (("abbreviation",), ("centered", "custom_unknown")),
+        ([], UNKNOWN_NODE_NAMES),
+        (["Abbreviation"], UNKNOWN_NODE_NAMES),
+        (["abbreviation", "abbreviation"], ("centered", "custom_unknown")),
     ],
     ids=[
         "default",
@@ -340,13 +328,17 @@ def test_suppression_changes_only_diagnostics_not_markdown(tmp_path):
         "duplicates",
     ],
 )
-def test_direct_llms_markdown_suppression_contract(
-    tmp_path, value, expected_warning_count
-):
-    result, markdown = _build(tmp_path, value=value, builder="llms-markdown")
+def test_suppression_contract(tmp_path, builder, value, expected_warnings):
+    result, markdown = _build(tmp_path, value=value, builder=builder)
 
+    output = _output(result)
     assert result.returncode == 0
-    assert _output(result).count("unknown node type:") == expected_warning_count
+    assert output.count("WARNING:") == len(expected_warnings)
+    for name in UNKNOWN_NODE_NAMES:
+        expected_count = int(name in expected_warnings)
+        assert output.count(f"unknown node type: <{name}:") == expected_count
+    if "abbreviation" in expected_warnings:
+        assert "index.rst:4: WARNING: unknown node type: <abbreviation:" in output
     _assert_unknown_content_omitted(markdown)
 
 

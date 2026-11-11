@@ -71,6 +71,13 @@ SITEMAP_TEXT_TRANSLATION = str.maketrans(
 )
 
 
+def _findall(node: docutils.nodes.Node, condition):
+    findall = getattr(node, "findall", None)
+    if findall is not None:
+        return findall(condition)
+    return node.traverse(condition)
+
+
 def _add_audience_tags(app: Sphinx) -> None:
     """Let Sphinx's native ``only`` directive select the build's audience."""
     is_agent = app.builder.name == SphinxLlmMarkdownBuilder.name
@@ -1075,7 +1082,7 @@ class MarkdownGenerator:
                 meta_type = getattr(
                     docutils.nodes, "meta", lambda node: node.tagname == "meta"
                 )
-                for node in doctree.traverse(meta_type):
+                for node in _findall(doctree, meta_type):
                     content = node.get("content")
                     if (
                         node.get("name") == "description"

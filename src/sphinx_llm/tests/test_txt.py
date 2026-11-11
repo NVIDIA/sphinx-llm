@@ -230,38 +230,40 @@ def get_non_index_rst_files(source_dir: Path) -> list[Path]:
     return rst_files
 
 
-def test_markdown_generator_init(markdown_app):
-    """Test MarkdownGenerator initialization."""
-    app = markdown_app
-    generator = MarkdownGenerator(app)
-    assert generator.app == app
-    assert generator.md_build_logfile is None
-
-
 def test_markdown_generator_setup(markdown_app):
     """Test that setup connects to the correct events."""
     app = markdown_app
     generator = MarkdownGenerator(app)
 
-    connect_calls = []
-    original_connect = app.connect
-
-    def record_connect(event, callback):
-        connect_calls.append((event, callback))
-        return original_connect(event, callback)
-
-    app.connect = record_connect
     generator.setup()
 
-    events = [call[0] for call in connect_calls]
-    assert "builder-inited" in events
+    app.connect.assert_called_once_with("builder-inited", generator.build_llms_txt)
 
 
 def test_combine_builds_with_exception(markdown_app):
     """Test that combine_builds returns early on exception."""
     app = markdown_app
+    app.warningiserror = False
     generator = MarkdownGenerator(app)
+    outdir = Path(app.outdir)
+    generator.outdir = outdir
+    generator.suffix_mode = sphinx_llm.txt.normalize_suffix_mode("auto")
+    generator.markdown_docinfo = False
+    generator.md_build_dir = outdir / "_markdown_build"
+    generator.md_build_dir.mkdir()
+    (generator.md_build_dir / "index.md").write_text("# Index\n", encoding="utf-8")
+    (generator.md_build_dir / LINK_TARGETS_FILENAME).write_text("{}", encoding="utf-8")
+    logfile = outdir / "markdown_build.log"
+    logfile.write_text("", encoding="utf-8")
+    generator.md_build_logfile = SimpleNamespace(name=str(logfile))
+    generator.md_build_process = MagicMock(returncode=0)
+    generator.md_build_process.poll.return_value = 0
+
     generator.combine_builds(app, Exception("fail"))
+
+    assert not list(outdir.rglob("*.md"))
+    assert not (outdir / "llms.txt").exists()
+    assert not (outdir / "llms-full.txt").exists()
 
 
 def test_combine_builds_terminates_orphan_subprocess_on_exception(markdown_app):
@@ -334,16 +336,39 @@ def test_boolean_config_overrides_use_sphinx_cli_values(tmp_path):
             generator.build_markdown_files()
 
     command = popen.call_args.args[0]
-    assert command[-8:] == [
-        "-D",
-        "probe_true=1",
-        "-D",
-        "probe_false=0",
-        "-D",
-        "extensions=sphinx_llm.txt",
-        "-D",
-        "markdown_docinfo=0",
-    ]
+    defines = [value for flag, value in zip(command, command[1:]) if flag == "-D"]
+    assert "probe_true=1" in defines
+    assert "probe_false=0" in defines
+    assert "probe_true=True" not in command
+    assert "probe_false=False" not in command
+
+
+def test_build_markdown_files_logs_subprocess_launch_failure(tmp_path):
+    """A failed ``sphinx-build`` launch is logged instead of propagating."""
+    app = SimpleNamespace(
+        config=SimpleNamespace(overrides={}, extensions=["sphinx_llm.txt"]),
+        confdir=tmp_path / "conf",
+        srcdir=tmp_path / "source",
+        doctreedir=tmp_path / "doctrees",
+        builder=SimpleNamespace(name="html", format="html"),
+        tags=(),
+    )
+    generator = MarkdownGenerator(app)
+    generator.md_build_dir = tmp_path / "markdown"
+    generator.parallel = True
+
+    with (tmp_path / "markdown.log").open("w") as logfile:
+        with (
+            patch("sphinx_llm.txt.tempfile.NamedTemporaryFile", return_value=logfile),
+            patch("sphinx_llm.txt.subprocess.Popen", side_effect=OSError("boom")),
+            patch("sphinx_llm.txt.logger") as logger,
+        ):
+            generator.build_markdown_files()
+
+    logger.error.assert_called_once_with("Failed to run sphinx-build subprocess: boom")
+    assert logfile.closed
+    # combine_builds relies on this to skip combining a build that never ran.
+    assert generator.md_build_process is None
 
 
 @pytest.mark.parametrize("builder", ["html", "dirhtml"])
@@ -2217,25 +2242,16 @@ def test_unsupported_and_internal_builders_do_not_register_discovery(builder: st
     app.config.llms_txt_suffix_mode = "auto"
     generator = MarkdownGenerator(app)
 
-    generator.build_llms_txt(app)
+    with patch.object(generator, "build_markdown_files") as build_markdown_files:
+        generator.build_llms_txt(app)
 
-    assert call("html-page-context", generator.add_discovery_metadata) not in (
-        app.connect.call_args_list
-    )
-
-
-def test_llms_full_txt_not_created_by_default(readonly_sphinx_build):
-    """Test that llms-full.txt is not created or referenced by default."""
-    _, build_dir, _ = readonly_sphinx_build
-
-    llms_full_txt_path = build_dir / "llms-full.txt"
-    assert not llms_full_txt_path.exists()
-    assert "llms-full.txt" not in (build_dir / "llms.txt").read_text(encoding="utf-8")
+    app.connect.assert_not_called()
+    build_markdown_files.assert_not_called()
 
 
 def test_llms_full_setting_matrix(sphinx_build_llms_full_matrix):
     """Cover default, disabled, and enabled full output in every build mode."""
-    app, build_dir, _, full_setting = sphinx_build_llms_full_matrix
+    app, build_dir, source_dir, full_setting = sphinx_build_llms_full_matrix
     llms_txt = (build_dir / "llms.txt").read_text(encoding="utf-8")
     llms_full = build_dir / "llms-full.txt"
 
@@ -2244,6 +2260,15 @@ def test_llms_full_setting_matrix(sphinx_build_llms_full_matrix):
         assert "llms-full.txt" not in llms_txt
         assert_file_exists_with_content(build_dir / "llms.txt")
         assert_file_exists_with_content(build_dir / "index.html.md")
+        rst_files = list(source_dir.rglob("*.rst"))
+        assert len(rst_files) > 0, "No RST files found in source directory"
+        for rst_file in rst_files:
+            rel_path = rst_file.relative_to(source_dir)
+            if app.builder.name == "html" or rel_path.stem == "index":
+                md_path = build_dir / rel_path.with_suffix(".html.md")
+            else:
+                md_path = build_dir / rel_path.with_suffix("") / "index.html.md"
+            assert md_path.exists(), f"Markdown file not found: {md_path}"
         return
 
     assert_file_exists_with_content(llms_full)
@@ -2257,86 +2282,6 @@ def test_llms_full_setting_matrix(sphinx_build_llms_full_matrix):
     assert "For more comprehensive documentation" not in llms_txt
     if not http_base:
         assert (build_dir / expected_url).is_file()
-
-
-@pytest.mark.parametrize(
-    "readonly_sphinx_build_no_llms_full",
-    ["html", "dirhtml"],
-    indirect=True,
-)
-def test_llms_full_txt_not_created_when_disabled(readonly_sphinx_build_no_llms_full):
-    """Test that llms-full.txt is NOT created when llms_txt_full_build is False."""
-    _, build_dir, _ = readonly_sphinx_build_no_llms_full
-
-    llms_full_txt_path = build_dir / "llms-full.txt"
-    assert not llms_full_txt_path.exists(), (
-        "llms-full.txt should not be created when llms_txt_full_build is False"
-    )
-
-
-@pytest.mark.parametrize(
-    "readonly_sphinx_build_no_llms_full",
-    ["html", "dirhtml"],
-    indirect=True,
-)
-def test_llms_txt_sitemap_still_created_when_full_disabled(
-    readonly_sphinx_build_no_llms_full,
-):
-    """Test that llms.txt sitemap is still created when llms-full.txt is disabled."""
-    _, build_dir, _ = readonly_sphinx_build_no_llms_full
-
-    llms_txt_path = build_dir / "llms.txt"
-    assert llms_txt_path.exists(), (
-        "llms.txt should still be created when llms_txt_full_build is False"
-    )
-    assert llms_txt_path.stat().st_size > 0, "llms.txt should not be empty"
-
-
-@pytest.mark.parametrize(
-    "readonly_sphinx_build_no_llms_full",
-    ["html", "dirhtml"],
-    indirect=True,
-)
-def test_markdown_files_still_created_when_full_disabled(
-    readonly_sphinx_build_no_llms_full,
-):
-    """Test that per-page markdown files are still created when llms-full.txt is disabled."""
-    app, build_dir, source_dir = readonly_sphinx_build_no_llms_full
-
-    rst_files = list(source_dir.rglob("*.rst"))
-    assert len(rst_files) > 0, "No RST files found in source directory"
-
-    for rst_file in rst_files:
-        rel_path = rst_file.relative_to(source_dir)
-
-        if app.builder.name == "html":
-            md_path = build_dir / rel_path.with_suffix(".html.md")
-        elif rel_path.stem == "index":
-            if rel_path.parent == Path("."):
-                md_path = build_dir / "index.html.md"
-            else:
-                md_path = build_dir / rel_path.parent / "index.html.md"
-        else:
-            md_path = build_dir / rel_path.with_suffix("") / "index.html.md"
-
-        assert md_path.exists(), (
-            f"Markdown file should still be created when llms-full.txt is disabled: {md_path}"
-        )
-
-
-@pytest.mark.parametrize(
-    "readonly_sphinx_build_no_llms_full",
-    ["html", "dirhtml"],
-    indirect=True,
-)
-def test_llms_txt_does_not_link_to_llms_full_when_disabled(
-    readonly_sphinx_build_no_llms_full,
-):
-    """Test that llms.txt has no llms-full reference when explicitly disabled."""
-    _, build_dir, _ = readonly_sphinx_build_no_llms_full
-
-    content = (build_dir / "llms.txt").read_text(encoding="utf-8")
-    assert "llms-full.txt" not in content
 
 
 @pytest.mark.parametrize("nested_enabled", [False, True])
@@ -2457,33 +2402,24 @@ def test_content_fallback_used_when_no_html_meta(readonly_sphinx_build):
     llms_txt_path = build_dir / "llms.txt"
     content = llms_txt_path.read_text(encoding="utf-8")
 
-    # The 'apples' page has no html_meta; its llms.txt description should match
-    # the content-based extraction.  We derive the local markdown file path from
-    # the URL already recorded in llms.txt.  The URL may be relative or absolute
-    # (when markdown_http_base is configured), so we normalise accordingly.
-    apples_lines = [line for line in content.splitlines() if "apples" in line.lower()]
+    # The 'apples' page has no html_meta, so its description is the first
+    # paragraph of its introduction truncated to 100 characters.
+    apples_lines = [
+        line
+        for line in content.splitlines()
+        if line.startswith("- [Feeding Apples to a Friendly Pig](")
+    ]
     assert apples_lines, "No llms.txt entry found for 'apples' page"
+    assert len(apples_lines) == 1, apples_lines
 
-    for line in apples_lines:
-        url_match = re.search(r"\]\(([^)]+)\)", line)
-        desc_match = re.search(r"\):\s*(.+)$", line)
-        assert url_match and desc_match and desc_match.group(1).strip(), (
-            f"Could not parse llms.txt entry for 'apples': {line!r}"
-        )
-        url = url_match.group(1)
-        if url.startswith(("http://", "https://")):
-            http_base = (getattr(app.config, "markdown_http_base", "") or "").rstrip(
-                "/"
-            )
-            rel_path = url[len(http_base) :].lstrip("/")
-        else:
-            rel_path = url
-        apples_md = build_dir / rel_path
-        expected = MarkdownGenerator.extract_description_from_markdown(apples_md)
-        assert desc_match.group(1).strip() == expected, (
-            f"Expected content-based description {expected!r}, "
-            f"got {desc_match.group(1).strip()!r}"
-        )
+    apples_url = (
+        "apples/index.html.md" if app.builder.name == "dirhtml" else "apples.html.md"
+    )
+    assert apples_lines[0] == (
+        f"- [Feeding Apples to a Friendly Pig]({apples_url}): "
+        "Feeding apples to a friendly pig can be a wonderful experience for both "
+        "you and the pig. Pigs are in..."
+    )
 
 
 @pytest.mark.parametrize(
@@ -2573,6 +2509,44 @@ def test_content_fallback_converts_inline_markdown_to_plain_text(
     markdown.write_text(source, encoding="utf-8")
 
     assert MarkdownGenerator.extract_description_from_markdown(markdown) == expected
+
+
+FILENAME_FALLBACK_CASES = [
+    ("index.md", "Home", "Main documentation page"),
+    ("index.html.md", "Home", "Main documentation page"),
+    ("test.md", "Test", "Testing and example page"),
+    ("test.html.md", "Test", "Testing and example page"),
+    ("getting_started.md", "Getting Started", "Page content"),
+    ("getting_started.html.md", "Getting Started", "Page content"),
+]
+
+
+@pytest.mark.parametrize("filename,title,description", FILENAME_FALLBACK_CASES)
+def test_filename_fallbacks_without_heading_or_prose(
+    tmp_path: Path, make_markdown_generator, filename, title, description
+) -> None:
+    """Pages without a heading or usable prose fall back to their file name."""
+    markdown = tmp_path / filename
+    markdown.write_text("<!-- comment -->\n\nshort\n", encoding="utf-8")
+
+    generator = make_markdown_generator()
+    assert generator.extract_title_from_markdown(markdown) == title
+    assert MarkdownGenerator.extract_description_from_markdown(markdown) == description
+
+
+@pytest.mark.parametrize("unreadable", ["missing", "directory"])
+@pytest.mark.parametrize("filename,title,description", FILENAME_FALLBACK_CASES)
+def test_filename_fallbacks_for_unreadable_files(
+    tmp_path: Path, make_markdown_generator, unreadable, filename, title, description
+) -> None:
+    """Unreadable markdown paths fall back to their file name."""
+    markdown = tmp_path / filename
+    if unreadable == "directory":
+        markdown.mkdir()
+
+    generator = make_markdown_generator()
+    assert generator.extract_title_from_markdown(markdown) == title
+    assert MarkdownGenerator.extract_description_from_markdown(markdown) == description
 
 
 def test_get_docname_from_md_file(tmp_path, markdown_app):
@@ -2678,15 +2652,21 @@ _NESTED_BODY_TEXT = "This is an example."
 
 def test_excluded_documents_not_in_llms_txt(readonly_sphinx_build_with_exclude):
     """Documents matching llms_txt_exclude must not be listed in llms.txt."""
-    _, build_dir, _ = readonly_sphinx_build_with_exclude
+    app, build_dir, _ = readonly_sphinx_build_with_exclude
     llms_txt = build_dir / "llms.txt"
     assert_file_exists_with_content(llms_txt)
-    content = llms_txt.read_text()
+    entries = _sitemap_entries(llms_txt)
 
-    assert _APPLES_BODY_TEXT not in content
-    assert _NESTED_BODY_TEXT not in content
+    if app.builder.name == "dirhtml":
+        excluded = {"apples/index.html.md", "nested/example/index.html.md"}
+        included = "test/index.html.md"
+    else:
+        excluded = {"apples.html.md", "nested/example.html.md"}
+        included = "test.html.md"
+
+    assert not excluded & set(entries.values())
     # Non-excluded documents are still listed
-    assert "test" in content
+    assert entries["Testing page"] == included
 
 
 def test_excluded_documents_not_in_llms_full_txt(readonly_sphinx_build_with_exclude):

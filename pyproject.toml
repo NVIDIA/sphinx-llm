@@ -37,6 +37,7 @@ gen = ["openai>=1.55.3"]
 [dependency-groups]
 docs = ["nvidia-sphinx-theme>=0.0.9.post1"]
 dev = [
+    "coverage>=7.10",
     "llms-txt==0.0.6; python_version >= '3.10'",
     "myst-parser>=1",
     "pytest>=8.4.1",
@@ -62,17 +63,32 @@ extra-dependencies = ["mypy>=1.0.0"]
 check = "mypy --install-types --non-interactive {args:src/sphinx_llm tests}"
 
 [tool.coverage.run]
-source_pkgs = ["sphinx_llm", "tests"]
+source_pkgs = ["sphinx_llm"]
 branch = true
 parallel = true
-omit = ["src/sphinx_llm/__about__.py"]
+# Measure the sphinx-build subprocesses that render Markdown.
+patch = ["subprocess"]
+omit = ["*/sphinx_llm/tests/*"]
 
 [tool.coverage.paths]
 sphinx_llm = ["src/sphinx_llm", "*/sphinx-llm/src/sphinx_llm"]
-tests = ["tests", "*/sphinx-llm/tests"]
 
 [tool.coverage.report]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+  "error",
+  # myst-parser reads SphinxTransform.app, deprecated in Sphinx 9. No category so
+  # this still matches when RemovedInSphinx11Warning becomes a DeprecationWarning.
+  "ignore:'myst_parser\\.sphinx_ext\\.myst_refs\\.MystReferenceResolver\\.app' is deprecated::myst_parser\\.sphinx_ext\\.myst_refs",
+  # Sphinx forks for parallel reading; under pytest-xdist the worker already
+  # runs execnet threads, so Python >=3.12 warns about fork() with threads.
+  "ignore:This process .* is multi-threaded, use of fork\\(\\) may lead to deadlocks:DeprecationWarning:multiprocessing\\.popen_fork",
+  # Sphinx <7 uses stdlib APIs that Python 3.12 deprecates.
+  "ignore:'imghdr' is deprecated:DeprecationWarning:sphinx\\.util\\.images",
+  "ignore:datetime\\.datetime\\.utcfromtimestamp\\(\\) is deprecated:DeprecationWarning:sphinx\\.",
+]
 
 [tool.ruff]
 target-version = "py39"
