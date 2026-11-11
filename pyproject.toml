@@ -63,16 +63,15 @@ extra-dependencies = ["mypy>=1.0.0"]
 check = "mypy --install-types --non-interactive {args:src/sphinx_llm tests}"
 
 [tool.coverage.run]
-source_pkgs = ["sphinx_llm", "tests"]
+source_pkgs = ["sphinx_llm"]
 branch = true
 parallel = true
 # Measure the sphinx-build subprocesses that render Markdown.
 patch = ["subprocess"]
-omit = ["src/sphinx_llm/__about__.py"]
+omit = ["*/sphinx_llm/tests/*"]
 
 [tool.coverage.paths]
 sphinx_llm = ["src/sphinx_llm", "*/sphinx-llm/src/sphinx_llm"]
-tests = ["tests", "*/sphinx-llm/tests"]
 
 [tool.coverage.report]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
