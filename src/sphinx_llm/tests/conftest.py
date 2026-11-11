@@ -155,14 +155,11 @@ def make_markdown_generator(tmp_path):
     return make
 
 
-@pytest.fixture(
-    params=[("html", True), ("dirhtml", True), ("html", False), ("dirhtml", False)]
-)
-def markdown_app(request, make_markdown_generator):
-    """Unbuilt app for constructor/event/process units, retaining the mode matrix."""
-    builder, parallel = request.param
-    config = SimpleNamespace(llms_txt_build_parallel=parallel)
-    app = make_markdown_generator(builder=builder, config=config).app
+@pytest.fixture
+def markdown_app(make_markdown_generator):
+    """Unbuilt app for mode-independent constructor/event/process units."""
+    config = SimpleNamespace(llms_txt_build_parallel=True)
+    app = make_markdown_generator(builder="html", config=config).app
     return app
 
 
