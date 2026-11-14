@@ -34,6 +34,9 @@ All notable changes to this project will be documented in this file.
   the markdown output as in the HTML build.
 - Made sitemap, discovery, `llms-full.txt`, and generated Markdown links share
   one canonical path resolver and reject colliding published paths.
+- Fixed `sphinx-build -D markdown_http_base=...` being ignored in generated
+  `llms.txt` indexes and Markdown links when `conf.py` also sets
+  `markdown_http_base`.
 
 ### Changed
 
