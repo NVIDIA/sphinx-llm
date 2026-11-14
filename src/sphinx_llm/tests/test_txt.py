@@ -2845,3 +2845,41 @@ def test_config_overrides_forwarded_to_markdown_build(
     app.build()
 
     assert "FORWARDED_OVERRIDE" in (build_dir / "index.html.md").read_text()
+
+
+@pytest.mark.parametrize(
+    ("http_base", "expected_target"),
+    [
+        ("https://override.example.test/docs", "https://override.example.test/docs/"),
+        ("", ""),
+    ],
+    ids=["absolute", "relative"],
+)
+def test_markdown_http_base_override_takes_precedence_over_conf_py(
+    tmp_path, make_sphinx_project, build_sphinx_app, http_base, expected_target
+):
+    """A ``-D markdown_http_base`` override replaces the value from conf.py."""
+    source_dir = make_sphinx_project(
+        config=(
+            'extensions = ["sphinx_llm.txt"]\n'
+            'markdown_http_base = "https://conf.example.test/docs"\n'
+        ),
+        documents={
+            "index.rst": "Index\n=====\n\nSee :doc:`other`.\n\n.. toctree::\n\n   other\n",
+            "other.rst": "Other\n=====\n\nOther page.\n",
+        },
+    )
+    _, build_dir, _ = build_sphinx_app(
+        source_dir,
+        root=tmp_path,
+        confoverrides={
+            "llms_txt_build_parallel": False,
+            "markdown_http_base": http_base,
+        },
+    )
+
+    llms_txt = (build_dir / "llms.txt").read_text(encoding="utf-8")
+    markdown = (build_dir / "index.html.md").read_text(encoding="utf-8")
+    assert f"- [Other]({expected_target}other.html.md)" in llms_txt
+    assert f"[Other]({expected_target}other.html.md)" in markdown
+    assert "conf.example.test" not in llms_txt + markdown

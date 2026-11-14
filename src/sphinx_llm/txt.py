@@ -758,10 +758,9 @@ class MarkdownGenerator:
         )
 
     def _markdown_http_base(self) -> str:
-        return (
-            self.app.config._raw_config.get("markdown_http_base")
-            or getattr(self.app.config, "markdown_http_base", "")
-        ).rstrip("/")
+        # setup() registers markdown_http_base when sphinx_markdown_builder is
+        # not loaded, so the effective value includes command-line overrides.
+        return (getattr(self.app.config, "markdown_http_base", "") or "").rstrip("/")
 
     def _materialize_links(
         self,
