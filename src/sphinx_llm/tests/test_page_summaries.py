@@ -545,7 +545,7 @@ def test_page_summaries_in_full_build_matrix(
 
 
 def test_page_summary_reports_missing_generation_dependencies(
-    summary_generator, monkeypatch, tmp_path
+    clear_summary_environment, summary_generator, monkeypatch, tmp_path
 ):
     """A missing openai package on a cache miss points users at the gen extra."""
     monkeypatch.setenv("TEST_API_KEY", "secret")

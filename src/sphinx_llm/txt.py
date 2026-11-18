@@ -72,6 +72,7 @@ SITEMAP_TEXT_TRANSLATION = str.maketrans(
 
 
 def _findall(node: docutils.nodes.Node, condition):
+    """Find matching nodes using the API available in this docutils version."""
     findall = getattr(node, "findall", None)
     if findall is not None:
         return findall(condition)

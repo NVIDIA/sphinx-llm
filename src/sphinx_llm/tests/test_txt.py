@@ -364,9 +364,9 @@ def test_build_markdown_files_logs_subprocess_launch_failure(tmp_path):
             patch("sphinx_llm.txt.logger") as logger,
         ):
             generator.build_markdown_files()
+            assert logfile.closed
 
     logger.error.assert_called_once_with("Failed to run sphinx-build subprocess: boom")
-    assert logfile.closed
     # combine_builds relies on this to skip combining a build that never ran.
     assert generator.md_build_process is None
 

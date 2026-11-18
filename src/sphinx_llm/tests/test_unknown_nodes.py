@@ -329,6 +329,7 @@ UNKNOWN_NODE_NAMES = ("abbreviation", "centered", "custom_unknown")
     ],
 )
 def test_suppression_contract(tmp_path, builder, value, expected_warnings):
+    """Suppress only the configured exact node names in both build paths."""
     result, markdown = _build(tmp_path, value=value, builder=builder)
 
     output = _output(result)

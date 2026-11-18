@@ -66,12 +66,14 @@ def readonly_myst_build(request, docs_source_dir, tmp_path_factory):
 
 
 def html_path(build, docname: str) -> Path:
+    """Locate a generated HTML page for either supported builder."""
     return build.output / (
         f"{docname}.html" if build.builder == "html" else f"{docname}/index.html"
     )
 
 
 def read_page(build, docname: str) -> tuple[str, str]:
+    """Read the HTML page and its colocated Markdown counterpart."""
     path = html_path(build, docname)
     return (
         path.read_text(encoding="utf-8"),
@@ -81,6 +83,7 @@ def read_page(build, docname: str) -> tuple[str, str]:
 
 @pytest.mark.parametrize("docname", PAGES)
 def test_title_and_body_in_html_and_markdown(readonly_myst_build, docname):
+    """Preserve MyST titles and body text in every generated format."""
     title, body = PAGES[docname]
     html, markdown = read_page(readonly_myst_build, docname)
     assert title in html and title in markdown
@@ -89,12 +92,14 @@ def test_title_and_body_in_html_and_markdown(readonly_myst_build, docname):
 
 @pytest.mark.parametrize("docname", PAGES)
 def test_body_appears_once_in_llms_full(readonly_myst_build, docname):
+    """Include each MyST page body exactly once in the combined output."""
     _, body = PAGES[docname]
     assert readonly_myst_build.full.count(body) == 1
 
 
 @pytest.mark.parametrize("docname", PAGES)
 def test_sitemap_entry_links_to_page_markdown(readonly_myst_build, docname):
+    """Link each MyST sitemap entry to an existing page with its body."""
     title, body = PAGES[docname]
     output = readonly_myst_build.output
     page_entries = [
@@ -110,6 +115,7 @@ def test_sitemap_entry_links_to_page_markdown(readonly_myst_build, docname):
 
 
 def test_sitemap_uses_authored_myst_description(readonly_myst_build):
+    """Prefer the authored MyST metadata description in the sitemap."""
     title, _ = PAGES["myst"]
     descriptions = [
         description
@@ -122,6 +128,7 @@ def test_sitemap_uses_authored_myst_description(readonly_myst_build):
 
 @pytest.mark.parametrize("docname", PAGES)
 def test_dirhtml_url_suffix_markdown_contains_body(readonly_myst_build, docname):
+    """Preserve page bodies in dirhtml URL-suffix Markdown files."""
     if readonly_myst_build.builder != "dirhtml":
         pytest.skip("URL-suffix Markdown files are only generated for dirhtml")
     _, body = PAGES[docname]
@@ -131,6 +138,7 @@ def test_dirhtml_url_suffix_markdown_contains_body(readonly_myst_build, docname)
 
 @pytest.mark.parametrize(("docname", "destination"), LINKS)
 def test_html_cross_format_links_resolve(readonly_myst_build, docname, destination):
+    """Resolve HTML links between MyST and reStructuredText pages."""
     page = html_path(readonly_myst_build, docname)
     html = page.read_text(encoding="utf-8")
     html_url = (
@@ -144,6 +152,7 @@ def test_html_cross_format_links_resolve(readonly_myst_build, docname, destinati
 
 @pytest.mark.parametrize(("docname", "destination"), LINKS)
 def test_markdown_cross_format_links_resolve(readonly_myst_build, docname, destination):
+    """Resolve Markdown links between MyST and reStructuredText pages."""
     page = html_path(readonly_myst_build, docname)
     markdown = page.with_suffix(".html.md").read_text(encoding="utf-8")
     markdown_url = (
@@ -156,6 +165,7 @@ def test_markdown_cross_format_links_resolve(readonly_myst_build, docname, desti
 
 
 def test_myst_code_block_is_converted(readonly_myst_build):
+    """Preserve fenced code blocks in per-page and combined Markdown."""
     html, markdown = read_page(readonly_myst_build, "myst")
     assert 'class="highlight-python' in html
     assert '```python\nprint("MyST code survives conversion")\n```' in markdown
@@ -163,23 +173,27 @@ def test_myst_code_block_is_converted(readonly_myst_build):
 
 
 def test_myst_list_is_converted(readonly_myst_build):
+    """Convert MyST lists into HTML and Markdown list markup."""
     html, markdown = read_page(readonly_myst_build, "myst")
     assert "<ul" in html and "Build HTML documentation." in html
     assert "- Build HTML documentation." in markdown
 
 
 def test_markdown_only_content_is_excluded_from_html(readonly_myst_build):
+    """Keep Markdown-only MyST content out of the HTML build."""
     html, markdown = read_page(readonly_myst_build, "myst")
     assert "This MyST paragraph appears only in Markdown output." in markdown
     assert "This MyST paragraph appears only in Markdown output." not in html
 
 
 def test_myst_metadata_is_not_rendered_in_markdown(readonly_myst_build):
+    """Exclude MyST front matter from rendered Markdown content."""
     _, markdown = read_page(readonly_myst_build, "myst")
     assert "html_meta:" not in markdown
 
 
 def test_linked_rst_page_has_markdown(readonly_myst_build):
+    """Generate the Markdown target of links to reStructuredText pages."""
     output = readonly_myst_build.output
     assert (
         output / "apples.html.md"
