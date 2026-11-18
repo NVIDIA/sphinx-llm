@@ -1799,6 +1799,8 @@ gen = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "coverage", version = "7.10.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "coverage", version = "7.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "llms-txt", marker = "python_full_version >= '3.10'" },
     { name = "myst-parser", version = "3.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "myst-parser", version = "4.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
@@ -1827,6 +1829,7 @@ provides-extras = ["docs", "gen"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "coverage", specifier = ">=7.10" },
     { name = "llms-txt", marker = "python_full_version >= '3.10'", specifier = "==0.0.6" },
     { name = "myst-parser", specifier = ">=1" },
     { name = "pytest", specifier = ">=8.4.1" },

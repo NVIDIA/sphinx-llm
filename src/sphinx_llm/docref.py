@@ -20,7 +20,7 @@ from sphinx.util import docname_join, logging
 from sphinx.util.docutils import SphinxDirective
 
 from . import summary as summary_client
-from .txt import MarkdownGenerator, SummaryOptions
+from .txt import MarkdownGenerator, SummaryOptions, _findall
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -45,13 +45,6 @@ LEGACY_STYLING_NAMES = {
 
 class DocrefNode(nodes.General, nodes.Element):
     """A reference awaiting summary selection during the Sphinx write phase."""
-
-
-def _findall(node: nodes.Node, condition):
-    findall = getattr(node, "findall", None)
-    if findall is not None:
-        return findall(condition)
-    return node.traverse(condition)
 
 
 def _environment_mapping(env, attribute: str) -> dict:
