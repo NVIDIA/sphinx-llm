@@ -45,16 +45,17 @@ def test_summary_configuration_precedence(summary_generator, monkeypatch, tmp_pa
         "llms_txt_summary_model": "cli-model",
         "llms_txt_summary_timeout": "40",
         "llms_txt_summary_allow_insecure_auth": "false",
-        "llms_txt_summary_reasoning_effort": "high",
+        "llms_txt_summary_reasoning_effort": "max",
     }
     generator.app.config.llms_txt_summary_model = "cli-model"
     generator.app.config.llms_txt_summary_timeout = 40
     generator.app.config.llms_txt_summary_allow_insecure_auth = False
-    generator.app.config.llms_txt_summary_reasoning_effort = "high"
+    generator.app.config.llms_txt_summary_reasoning_effort = "max"
     options = generator._get_summary_options()
     assert options.model == "cli-model"
     assert options.timeout == 40
     assert options.allow_insecure_auth is False
+    assert options.reasoning_effort == "max"
 
 
 def test_sphinx_command_line_override_and_built_in_defaults(
