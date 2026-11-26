@@ -1344,7 +1344,6 @@ class MarkdownGenerator:
             markdown,
             options,
             SUMMARY_PROMPT_VERSION,
-            options.reasoning_effort,
         )
         cache = self._load_summary_cache()
         record = cache.get(docname)
