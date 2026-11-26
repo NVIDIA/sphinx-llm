@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from openai.types import ReasoningEffort
 from sphinx.errors import ExtensionError
 
 from sphinx_llm.summary import (
@@ -110,6 +111,26 @@ def test_summarize_text_uses_environment_configuration(openai_response, monkeypa
     ] == {"reasoning_effort": "low"}
     # sanity check that the test is meaningful.
     assert "low" != DEFAULT_REASONING_EFFORT
+
+
+def test_summarize_text_reasoning_effort_overrides_openapi_env(openai_response, monkeypatch):
+    """Test model, endpoint, credential, and reasoning environment variables."""
+    desired_reasoning_effort: ReasoningEffort = "max"
+    monkeypatch.setenv("OPENAI_MODEL", "env-model")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://models.example.com/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "secret")
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "low")
+    response = openai_response("Summary.")
+
+    with patch("openai.OpenAI") as mock_openai:
+        mock_openai.return_value.chat.completions.create.return_value = response
+        assert summarize_text("Page contents.", reasoning_effort=desired_reasoning_effort,) == "Summary."
+
+    assert mock_openai.return_value.chat.completions.create.call_args.kwargs[
+        "extra_body"
+    ] == {"reasoning_effort": desired_reasoning_effort}
+    # sanity check that the test is meaningful.
+    assert desired_reasoning_effort != DEFAULT_REASONING_EFFORT
 
 
 def test_summarize_text_can_omit_reasoning_effort(openai_response, monkeypatch):
