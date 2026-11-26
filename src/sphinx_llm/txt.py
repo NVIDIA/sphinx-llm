@@ -76,6 +76,14 @@ SITEMAP_TEXT_TRANSLATION = str.maketrans(
 )
 
 
+def _findall(node: docutils.nodes.Node, condition):
+    """Find matching nodes using the API available in this docutils version."""
+    findall = getattr(node, "findall", None)
+    if findall is not None:
+        return findall(condition)
+    return node.traverse(condition)
+
+
 def _add_audience_tags(app: Sphinx) -> None:
     """Let Sphinx's native ``only`` directive select the build's audience."""
     is_agent = app.builder.name == SphinxLlmMarkdownBuilder.name
@@ -648,9 +656,12 @@ class MarkdownGenerator:
                 f"markdown_docinfo={'1' if getattr(self, 'markdown_docinfo', False) else '0'}",
             ]
 
-            # When building sequentially we can reuse the doctree directory from the primary build
-            # but in parallel builds these may clobber each other so we need to use a separate one
-            if not self.parallel:
+            # Sequential builds can reuse the primary doctrees unless disabled
+            # for builder-specific read transforms. Parallel builds must always
+            # use Sphinx's default cache under the temporary Markdown output.
+            if not self.parallel and getattr(
+                self.app.config, "llms_txt_reuse_doctrees", True
+            ):
                 sphinx_build_cmd.append("-d")
                 sphinx_build_cmd.append(str(self.app.doctreedir))
 
@@ -761,10 +772,9 @@ class MarkdownGenerator:
         )
 
     def _markdown_http_base(self) -> str:
-        return (
-            self.app.config._raw_config.get("markdown_http_base")
-            or getattr(self.app.config, "markdown_http_base", "")
-        ).rstrip("/")
+        # setup() registers markdown_http_base when sphinx_markdown_builder is
+        # not loaded, so the effective value includes command-line overrides.
+        return (getattr(self.app.config, "markdown_http_base", "") or "").rstrip("/")
 
     def _materialize_links(
         self,
@@ -818,14 +828,7 @@ class MarkdownGenerator:
         llms_txt_path = self.outdir / "llms-full.txt"
         with open(llms_txt_path, "w", encoding="utf-8") as llms_txt:
             # Sort files to ensure index.html.md comes first
-            sorted_files = sorted(
-                self.generated_markdown_files,
-                key=lambda path: (
-                    path.relative_to(self.outdir).as_posix()
-                    not in {"index.html.md", "index.md"},
-                    path.relative_to(self.outdir).as_posix(),
-                ),
-            )
+            sorted_files = self._sorted_sitemap_files(self.generated_markdown_files)
 
             for md_file in sorted_files:
                 docname = self._docname_by_output_file[md_file]
@@ -962,7 +965,11 @@ class MarkdownGenerator:
 
             for line in self.get_project_description().strip().split("\n"):
                 sitemap.write(f"> {line}\n")
-            sitemap.write("\n\n")
+            sitemap.write("\n")
+
+            details = getattr(self.app.config, "llms_txt_details", "").strip()
+            if details:
+                sitemap.write(f"{details}\n\n")
 
             if hasattr(self.app.config, "copyright") and self.app.config.copyright:
                 sitemap.write(f"{self.app.config.copyright}\n\n")
@@ -1081,7 +1088,7 @@ class MarkdownGenerator:
                 meta_type = getattr(
                     docutils.nodes, "meta", lambda node: node.tagname == "meta"
                 )
-                for node in doctree.traverse(meta_type):
+                for node in _findall(doctree, meta_type):
                     content = node.get("content")
                     if (
                         node.get("name") == "description"
@@ -1491,7 +1498,9 @@ def setup(app: Sphinx) -> dict[str, Any]:
         app.add_builder(SphinxLlmMarkdownBuilder)
     app.add_config_value("llms_txt_enabled", True, "")
     app.add_config_value("llms_txt_description", "", "env")
+    app.add_config_value("llms_txt_details", "", "env")
     app.add_config_value("llms_txt_build_parallel", True, "env")
+    app.add_config_value("llms_txt_reuse_doctrees", True, "env")
     app.add_config_value("llms_txt_markdown_docinfo", False, "env")
     app.add_config_value("llms_txt_suffix_mode", "auto", "env")
     app.add_config_value("llms_txt_full_build", False, "env")

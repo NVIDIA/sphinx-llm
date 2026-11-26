@@ -57,3 +57,19 @@ Learn more
 * `README: extension usage and configuration <https://github.com/NVIDIA/sphinx-llm#readme>`_
 * `Source repository <https://github.com/NVIDIA/sphinx-llm>`_
 * `Issue tracker <https://github.com/NVIDIA/sphinx-llm/issues>`_
+
+Sequential build example
+------------------------
+
+This site's build exercises isolated sequential Markdown generation using the
+following settings from its own configuration:
+
+.. literalinclude:: conf.py
+   :language: python
+   :start-at: llms_txt_build_parallel
+   :end-at: llms_txt_reuse_doctrees
+
+See the `configuration table
+<https://github.com/NVIDIA/sphinx-llm#configuration>`_ for the options' defaults
+and behavior. The generated `Markdown version <index.html.md>`_ is built from
+its own source read rather than the HTML doctree cache.

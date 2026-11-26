@@ -155,14 +155,11 @@ def make_markdown_generator(tmp_path):
     return make
 
 
-@pytest.fixture(
-    params=[("html", True), ("dirhtml", True), ("html", False), ("dirhtml", False)]
-)
-def markdown_app(request, make_markdown_generator):
-    """Unbuilt app for constructor/event/process units, retaining the mode matrix."""
-    builder, parallel = request.param
-    config = SimpleNamespace(llms_txt_build_parallel=parallel)
-    app = make_markdown_generator(builder=builder, config=config).app
+@pytest.fixture
+def markdown_app(make_markdown_generator):
+    """Unbuilt app for mode-independent constructor/event/process units."""
+    config = SimpleNamespace(llms_txt_build_parallel=True)
+    app = make_markdown_generator(builder="html", config=config).app
     return app
 
 
@@ -317,16 +314,6 @@ def sphinx_build_with_http_base(
             "llms_txt_full_build": True,
         },
     )
-
-
-@pytest.fixture(scope="module")
-def readonly_sphinx_build_no_llms_full(
-    build_example_docs,
-    request,
-) -> Generator[tuple[Sphinx, Path, Path], None, None]:
-    """Read-only output with full generation disabled; never modify artifacts."""
-    builder = request.param
-    yield build_example_docs(builder, {"llms_txt_full_build": False})
 
 
 @pytest.fixture(

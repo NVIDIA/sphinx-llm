@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Added `llms_txt_details` for unquoted introductory Markdown after the project
+  description blockquote in generated root and nested `llms.txt` indexes.
 - Added `llms_txt_suppress_unknown_node_warnings` for opt-in suppression of all
   or selected unknown-node diagnostics from generated Markdown while
   continuing to omit unsupported node subtrees.
@@ -17,6 +19,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Fixed an extra blank line after the project description blockquote in
+  generated `llms.txt` indexes.
 - Fixed the default `llms.txt` project description to use the package summary
   (the `description` in `pyproject.toml`) instead of the long description,
   which copied the whole README into every generated index.
@@ -30,6 +34,9 @@ All notable changes to this project will be documented in this file.
   the markdown output as in the HTML build.
 - Made sitemap, discovery, `llms-full.txt`, and generated Markdown links share
   one canonical path resolver and reject colliding published paths.
+- Fixed `sphinx-build -D markdown_http_base=...` being ignored in generated
+  `llms.txt` indexes and Markdown links when `conf.py` also sets
+  `markdown_http_base`.
 
 ### Changed
 
