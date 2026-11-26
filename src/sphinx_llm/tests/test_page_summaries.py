@@ -173,6 +173,7 @@ def test_summary_uses_bounded_markdown_and_complete_fingerprint(
         ("llms_txt_summary_max_input_chars", 100),
         ("llms_txt_summary_timeout", 15),
         ("llms_txt_summary_allow_insecure_auth", True),
+        ("llms_txt_summary_reasoning_effort", "high"),
     ],
 )
 def test_generation_setting_changes_invalidate_cache(

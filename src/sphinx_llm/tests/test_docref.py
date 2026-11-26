@@ -410,6 +410,7 @@ def test_incremental_cache_hit_and_target_content_invalidation(
         "max_input_chars",
         "timeout",
         "prompt_version",
+        "reasoning_effort",
     ],
 )
 def test_generation_setting_changes_invalidate_cache(
@@ -448,6 +449,8 @@ def test_generation_setting_changes_invalidate_cache(
         second_overrides["llms_txt_summary_max_input_chars"] = 100
     elif changed_setting == "timeout":
         second_overrides["llms_txt_summary_timeout"] = 15
+    elif changed_setting == "reasoning_effort":
+        second_overrides["llms_txt_summary_reasoning_effort"] = "high"
     else:
         monkeypatch.setattr(
             summary_client,
