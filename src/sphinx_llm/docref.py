@@ -92,7 +92,6 @@ def _fingerprint(target: str, contents: str, settings: SummaryOptions) -> str:
         contents,
         settings,
         summary_client.SUMMARY_PROMPT_VERSION,
-        summary_client.DEFAULT_REASONING_EFFORT,
     )
 
 

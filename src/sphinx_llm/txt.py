@@ -1306,7 +1306,6 @@ class MarkdownGenerator:
         markdown: str,
         options: SummaryOptions,
         prompt_version: int,
-        reasoning_effort: ReasoningEffort,
     ) -> str:
         """Hash complete Markdown and all non-secret generation parameters."""
         settings = {
@@ -1316,7 +1315,7 @@ class MarkdownGenerator:
             "model": options.model,
             "prompt_version": prompt_version,
             "provider": options.provider,
-            "reasoning_effort": reasoning_effort,
+            "reasoning_effort": options.reasoning_effort,
             "timeout": options.timeout,
         }
         fingerprint_input = json.dumps(settings, sort_keys=True) + "\0" + markdown
