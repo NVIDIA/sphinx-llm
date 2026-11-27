@@ -8,9 +8,9 @@ import os
 from typing import Optional
 from urllib.parse import urlparse
 
-from openai.types import ReasoningEffort
 from sphinx.errors import ExtensionError
 
+from .effort import ReasoningEffort
 from .version import __version__
 
 DEFAULT_MODEL = ""

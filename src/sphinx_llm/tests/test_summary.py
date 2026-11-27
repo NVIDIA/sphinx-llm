@@ -7,9 +7,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from openai.types import ReasoningEffort
 from sphinx.errors import ExtensionError
 
+from sphinx_llm.effort import ReasoningEffort
 from sphinx_llm.summary import (
     DEFAULT_REASONING_EFFORT,
     SYSTEM_PROMPT,

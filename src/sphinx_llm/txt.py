@@ -29,7 +29,6 @@ from typing import Any
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import docutils.nodes
-from openai.types import ReasoningEffort
 from sphinx.application import Sphinx
 from sphinx.environment import BuildEnvironment
 from sphinx.errors import ExtensionError
@@ -37,6 +36,7 @@ from sphinx.util import logging
 from sphinx.util.matching import patmatch
 from sphinx.util.osutil import relative_uri
 
+from .effort import ReasoningEffort
 from .extract_prose import extract_prose, markdown_lines_to_plain_text
 from .markdown_builder import (
     LINK_TARGETS_FILENAME,
@@ -50,7 +50,6 @@ from .markdown_builder import (
 from .summary import (
     DEFAULT_API_KEY_ENV,
     DEFAULT_REASONING_EFFORT,
-    DEFAULT_REASONING_EFFORT_ENV,
 )
 from .version import __version__
 
