@@ -4,4 +4,4 @@ from typing import Literal, Optional
 try:
     from openai.types import ReasoningEffort
 except ImportError:
-    ReasoningEffort = Optional[Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]] | 
+    ReasoningEffort = Optional[Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]]
