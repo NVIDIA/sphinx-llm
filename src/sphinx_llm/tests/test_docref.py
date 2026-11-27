@@ -410,6 +410,7 @@ def test_incremental_cache_hit_and_target_content_invalidation(
         "max_input_chars",
         "timeout",
         "prompt_version",
+        "reasoning_effort",
     ],
 )
 def test_generation_setting_changes_invalidate_cache(
@@ -448,6 +449,8 @@ def test_generation_setting_changes_invalidate_cache(
         second_overrides["llms_txt_summary_max_input_chars"] = 100
     elif changed_setting == "timeout":
         second_overrides["llms_txt_summary_timeout"] = 15
+    elif changed_setting == "reasoning_effort":
+        second_overrides["llms_txt_summary_reasoning_effort"] = "high"
     else:
         monkeypatch.setattr(
             summary_client,
@@ -549,6 +552,45 @@ def test_legacy_hash_seeds_cache_without_modifying_source(
     [summary] = _report(output_dir)["summaries"]
     assert summary["origin"] == "generated"
     assert summary["model"] == "legacy-model"
+
+
+def test_legacy_md5_does_not_seed_summary_with_nondefault_reasoning_effort(
+    fake_summary_generator,
+    build_sphinx_app,
+    docref_project,
+    tmp_path,
+    monkeypatch,
+):
+    target_text = "Target\n\nThe first target paragraph."
+    legacy_hash = hashlib.md5(target_text.encode()).hexdigest()
+    index = (
+        "Index\n=====\n\n"
+        ".. toctree::\n"
+        "   :hidden:\n\n"
+        "   target\n\n"
+        ".. docref:: target\n"
+        f"   :hash: {legacy_hash}\n"
+        "   :model: legacy-model\n\n"
+        "   A legacy generated summary.\n"
+    )
+    source_dir = docref_project(tmp_path, index=index)
+    calls: list = []
+    monkeypatch.setattr(
+        docref, "generate_summary", fake_summary_generator(calls, "Regenerated")
+    )
+
+    _, output_dir, _ = build_sphinx_app(
+        source_dir,
+        confoverrides={
+            "llms_txt_summary_enabled": True,
+            "llms_txt_summary_reasoning_effort": "high",
+        },
+    )
+
+    assert len(calls) == 1
+    [summary] = _report(output_dir)["summaries"]
+    assert summary["summary"] == "Regenerated 1."
+    assert summary["origin"] == "generated"
 
 
 def test_environment_configuration_and_report_do_not_expose_secrets(
@@ -762,6 +804,7 @@ def test_generate_summary_forwards_shared_limits_and_security(monkeypatch):
         max_input_chars=5,
         timeout=12,
         cache_path="",
+        reasoning_effort="high",
     )
     calls = []
 
@@ -779,7 +822,7 @@ def test_generate_summary_forwards_shared_limits_and_security(monkeypatch):
             {
                 "base_url": "https://example.invalid/v1",
                 "api_key_env": "",
-                "reasoning_effort": "none",
+                "reasoning_effort": "high",
                 "timeout": 12,
                 "use_environment_defaults": False,
                 "allow_insecure_auth": True,

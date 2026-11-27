@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 from sphinx.errors import ExtensionError
 
+from .effort import ReasoningEffort
 from .version import __version__
 
 DEFAULT_MODEL = ""
@@ -53,7 +54,7 @@ def summary_fingerprint(
     *,
     base_url: str = "",
     api_key_env: str = DEFAULT_API_KEY_ENV,
-    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+    reasoning_effort: ReasoningEffort = DEFAULT_REASONING_EFFORT,
 ) -> str:
     """Return a stable cache key for text and every generation setting."""
     return hashlib.sha256(
@@ -96,7 +97,7 @@ def summarize_text(
     *,
     base_url: str = "",
     api_key_env: str = DEFAULT_API_KEY_ENV,
-    reasoning_effort: Optional[str] = None,
+    reasoning_effort: ReasoningEffort = None,
     timeout: Optional[float] = None,
     use_environment_defaults: bool = True,
     allow_insecure_auth: bool = False,
@@ -172,6 +173,9 @@ def setup(app):
     app.add_config_value("llms_txt_summary_model", "", "env")
     app.add_config_value("llms_txt_summary_base_url", "", "env")
     app.add_config_value("llms_txt_summary_api_key_env", DEFAULT_API_KEY_ENV, "env")
+    app.add_config_value(
+        "llms_txt_summary_reasoning_effort", DEFAULT_REASONING_EFFORT, "env"
+    )
     app.add_config_value("llms_txt_summary_allow_insecure_auth", False, "env")
     app.add_config_value("llms_txt_summary_max_input_chars", 12_000, "env")
     app.add_config_value("llms_txt_summary_timeout", 60, "env")

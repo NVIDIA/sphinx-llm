@@ -40,6 +40,55 @@ pages. No model or API key is needed for this workflow. To generate summaries
 with a model, install ``sphinx-llm[gen]`` and follow the configuration instructions
 in the README.
 
+Configure summary reasoning effort
+----------------------------------
+
+To customize the reasoning effort used when generating page summaries, set
+``llms_txt_summary_reasoning_effort`` in ``conf.py`` alongside the summary
+model and enablement setting. Install ``sphinx-llm[gen]`` and configure your
+API key in the environment before building:
+
+.. code-block:: python
+
+   extensions = ["sphinx_llm.docref"]
+   llms_txt_summary_enabled = True
+   llms_txt_summary_model = "your-model"
+   llms_txt_summary_reasoning_effort = "high"
+
+Add an empty ``docref`` directive to request a generated summary for its target:
+
+.. code-block:: rst
+
+   Index
+   =====
+
+   .. toctree::
+      :hidden:
+
+      guide
+
+   .. docref:: guide
+
+And provide content on the target page:
+
+.. code-block:: rst
+
+   Guide
+   =====
+
+   This page contains the content that will be summarized.
+
+For example, build with ``OPENAI_API_KEY`` set in the environment:
+
+.. code-block:: console
+
+   sphinx-build -b html docs docs/_build/html
+
+The value is passed to the configured OpenAI-compatible endpoint. Supported
+values depend on the endpoint and model. See the `configuration table
+<https://github.com/NVIDIA/sphinx-llm#configuration>`_ for the option's
+environment-variable override and default.
+
 Build this project's documentation
 ----------------------------------
 

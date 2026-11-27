@@ -92,7 +92,6 @@ def _fingerprint(target: str, contents: str, settings: SummaryOptions) -> str:
         contents,
         settings,
         summary_client.SUMMARY_PROMPT_VERSION,
-        summary_client.DEFAULT_REASONING_EFFORT,
     )
 
 
@@ -114,7 +113,7 @@ def generate_summary(settings: SummaryOptions, contents: str) -> str:
             settings.model,
             base_url=settings.base_url,
             api_key_env=settings.api_key_env,
-            reasoning_effort=summary_client.DEFAULT_REASONING_EFFORT,
+            reasoning_effort=settings.reasoning_effort,
             timeout=settings.timeout,
             use_environment_defaults=False,
             allow_insecure_auth=settings.allow_insecure_auth,
@@ -267,7 +266,7 @@ def _generated_record(
             }
         ),
         "generation_settings": {
-            "reasoning_effort": summary_client.DEFAULT_REASONING_EFFORT,
+            "reasoning_effort": settings.reasoning_effort,
             "temperature": summary_client.SUMMARY_TEMPERATURE,
         },
     }
@@ -293,15 +292,17 @@ def _legacy_seed(
     settings: SummaryOptions,
 ) -> dict[str, Any] | None:
     legacy_hashes = {
-        hashlib.md5(contents.encode()).hexdigest(),
         summary_client.summary_fingerprint(
             contents,
             settings.model,
             base_url=settings.base_url,
             api_key_env=settings.api_key_env,
-            reasoning_effort=summary_client.DEFAULT_REASONING_EFFORT,
-        ),
+            reasoning_effort=settings.reasoning_effort,
+        )
     }
+    # So we would not hurt old data.
+    if settings.reasoning_effort == summary_client.DEFAULT_REASONING_EFFORT:
+        legacy_hashes.add(hashlib.md5(contents.encode()).hexdigest())
     for request in requests:
         if request["legacy_hash"] in legacy_hashes and request["body"].strip():
             return _generated_record(
