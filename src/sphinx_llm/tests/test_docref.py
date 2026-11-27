@@ -554,6 +554,45 @@ def test_legacy_hash_seeds_cache_without_modifying_source(
     assert summary["model"] == "legacy-model"
 
 
+def test_legacy_md5_does_not_seed_summary_with_nondefault_reasoning_effort(
+    fake_summary_generator,
+    build_sphinx_app,
+    docref_project,
+    tmp_path,
+    monkeypatch,
+):
+    target_text = "Target\n\nThe first target paragraph."
+    legacy_hash = hashlib.md5(target_text.encode()).hexdigest()
+    index = (
+        "Index\n=====\n\n"
+        ".. toctree::\n"
+        "   :hidden:\n\n"
+        "   target\n\n"
+        ".. docref:: target\n"
+        f"   :hash: {legacy_hash}\n"
+        "   :model: legacy-model\n\n"
+        "   A legacy generated summary.\n"
+    )
+    source_dir = docref_project(tmp_path, index=index)
+    calls: list = []
+    monkeypatch.setattr(
+        docref, "generate_summary", fake_summary_generator(calls, "Regenerated")
+    )
+
+    _, output_dir, _ = build_sphinx_app(
+        source_dir,
+        confoverrides={
+            "llms_txt_summary_enabled": True,
+            "llms_txt_summary_reasoning_effort": "high",
+        },
+    )
+
+    assert len(calls) == 1
+    [summary] = _report(output_dir)["summaries"]
+    assert summary["summary"] == "Regenerated 1."
+    assert summary["origin"] == "generated"
+
+
 def test_environment_configuration_and_report_do_not_expose_secrets(
     fake_summary_generator, build_sphinx_app, docref_project, tmp_path, monkeypatch
 ):

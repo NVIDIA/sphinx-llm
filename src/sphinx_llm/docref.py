@@ -292,15 +292,17 @@ def _legacy_seed(
     settings: SummaryOptions,
 ) -> dict[str, Any] | None:
     legacy_hashes = {
-        hashlib.md5(contents.encode()).hexdigest(),
         summary_client.summary_fingerprint(
             contents,
             settings.model,
             base_url=settings.base_url,
             api_key_env=settings.api_key_env,
             reasoning_effort=settings.reasoning_effort,
-        ),
+        )
     }
+    # So we would not hurt old data.
+    if settings.reasoning_effort == summary_client.DEFAULT_REASONING_EFFORT:
+        legacy_hashes.add(hashlib.md5(contents.encode()).hexdigest())
     for request in requests:
         if request["legacy_hash"] in legacy_hashes and request["body"].strip():
             return _generated_record(
